@@ -1,0 +1,738 @@
+# =============================================================================
+# 06_descriptive_stats.R
+# Descriptive statistics for Mexican political elite, 1929-2012
+#
+# Three eras:
+#   corporatism  1929-1945  (caudillo settlement, PNR->PRM->PRI founding)
+#   pri_hege     1946-1999  (PRI institutionalization and authoritarian stability)
+#   democracy    2000-2012  (alternation, PAN presidencies)
+#
+# Key design: each long-format CSV is filtered to positions with year_start
+# within the era window and aggregated per person. A person active in multiple
+# eras appears in multiple era panels, reflecting career trajectory.
+#
+# Input:  data/{education,party_positions,govt_positions,labor_positions,birthplace}.csv
+# Output: output/descriptive_stats.pdf
+# =============================================================================
+
+library(tidyverse)
+library(lubridate)
+library(scales)
+library(patchwork)
+
+# ---------------------------------------------------------------------------
+# Paths
+# ---------------------------------------------------------------------------
+DATA_DIR   <- "C:/Users/Dell/Dropbox/TapadosPRI/data"
+OUTPUT_DIR <- "C:/Users/Dell/Dropbox/TapadosPRI/output"
+dir.create(OUTPUT_DIR, showWarnings = FALSE)
+
+# ---------------------------------------------------------------------------
+# Era definitions
+# ---------------------------------------------------------------------------
+ERAS <- list(
+  corporatism = c(1929, 1945),
+  pri_hege    = c(1946, 1999),
+  democracy   = c(2000, 2012)
+)
+
+ERA_LABELS <- c(
+  corporatism = "Corporatism\n(1929-45)",
+  pri_hege    = "PRI Hegemony\n(1946-99)",
+  democracy   = "Democracy\n(2000-12)"
+)
+
+ERA_COLORS <- c(
+  corporatism = "#C0392B",
+  pri_hege    = "#27AE60",
+  democracy   = "#2980B9"
+)
+
+# ---------------------------------------------------------------------------
+# Helper: filter long data to era windows, add era factor column
+# ---------------------------------------------------------------------------
+make_era_panel <- function(df, year_col = "year_start", eras = ERAS) {
+  map_dfr(names(eras), function(e) {
+    lo <- eras[[e]][1]
+    hi <- eras[[e]][2]
+    df |>
+      filter(.data[[year_col]] >= lo, .data[[year_col]] <= hi) |>
+      mutate(era = factor(e, levels = names(ERAS)))
+  })
+}
+
+# ---------------------------------------------------------------------------
+# Helper: rank lookup (named integer vector)
+# ---------------------------------------------------------------------------
+rank_lookup <- function(rank_vec, lookup_vec) {
+  r <- lookup_vec[rank_vec]
+  r[is.na(r)] <- 99L
+  as.integer(r)
+}
+
+# ---------------------------------------------------------------------------
+# Load data
+# ---------------------------------------------------------------------------
+cat("Loading data...\n")
+
+edu_long   <- read_csv(file.path(DATA_DIR, "education.csv"),       show_col_types = FALSE) |>
+  mutate(foreign_degree = foreign_degree %in% c(TRUE, "True", "TRUE"))
+
+party_long <- read_csv(file.path(DATA_DIR, "party_positions.csv"), show_col_types = FALSE)
+
+govt_long  <- read_csv(file.path(DATA_DIR, "govt_positions.csv"),  show_col_types = FALSE) |>
+  mutate(is_federal  = is_federal  %in% c(TRUE, "True", "TRUE", 1L),
+         is_judicial = is_judicial %in% c(TRUE, "True", "TRUE", 1L))
+
+labor_long <- read_csv(file.path(DATA_DIR, "labor_positions.csv"), show_col_types = FALSE) |>
+  mutate(is_national = is_national %in% c(TRUE, "True", "TRUE"))
+
+birthplace <- read_csv(file.path(DATA_DIR, "birthplace.csv"),      show_col_types = FALSE) |>
+  distinct(person_id, .keep_all = TRUE) |>
+  select(person_id, birthplace_state = state)
+
+cat("  govt_long:", nrow(govt_long), "rows\n")
+cat("  party_long:", nrow(party_long), "rows\n")
+cat("  edu_long:", nrow(edu_long), "rows\n")
+cat("  labor_long:", nrow(labor_long), "rows\n")
+
+# ---------------------------------------------------------------------------
+# Birth year helper (pull from any long file)
+# ---------------------------------------------------------------------------
+birth_years <- bind_rows(
+  select(govt_long,  person_id, birth_date_clean),
+  select(party_long, person_id, birth_date_clean),
+  select(edu_long,   person_id, birth_date_clean)
+) |>
+  distinct(person_id, .keep_all = TRUE) |>
+  mutate(birth_year = year(as.Date(birth_date_clean)))
+
+# ---------------------------------------------------------------------------
+# Rank order lookups
+# ---------------------------------------------------------------------------
+GOVT_RANK_ORDER <- c(
+  secretary = 1, governor = 2, secretary_general = 3,
+  director_general = 4, assistant_secretary = 5, oficial_mayor = 6,
+  ambassador = 7, head = 8, director = 9, judge = 10, justice = 11,
+  coordinator = 12, adviser = 13, assistant_director = 14,
+  assistant = 15, other = 99
+)
+
+PARTY_RANK_ORDER <- c(
+  national_president = 1, secretary_general_nat = 2, cen_president = 3,
+  cen_secretary = 4, iepes_director = 5, national_delegate = 6,
+  state_president = 7, state_secretary_general = 8, campaign_leader = 9,
+  state_secretary = 10, cen_member = 11, adviser_member = 12,
+  campaign_participant = 13, joined = 14, other = 99
+)
+
+# ---------------------------------------------------------------------------
+# Build era-specific aggregates
+# ---------------------------------------------------------------------------
+cat("Building era panels...\n")
+
+# Government positions per (person, era)
+govt_era <- govt_long |>
+  make_era_panel("year_start") |>
+  mutate(rank_order = rank_lookup(rank, GOVT_RANK_ORDER)) |>
+  group_by(person_id, era) |>
+  summarise(
+    n_govt           = n(),
+    ever_secretary   = any(rank %in% c("secretary", "secretary_general"), na.rm = TRUE),
+    ever_governor    = any(rank == "governor",          na.rm = TRUE),
+    ever_dir_gen     = any(rank == "director_general",  na.rm = TRUE),
+    ever_ambassador  = any(rank == "ambassador",        na.rm = TRUE),
+    ever_judge       = any(rank %in% c("judge", "justice"), na.rm = TRUE),
+    is_federal_any   = any(is_federal, na.rm = TRUE),
+    highest_govt_rank = rank[which.min(rank_order)][1],
+    .groups = "drop"
+  )
+
+# Party positions per (person, era)
+party_era <- party_long |>
+  make_era_panel("year_start") |>
+  mutate(rank_order = rank_lookup(party_rank, PARTY_RANK_ORDER)) |>
+  group_by(person_id, era) |>
+  summarise(
+    n_party              = n(),
+    pri_active           = any(party %in% c("PRI", "PRM", "PNR"), na.rm = TRUE),
+    pan_active           = any(party == "PAN", na.rm = TRUE),
+    prd_active           = any(party == "PRD", na.rm = TRUE),
+    ever_national_leader = any(party_level == "national", na.rm = TRUE),
+    ever_cen             = any(party_body == "CEN", na.rm = TRUE),
+    highest_party_rank   = party_rank[which.min(rank_order)][1],
+    .groups = "drop"
+  )
+
+# Labor positions per (person, era)
+labor_era <- labor_long |>
+  make_era_panel("year_start") |>
+  group_by(person_id, era) |>
+  summarise(
+    n_labor        = n(),
+    sectors_in_era = paste(sort(unique(na.omit(sector))), collapse = "|"),
+    .groups = "drop"
+  )
+
+# Education background — cumulative per (person, era)
+# For era X, include degrees where year_end <= era_end OR year_end is NA
+edu_era_background <- function(era_name) {
+  era_end <- ERAS[[era_name]][2]
+  edu_long |>
+    filter(record_type == "degree",
+           is.na(year_end) | year_end <= era_end) |>
+    group_by(person_id) |>
+    summarise(
+      undergrad     = any(degree_level == "undergraduate", na.rm = TRUE),
+      masters       = any(degree_level == "masters",       na.rm = TRUE),
+      phd           = any(degree_level == "phd",           na.rm = TRUE),
+      foreign_deg   = any(foreign_degree, na.rm = TRUE),
+      law           = any(degree_field == "law",           na.rm = TRUE),
+      economics     = any(degree_field == "economics",     na.rm = TRUE),
+      engineering   = any(degree_field == "engineering",   na.rm = TRUE),
+      medicine      = any(degree_field == "medicine",      na.rm = TRUE),
+      business      = any(degree_field == "business",      na.rm = TRUE),
+      military_deg  = any(degree_field == "military",      na.rm = TRUE),
+      education_deg = any(degree_field == "education",     na.rm = TRUE),
+      political_sci = any(degree_field == "political_sci", na.rm = TRUE),
+      humanities    = any(degree_field == "humanities",    na.rm = TRUE),
+      top_inst      = first(na.omit(organization)),
+      .groups = "drop"
+    ) |>
+    mutate(era = factor(era_name, levels = names(ERAS)))
+}
+
+edu_era <- map_dfr(names(ERAS), edu_era_background)
+
+# ---------------------------------------------------------------------------
+# Master panel: person x era
+# ---------------------------------------------------------------------------
+cat("Building master panel...\n")
+
+all_person_eras <- bind_rows(
+  select(govt_era,  person_id, era),
+  select(party_era, person_id, era),
+  select(labor_era, person_id, era)
+) |> distinct()
+
+panel <- all_person_eras |>
+  left_join(govt_era,   by = c("person_id", "era")) |>
+  left_join(party_era,  by = c("person_id", "era")) |>
+  left_join(labor_era,  by = c("person_id", "era")) |>
+  left_join(edu_era,    by = c("person_id", "era")) |>
+  left_join(birth_years, by = "person_id") |>
+  left_join(birthplace,  by = "person_id") |>
+  mutate(
+    n_govt  = coalesce(n_govt,  0L),
+    n_party = coalesce(n_party, 0L),
+    n_labor = coalesce(n_labor, 0L),
+    has_govt  = n_govt  > 0,
+    has_party = n_party > 0,
+    has_labor = n_labor > 0,
+    birth_region = case_when(
+      birthplace_state == "Federal District" ~ "Capital (DF)",
+      birthplace_state %in% c("Nuevo Leon","Coahuila","Chihuahua","Sonora","Sinaloa",
+                               "Baja California","Baja California Sur","Tamaulipas",
+                               "Durango","Zacatecas","Nayarit") ~ "North",
+      birthplace_state %in% c("Jalisco","Guanajuato","Michoacan","Queretaro",
+                               "Colima","Aguascalientes") ~ "Bajio/West",
+      birthplace_state %in% c("Mexico","Morelos","Puebla","Tlaxcala","Hidalgo") ~ "Center",
+      birthplace_state %in% c("Veracruz","Tabasco","Campeche",
+                               "Yucatan","Quintana Roo") ~ "Gulf/SE",
+      birthplace_state %in% c("Guerrero","Oaxaca","Chiapas") ~ "South",
+      TRUE ~ NA_character_
+    )
+  )
+
+cat("  Panel rows:", nrow(panel), "| unique persons:", n_distinct(panel$person_id), "\n")
+
+# Career trajectory panel: pivot highest rank wide on era (one row per person)
+career_traj <- panel |>
+  select(person_id, era, highest_govt_rank, highest_party_rank) |>
+  pivot_wider(
+    names_from  = era,
+    values_from = c(highest_govt_rank, highest_party_rank),
+    names_sep   = "_"
+  )
+
+# ---------------------------------------------------------------------------
+# Plot theme
+# ---------------------------------------------------------------------------
+theme_pri <- function(base_size = 12) {
+  theme_minimal(base_size = base_size) +
+    theme(
+      plot.title    = element_text(face = "bold", size = base_size + 2),
+      plot.subtitle = element_text(color = "grey40", size = base_size - 1),
+      strip.text    = element_text(face = "bold"),
+      legend.position = "bottom",
+      panel.grid.minor = element_blank()
+    )
+}
+
+era_fill <- scale_fill_manual(values = ERA_COLORS, labels = ERA_LABELS, name = NULL)
+era_color <- scale_color_manual(values = ERA_COLORS, labels = ERA_LABELS, name = NULL)
+era_x <- scale_x_discrete(labels = ERA_LABELS)
+
+# ---------------------------------------------------------------------------
+# OPEN PDF
+# ---------------------------------------------------------------------------
+pdf(file.path(OUTPUT_DIR, "descriptive_stats.pdf"), width = 11, height = 8.5)
+
+# ===========================================================================
+# PAGE 1: Sample overview
+# ===========================================================================
+overview <- panel |>
+  group_by(era) |>
+  summarise(
+    n_persons     = n_distinct(person_id),
+    n_obs         = n(),
+    pct_govt      = mean(has_govt)  * 100,
+    pct_party     = mean(has_party) * 100,
+    pct_labor     = mean(has_labor) * 100,
+    median_birth  = median(birth_year, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+overview_long <- overview |>
+  pivot_longer(-era,
+               names_to  = "metric",
+               values_to = "value") |>
+  mutate(metric = factor(metric, levels = c(
+    "n_persons","median_birth","pct_govt","pct_party","pct_labor"
+  )))
+
+metric_labels <- c(
+  n_persons    = "N unique persons",
+  median_birth = "Median birth year",
+  pct_govt     = "% with govt position",
+  pct_party    = "% with party position",
+  pct_labor    = "% with labor position"
+)
+
+p1 <- ggplot(overview_long |> filter(metric != "n_obs"),
+             aes(x = era, y = value, fill = era)) +
+  geom_col(show.legend = FALSE) +
+  geom_text(aes(label = round(value, 1)), vjust = -0.3, size = 3.5) +
+  facet_wrap(~ metric, scales = "free_y",
+             labeller = labeller(metric = metric_labels)) +
+  era_fill + era_x +
+  labs(title    = "Sample overview by political era",
+       subtitle = "Each person may appear in multiple eras if active across era boundaries",
+       x = NULL, y = NULL) +
+  theme_pri()
+
+print(p1)
+
+# ===========================================================================
+# PAGE 2: Education fields by era
+# ===========================================================================
+FIELDS <- c("law","economics","engineering","medicine","business",
+            "military_deg","education_deg","political_sci","humanities")
+FIELD_LABELS <- c(law="Law", economics="Economics", engineering="Engineering",
+                  medicine="Medicine", business="Business/Mgmt",
+                  military_deg="Military", education_deg="Education",
+                  political_sci="Political Sci.", humanities="Humanities")
+
+edu_fields <- panel |>
+  filter(has_govt | has_party) |>
+  group_by(era) |>
+  summarise(across(all_of(FIELDS), ~ mean(.x, na.rm = TRUE) * 100),
+            .groups = "drop") |>
+  pivot_longer(-era, names_to = "field", values_to = "pct") |>
+  mutate(field_label = FIELD_LABELS[field])
+
+p2 <- ggplot(edu_fields, aes(x = reorder(field_label, pct), y = pct, fill = era)) +
+  geom_col(position = "dodge") +
+  coord_flip() +
+  era_fill +
+  scale_y_continuous(labels = label_percent(scale = 1)) +
+  labs(title    = "Education field composition by era",
+       subtitle = "% of politically active persons with each degree field (cumulative to era end)",
+       x = NULL, y = "% of persons") +
+  guides(fill = guide_legend(nrow = 1)) +
+  theme_pri()
+
+print(p2)
+
+# ===========================================================================
+# PAGE 3: Education level & foreign degrees
+# ===========================================================================
+edu_level <- panel |>
+  filter(has_govt | has_party) |>
+  group_by(era) |>
+  summarise(
+    `PhD`           = mean(coalesce(phd,      FALSE), na.rm = TRUE) * 100,
+    `Masters`       = mean(coalesce(masters,  FALSE) & !coalesce(phd, FALSE), na.rm = TRUE) * 100,
+    `Undergraduate` = mean(coalesce(undergrad,FALSE) & !coalesce(masters, FALSE) & !coalesce(phd, FALSE), na.rm = TRUE) * 100,
+    `No degree info`= mean(!coalesce(undergrad,FALSE) & !coalesce(masters, FALSE) & !coalesce(phd, FALSE), na.rm = TRUE) * 100,
+    .groups = "drop"
+  ) |>
+  pivot_longer(-era, names_to = "level", values_to = "pct") |>
+  mutate(level = factor(level, levels = c("No degree info","Undergraduate","Masters","PhD")))
+
+p3a <- ggplot(edu_level, aes(x = era, y = pct, fill = level)) +
+  geom_col(position = "stack") +
+  scale_fill_brewer(palette = "Blues") +
+  scale_y_continuous(labels = label_percent(scale = 1)) +
+  era_x +
+  labs(title = "Education level by era", x = NULL, y = "%", fill = "Highest level") +
+  theme_pri()
+
+foreign_pct <- panel |>
+  filter(has_govt | has_party) |>
+  group_by(era) |>
+  summarise(pct = mean(coalesce(foreign_deg, FALSE)) * 100, .groups = "drop")
+
+p3b <- ggplot(foreign_pct, aes(x = era, y = pct, fill = era)) +
+  geom_col(show.legend = FALSE) +
+  geom_text(aes(label = paste0(round(pct, 1), "%")), vjust = -0.3, size = 3.5) +
+  scale_y_continuous(labels = label_percent(scale = 1)) +
+  era_fill + era_x +
+  labs(title = "Foreign degree", x = NULL, y = "% with foreign degree") +
+  theme_pri()
+
+print(p3a + p3b + plot_layout(widths = c(2, 1)))
+
+# ===========================================================================
+# PAGE 4: Top institutions
+# ===========================================================================
+top_inst_overall <- edu_long |>
+  filter(record_type == "degree", !is.na(organization)) |>
+  count(organization, sort = TRUE) |>
+  slice_head(n = 15)
+
+p4a <- ggplot(top_inst_overall,
+              aes(x = reorder(organization, n), y = n)) +
+  geom_col(fill = "#2C3E50") +
+  coord_flip() +
+  labs(title = "Top 15 institutions — all eras combined",
+       x = NULL, y = "N degree records") +
+  theme_pri()
+
+# Per-era top-5: use year_end to assign degree to era
+top_inst_era <- edu_long |>
+  filter(record_type == "degree", !is.na(organization)) |>
+  make_era_panel("year_end") |>
+  count(era, organization) |>
+  group_by(era) |>
+  slice_max(n, n = 5) |>
+  ungroup()
+
+p4b <- ggplot(top_inst_era, aes(x = reorder(organization, n), y = n, fill = era)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ era, scales = "free",
+             labeller = labeller(era = ERA_LABELS)) +
+  coord_flip() +
+  era_fill +
+  labs(title = "Top 5 institutions per era", x = NULL, y = "N degree records") +
+  theme_pri()
+
+print(p4a / p4b + plot_layout(heights = c(1, 1.2)))
+
+# ===========================================================================
+# PAGE 5: Government role types by era
+# ===========================================================================
+govt_roles <- panel |>
+  filter(has_govt) |>
+  group_by(era) |>
+  summarise(
+    Secretary          = mean(coalesce(ever_secretary,  FALSE)) * 100,
+    Governor           = mean(coalesce(ever_governor,   FALSE)) * 100,
+    `Dir. General`     = mean(coalesce(ever_dir_gen,    FALSE)) * 100,
+    Ambassador         = mean(coalesce(ever_ambassador, FALSE)) * 100,
+    Judge              = mean(coalesce(ever_judge,      FALSE)) * 100,
+    .groups = "drop"
+  ) |>
+  pivot_longer(-era, names_to = "role", values_to = "pct") |>
+  mutate(role = factor(role, levels = c("Secretary","Governor","Dir. General",
+                                        "Ambassador","Judge")))
+
+p5 <- ggplot(govt_roles, aes(x = era, y = pct, fill = era)) +
+  geom_col(show.legend = FALSE) +
+  geom_text(aes(label = paste0(round(pct, 1), "%")), vjust = -0.3, size = 3) +
+  facet_wrap(~ role, nrow = 1) +
+  scale_y_continuous(labels = label_percent(scale = 1)) +
+  era_fill + era_x +
+  labs(title    = "Government role types by era",
+       subtitle = "% of persons with govt positions who ever held each role (within that era)",
+       x = NULL, y = "%") +
+  theme_pri()
+
+print(p5)
+
+# ===========================================================================
+# PAGE 6: Party activity over calendar time
+# ===========================================================================
+party_time <- party_long |>
+  filter(!is.na(year_start), year_start >= 1920, year_start <= 2012) |>
+  mutate(party_grp = case_when(
+    party %in% c("PRI","PRM","PNR") ~ "PRI / PRM / PNR",
+    party == "PAN"                  ~ "PAN",
+    party == "PRD"                  ~ "PRD",
+    TRUE                            ~ "Other / Unknown"
+  )) |>
+  count(year = as.integer(year_start), party_grp)
+
+p6 <- ggplot(party_time, aes(x = year, y = n, fill = party_grp)) +
+  geom_area(position = "stack", alpha = 0.85, color = "white", linewidth = 0.2) +
+  geom_vline(xintercept = c(1929, 1946, 1988, 2000),
+             linetype = "dashed", color = "grey30", linewidth = 0.7) +
+  annotate("text",
+           x      = c(1929, 1946, 1988, 2000),
+           y      = Inf,
+           label  = c("1929\nPNR\nfounded","1946\nPRI\nfounded",
+                      "1988\nContested\nelection","2000\nPAN\nwins"),
+           vjust  = 1.2, hjust = -0.05, size = 3, color = "grey20") +
+  scale_fill_manual(values = c(
+    "PRI / PRM / PNR" = "#27AE60",
+    "PAN"             = "#2980B9",
+    "PRD"             = "#F39C12",
+    "Other / Unknown" = "#BDC3C7"
+  )) +
+  scale_x_continuous(breaks = seq(1930, 2010, 10)) +
+  labs(title    = "Party activity over calendar time",
+       subtitle = "N active party positions per year, by party",
+       x = "Year", y = "N positions", fill = NULL) +
+  guides(fill = guide_legend(nrow = 1)) +
+  theme_pri()
+
+print(p6)
+
+# ===========================================================================
+# PAGE 7: Labor sector composition by era
+# ===========================================================================
+LABOR_SECTORS <- c(
+  industrial_union = "Industrial union",
+  peasant          = "Peasant/Agrarian",
+  education        = "Education workers",
+  public_employees = "Public employees",
+  business         = "Business/Employers",
+  professional     = "Professional",
+  student          = "Student",
+  religious        = "Religious"
+)
+
+labor_sec2 <- panel |>
+  filter(has_labor) |>
+  mutate(
+    industrial_union = str_detect(coalesce(sectors_in_era,""), "industrial_union"),
+    peasant          = str_detect(coalesce(sectors_in_era,""), "peasant"),
+    edu_labor        = str_detect(coalesce(sectors_in_era,""), fixed("education")),
+    public_emp       = str_detect(coalesce(sectors_in_era,""), "public_employees"),
+    biz              = str_detect(coalesce(sectors_in_era,""), "business"),
+    professional     = str_detect(coalesce(sectors_in_era,""), "professional"),
+    student          = str_detect(coalesce(sectors_in_era,""), "student"),
+    religious        = str_detect(coalesce(sectors_in_era,""), "religious")
+  ) |>
+  group_by(era) |>
+  summarise(
+    `Industrial union`  = mean(industrial_union) * 100,
+    `Peasant/Agrarian`  = mean(peasant)          * 100,
+    `Education workers` = mean(edu_labor)         * 100,
+    `Public employees`  = mean(public_emp)        * 100,
+    `Business/Employers`= mean(biz)               * 100,
+    `Professional`      = mean(professional)      * 100,
+    `Student`           = mean(student)            * 100,
+    `Religious`         = mean(religious)          * 100,
+    .groups = "drop"
+  ) |>
+  pivot_longer(-era, names_to = "sector", values_to = "pct")
+
+p7 <- ggplot(labor_sec2, aes(x = era, y = pct, fill = era)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ sector, nrow = 2) +
+  scale_y_continuous(labels = label_percent(scale = 1)) +
+  era_fill + era_x +
+  labs(title    = "Labor/union sector composition by era",
+       subtitle = "% of persons with labor positions active in each sector (within era)",
+       x = NULL, y = "%") +
+  theme_pri()
+
+print(p7)
+
+# ===========================================================================
+# PAGE 8: Geographic origin by era
+# ===========================================================================
+geo_era <- panel |>
+  filter((has_govt | has_party), !is.na(birth_region)) |>
+  count(era, birth_region) |>
+  group_by(era) |>
+  mutate(pct = n / sum(n) * 100) |>
+  ungroup()
+
+p8 <- ggplot(geo_era, aes(x = reorder(birth_region, pct), y = pct, fill = era)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ era, labeller = labeller(era = ERA_LABELS)) +
+  coord_flip() +
+  scale_y_continuous(labels = label_percent(scale = 1)) +
+  era_fill +
+  labs(title    = "Birth region by era",
+       subtitle = "% of politically active persons born in each macro-region",
+       x = NULL, y = "%") +
+  theme_pri()
+
+print(p8)
+
+# ===========================================================================
+# PAGE 9: Career breadth by era
+# ===========================================================================
+breadth <- panel |>
+  group_by(era) |>
+  summarise(
+    `Govt only`       = mean( has_govt & !has_party & !has_labor) * 100,
+    `Party only`      = mean(!has_govt &  has_party & !has_labor) * 100,
+    `Labor only`      = mean(!has_govt & !has_party &  has_labor) * 100,
+    `Govt + Party`    = mean( has_govt &  has_party & !has_labor) * 100,
+    `Govt + Labor`    = mean( has_govt & !has_party &  has_labor) * 100,
+    `Party + Labor`   = mean(!has_govt &  has_party &  has_labor) * 100,
+    `All three`       = mean( has_govt &  has_party &  has_labor) * 100,
+    .groups = "drop"
+  ) |>
+  pivot_longer(-era, names_to = "combo", values_to = "pct") |>
+  mutate(combo = factor(combo, levels = c(
+    "Govt only","Party only","Labor only",
+    "Govt + Party","Govt + Labor","Party + Labor","All three"
+  )))
+
+p9a <- ggplot(breadth, aes(x = era, y = pct, fill = era)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ combo, nrow = 2) +
+  scale_y_continuous(labels = label_percent(scale = 1)) +
+  era_fill + era_x +
+  labs(title = "Career domain combinations by era",
+       x = NULL, y = "%") +
+  theme_pri()
+
+n_govt_dist <- panel |>
+  filter(has_govt, n_govt > 0) |>
+  ggplot(aes(x = era, y = n_govt, fill = era)) +
+  geom_violin(alpha = 0.6, show.legend = FALSE) +
+  geom_boxplot(width = 0.12, outlier.size = 0.5, show.legend = FALSE) +
+  scale_y_log10(labels = label_comma()) +
+  era_fill + era_x +
+  labs(title = "N govt positions (log scale)", x = NULL, y = "N positions") +
+  theme_pri()
+
+print(p9a / n_govt_dist + plot_layout(heights = c(1.5, 1)))
+
+# ===========================================================================
+# PAGE 10: Age at government entry by era
+# ===========================================================================
+age_entry <- govt_long |>
+  make_era_panel("year_start") |>
+  left_join(birth_years, by = "person_id") |>
+  mutate(age = as.integer(year_start) - birth_year) |>
+  filter(!is.na(age), age >= 18, age <= 80)
+
+medians_age <- age_entry |>
+  group_by(era) |>
+  summarise(med = median(age), .groups = "drop")
+
+p10 <- ggplot(age_entry, aes(x = era, y = age, fill = era)) +
+  geom_violin(alpha = 0.6, show.legend = FALSE) +
+  geom_boxplot(width = 0.12, outlier.size = 0.5, show.legend = FALSE) +
+  geom_text(data = medians_age,
+            aes(x = era, y = med, label = paste0("med=", round(med))),
+            nudge_x = 0.35, size = 3.5, fontface = "bold") +
+  era_fill + era_x +
+  labs(title    = "Age at government position entry by era",
+       subtitle = "One data point per government position record with known year and birth date",
+       x = NULL, y = "Age at entry") +
+  theme_pri()
+
+print(p10)
+
+# ===========================================================================
+# PAGE 11: Career transition heatmaps
+# ===========================================================================
+draw_transition_hm <- function(traj_df, from_col, to_col, title,
+                                top_ranks) {
+  d <- traj_df |>
+    select(from = all_of(from_col), to = all_of(to_col)) |>
+    filter(!is.na(from), !is.na(to)) |>
+    mutate(
+      from = factor(ifelse(from %in% top_ranks, from, "other"), levels = rev(top_ranks)),
+      to   = factor(ifelse(to   %in% top_ranks, to,   "other"), levels = top_ranks)
+    ) |>
+    count(from, to)
+
+  ggplot(d, aes(x = to, y = from, fill = n)) +
+    geom_tile(color = "white", linewidth = 0.8) +
+    geom_text(aes(label = n), size = 3, color = "white", fontface = "bold") +
+    scale_fill_gradient(low = "#AED6F1", high = "#1A5276", na.value = "grey95") +
+    labs(title = title,
+         x = "Rank in later era", y = "Rank in earlier era",
+         fill = "N persons") +
+    theme_pri() +
+    theme(axis.text.x = element_text(angle = 35, hjust = 1))
+}
+
+GOVT_RANK_LABELS <- c("secretary","governor","secretary_general","director_general",
+                       "assistant_secretary","ambassador","director","adviser","other")
+
+p11a <- draw_transition_hm(career_traj,
+  "highest_govt_rank_corporatism", "highest_govt_rank_pri_hege",
+  "Govt rank: Corporatism → PRI Hegemony", GOVT_RANK_LABELS)
+
+p11b <- draw_transition_hm(career_traj,
+  "highest_govt_rank_pri_hege", "highest_govt_rank_democracy",
+  "Govt rank: PRI Hegemony → Democracy", GOVT_RANK_LABELS)
+
+print(p11a + p11b)
+
+# ===========================================================================
+# PAGE 12: Cross-domain career flows
+# ===========================================================================
+PARTY_RANK_LABELS <- c("national_president","secretary_general_nat","cen_president",
+                        "cen_secretary","state_president","state_secretary_general",
+                        "cen_member","adviser_member","joined","other")
+
+cross_flow <- function(traj_df, from_col, to_col, title, from_ranks, to_ranks) {
+  d <- traj_df |>
+    select(from = all_of(from_col), to = all_of(to_col)) |>
+    filter(!is.na(from), !is.na(to)) |>
+    mutate(
+      from = ifelse(from %in% from_ranks, str_replace_all(from,"_"," "), "other"),
+      to   = ifelse(to   %in% to_ranks,   str_replace_all(to,  "_"," "), "other")
+    ) |>
+    count(from, to) |>
+    arrange(desc(n))
+
+  if (requireNamespace("ggalluvial", quietly = TRUE)) {
+    library(ggalluvial)
+    ggplot(d, aes(y = n, axis1 = from, axis2 = to)) +
+      geom_alluvium(aes(fill = from), width = 1/8, alpha = 0.8) +
+      geom_stratum(width = 1/8, fill = "grey85", color = "grey60") +
+      geom_label(stat = "stratum", aes(label = after_stat(stratum)), size = 2.8) +
+      scale_x_discrete(limits = c("Origin","Destination"), expand = c(.06,.06)) +
+      labs(title = title, y = "N persons", fill = NULL) +
+      theme_pri() + theme(legend.position = "none")
+  } else {
+    ggplot(d, aes(x = reorder(from, n), y = n, fill = to)) +
+      geom_col(position = "stack") +
+      coord_flip() +
+      labs(title    = paste(title, "(ggalluvial not installed — bar chart fallback)"),
+           subtitle = "Install ggalluvial for Sankey diagram",
+           x = NULL, y = "N persons", fill = "Destination rank") +
+      theme_pri()
+  }
+}
+
+p12a <- cross_flow(career_traj,
+  "highest_party_rank_corporatism", "highest_govt_rank_pri_hege",
+  "Party rank (Corporatism) → Govt rank (PRI Hegemony)",
+  PARTY_RANK_LABELS, GOVT_RANK_LABELS)
+
+p12b <- cross_flow(career_traj,
+  "highest_govt_rank_pri_hege", "highest_party_rank_democracy",
+  "Govt rank (PRI Hegemony) → Party rank (Democracy)",
+  GOVT_RANK_LABELS, PARTY_RANK_LABELS)
+
+print(p12a + p12b)
+
+# ---------------------------------------------------------------------------
+# CLOSE PDF
+# ---------------------------------------------------------------------------
+dev.off()
+cat("\nSaved:", file.path(OUTPUT_DIR, "descriptive_stats.pdf"), "\n")
+cat("Pages: 12\n")
