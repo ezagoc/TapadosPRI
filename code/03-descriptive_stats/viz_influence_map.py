@@ -14,6 +14,12 @@ import pandas as pd
 import geopandas as gpd
 import matplotlib.pyplot as plt
 from collections import defaultdict
+from pathlib import Path
+
+CODE_DIR = Path(__file__).resolve().parents[1]
+if str(CODE_DIR) not in sys.path:
+    sys.path.append(str(CODE_DIR))
+
 from config import (
     PARSED_POSITIONS_CSV,
     BIOGRAPHIES_CSV,

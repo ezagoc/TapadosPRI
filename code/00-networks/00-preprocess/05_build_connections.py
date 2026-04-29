@@ -10,7 +10,14 @@ Output: data/parsed_connections.csv
 import re
 from typing import Optional
 from collections import defaultdict
+from pathlib import Path
+import sys
 import pandas as pd
+
+CODE_DIR = Path(__file__).resolve().parents[2]
+if str(CODE_DIR) not in sys.path:
+    sys.path.append(str(CODE_DIR))
+
 from config import (
     BIOGRAPHIES_CSV,
     PARSED_POSITIONS_CSV,

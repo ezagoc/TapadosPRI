@@ -20,9 +20,15 @@ import re
 import json
 import getpass
 from typing import Optional
+from pathlib import Path
+import sys
 
 import pandas as pd
 import openai
+
+CODE_DIR = Path(__file__).resolve().parents[2]
+if str(CODE_DIR) not in sys.path:
+    sys.path.append(str(CODE_DIR))
 
 from config import PARSED_POSITIONS_CSV, LABOR_POSITIONS_CSV, LABOR_POSITIONS_WIDE_CSV
 

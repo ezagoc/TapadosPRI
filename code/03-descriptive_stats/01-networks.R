@@ -24,8 +24,9 @@ library(grid)
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
-DATA_DIR   <- "C:/Users/Dell/Dropbox/TapadosPRI/data"
-OUTPUT_DIR <- "C:/Users/Dell/Dropbox/TapadosPRI/output"
+DB_ROOT <- Sys.getenv("TAPADOSPRI_DB_ROOT", unset = "C:/Users/Dell/Dropbox/TapadosPRI")
+DATA_DIR <- Sys.getenv("TAPADOSPRI_DATA_DIR", unset = file.path(DB_ROOT, "data"))
+OUTPUT_DIR <- Sys.getenv("TAPADOSPRI_OUTPUT_DIR", unset = file.path(DB_ROOT, "output"))
 dir.create(OUTPUT_DIR, showWarnings = FALSE)
 
 # ---------------------------------------------------------------------------

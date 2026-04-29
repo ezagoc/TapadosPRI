@@ -20,9 +20,12 @@
 library(tidyverse)
 library(lubridate)
 
+DB_ROOT <- Sys.getenv("TAPADOSPRI_DB_ROOT", unset = "C:/Users/Dell/Dropbox/TapadosPRI")
+DATA_DIR <- Sys.getenv("TAPADOSPRI_DATA_DIR", unset = file.path(DB_ROOT, "data"))
+
 # ---- 0. LOAD DATA ------------------------------------------
 df <- read_csv(
-  "C:/Users/Dell/Dropbox/TapadosPRI/data/biographies.csv",
+  file.path(DATA_DIR, "biographies.csv"),
   locale        = locale(encoding = "UTF-8"),
   show_col_types = FALSE
 )
@@ -319,7 +322,7 @@ cat("\n")
 # ============================================================
 # SECTION 3  Save output
 # ============================================================
-out_path <- "C:/Users/Dell/Dropbox/TapadosPRI/data/biographies_r_cleaned.csv"
+out_path <- file.path(DATA_DIR, "biographies_r_cleaned.csv")
 write_csv(df, out_path, na = "")
 
 cat("── Saved:", out_path, "\n")

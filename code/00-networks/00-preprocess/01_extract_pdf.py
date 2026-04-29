@@ -8,9 +8,16 @@ Output: data/biographies_full.txt
 import pdfplumber
 import re
 from pathlib import Path
+import sys
 
-PDF_PATH = Path(__file__).parent.parent / "literature" / "biographies" / "Mexican_Political_Biographies_1935-2009_Fourth_Edi....pdf"
-OUT_DIR  = Path(__file__).parent.parent / "data"
+CODE_DIR = Path(__file__).resolve().parents[2]
+if str(CODE_DIR) not in sys.path:
+    sys.path.append(str(CODE_DIR))
+
+from config import MAIN_BIOGRAPHIES_PDF, DATA_DIR
+
+PDF_PATH = MAIN_BIOGRAPHIES_PDF
+OUT_DIR = DATA_DIR
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Watermark strip: all watermark words sit at x0 = -4.8 (outside page boundary)

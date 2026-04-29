@@ -1,0 +1,8 @@
+geopandas
+matplotlib
+networkx
+numpy
+openai
+pandas
+pdfplumber
+spacy

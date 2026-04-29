@@ -2,6 +2,7 @@
 Shared configuration for the TapadosPRI political network analysis pipeline.
 """
 
+import os
 import re
 import unicodedata
 from pathlib import Path
@@ -10,9 +11,15 @@ from pathlib import Path
 # Paths
 # ---------------------------------------------------------------------------
 ROOT = Path(__file__).resolve().parent.parent
-DATA_DIR = ROOT / "data"
-OUTPUT_DIR = ROOT / "output"
+DB_ROOT = Path(os.environ.get("TAPADOSPRI_DB_ROOT", r"C:\Users\Dell\Dropbox\TapadosPRI")).expanduser()
+DATA_DIR = Path(os.environ.get("TAPADOSPRI_DATA_DIR", str(DB_ROOT / "data"))).expanduser()
+OUTPUT_DIR = Path(os.environ.get("TAPADOSPRI_OUTPUT_DIR", str(DB_ROOT / "output"))).expanduser()
+LITERATURE_DIR = Path(os.environ.get("TAPADOSPRI_LITERATURE_DIR", str(DB_ROOT / "literature"))).expanduser()
+BIOGRAPHIES_DIR = LITERATURE_DIR / "biographies"
+
+BIOGRAPHIES_RAW_TXT = DATA_DIR / "biographies_full.txt"
 BIOGRAPHIES_CSV = DATA_DIR / "biographies_corrected.csv"
+BIOGRAPHIES_PARSED_CSV = DATA_DIR / "biographies.csv"
 CORCHOLATAS_XLSX = DATA_DIR / "candidates" / "corcholatas historicas.xlsx"
 PARSED_POSITIONS_CSV       = DATA_DIR / "parsed_positions.csv"
 PARSED_CONNECTIONS_CSV     = DATA_DIR / "parsed_connections.csv"
@@ -29,6 +36,8 @@ LABOR_POSITIONS_WIDE_CSV   = DATA_DIR / "labor_positions_wide.csv"
 OTHER_POSITIONS_CSV        = DATA_DIR / "other_positions.csv"
 SHAPEFILE_DIR = DATA_DIR / "shapefiles"
 STATES_GEOJSON = SHAPEFILE_DIR / "mexico_states.json"
+MAIN_BIOGRAPHIES_PDF = BIOGRAPHIES_DIR / "Mexican_Political_Biographies_1935-2009_Fourth_Edi....pdf"
+EARLY_BIOGRAPHIES_PDF = BIOGRAPHIES_DIR / "mexican-political-biographies-1884-1934.pdf"
 
 # ---------------------------------------------------------------------------
 # Mexican states: canonical name -> (variants list, centroid lat, centroid lon)

@@ -13,6 +13,13 @@ Output: data/other_positions.csv
 """
 
 import pandas as pd
+from pathlib import Path
+import sys
+
+CODE_DIR = Path(__file__).resolve().parents[2]
+if str(CODE_DIR) not in sys.path:
+    sys.path.append(str(CODE_DIR))
+
 from config import PARSED_POSITIONS_CSV, OTHER_POSITIONS_CSV
 
 # ---------------------------------------------------------------------------

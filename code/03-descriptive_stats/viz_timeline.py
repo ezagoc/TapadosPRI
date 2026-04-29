@@ -15,6 +15,12 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from matplotlib.patches import Rectangle
 from collections import defaultdict
+from pathlib import Path
+
+CODE_DIR = Path(__file__).resolve().parents[1]
+if str(CODE_DIR) not in sys.path:
+    sys.path.append(str(CODE_DIR))
+
 from config import (
     PARSED_POSITIONS_CSV,
     OUTPUT_DIR,

@@ -14,9 +14,16 @@ Biography structure (from the book's key):
 import re
 import pandas as pd
 from pathlib import Path
+import sys
 
-TEXT_PATH = Path(__file__).parent.parent / "data" / "biographies_full.txt"
-OUT_CSV   = Path(__file__).parent.parent / "data" / "biographies.csv"
+CODE_DIR = Path(__file__).resolve().parents[2]
+if str(CODE_DIR) not in sys.path:
+    sys.path.append(str(CODE_DIR))
+
+from config import BIOGRAPHIES_RAW_TXT, BIOGRAPHIES_PARSED_CSV
+
+TEXT_PATH = BIOGRAPHIES_RAW_TXT
+OUT_CSV = BIOGRAPHIES_PARSED_CSV
 
 FIELD_MAP = {
     'a': 'birth_date',

@@ -27,8 +27,15 @@ Outputs:
 
 import re
 from typing import Optional
+from pathlib import Path
+import sys
 import pandas as pd
 import spacy
+
+CODE_DIR = Path(__file__).resolve().parents[2]
+if str(CODE_DIR) not in sys.path:
+    sys.path.append(str(CODE_DIR))
+
 from config import PARSED_POSITIONS_CSV, EDUCATION_CSV, EDUCATION_WIDE_CSV
 
 # ---------------------------------------------------------------------------

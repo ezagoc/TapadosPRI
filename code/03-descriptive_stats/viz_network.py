@@ -12,6 +12,12 @@ import matplotlib.patches as mpatches
 from matplotlib.lines import Line2D
 from collections import Counter
 import sys
+from pathlib import Path
+
+CODE_DIR = Path(__file__).resolve().parents[1]
+if str(CODE_DIR) not in sys.path:
+    sys.path.append(str(CODE_DIR))
+
 from config import PARSED_CONNECTIONS_CSV, OUTPUT_DIR, normalize_name, DATA_DIR
 
 # ---------------------------------------------------------------------------
