@@ -25,6 +25,17 @@ Fixes applied:
   7.  Campaign coordinator → "campaign_leader": "coordinator/director of campaign"
       (3 records)
 
+  ── party / party_level ─────────────────────────────────────────────────────
+  8.  Recognize minor party acronyms not in original _PARTY_PATTERNS:
+      PMS, PRT, PCD, PPM, PAS, PP  (fills null party column)
+  9.  City in text → party_level="local": if text mentions a specific
+      municipality (from CITY_TO_STATE in config.py), override "state"→"local"
+ 10.  Null party_level → infer from context:
+      - "Chamber of Deputies" / "Senate" / national keywords → "national"
+      - City name in text → "local"
+      - State name in text → "state"
+      - Fallback → "national" (party committee/delegation roles)
+
 Note on "candidate" rank: if party_positions_wide.csv is regenerated from this
 clean file, add "candidate": 15 to _RANK_ORDER in 05_party_positions.py so that
 _best_rank() handles it correctly.
@@ -168,6 +179,7 @@ def _fix_camp_coord_rank(rank: str, text: str) -> str:
 
 # ---------------------------------------------------------------------------
 # Fix 8: party_level="state" with null state → set to None
+# (kept as fix 8, city/level fixes below are 9-10)
 # Bug in 05_party_positions.py: float(NaN) is truthy in Python, so
 # `if state and state not in ("Federal District",)` incorrectly returned
 # "state" for records where state was NaN.
@@ -177,6 +189,145 @@ def _fix_party_level(level: str, state) -> Optional[str]:
     if level == "state" and pd.isna(state):
         return None
     return level
+
+
+# ---------------------------------------------------------------------------
+# Fix 9: Recognize minor party acronyms missing from original _PARTY_PATTERNS
+# ---------------------------------------------------------------------------
+
+# Maps acronym → canonical name stored in `party` column
+_MINOR_PARTIES = {
+    "PMS":  "PMS",   # Partido Mexicano Socialista (PRD precursor 1987–1989)
+    "PRT":  "PRT",   # Partido Revolucionario de los Trabajadores (Trotskyist)
+    "PCD":  "PCD",   # Partido Centro Democrático (Camacho Solís, 1999–2003)
+    "PPM":  "PPM",   # Partido Popular Mexicano
+    "PAS":  "PAS",   # Partido Alianza Social
+}
+# PP (Partido Popular) handled separately — acronym too short/ambiguous alone
+_PP_RE = re.compile(r"\bParty\b.*\bPP\b|\bPP\b.*\bParty\b|candidate\s+of\s+PP\b"
+                    r"|member\s+of\s+PP\b|founding\s+member.*\bPP\b", re.I)
+_MINOR_PARTY_RE = re.compile(
+    r"\b(" + "|".join(_MINOR_PARTIES.keys()) + r")\b", re.I
+)
+
+def _fix_minor_party(party, org: str, text: str):
+    if pd.notna(party):
+        return party
+    for source in (org, text):
+        if not isinstance(source, str):
+            continue
+        m = _MINOR_PARTY_RE.search(source)
+        if m:
+            return _MINOR_PARTIES[m.group(1).upper()]
+    if isinstance(text, str) and _PP_RE.search(text):
+        return "PP"
+    return party
+
+
+# ---------------------------------------------------------------------------
+# Fix 9b: City in text → party_level="local"
+# Uses CITY_TO_STATE from config.py (cities that are clearly municipalities,
+# not state names). State-named cities (Puebla, Oaxaca) are excluded to avoid
+# false positives.
+# ---------------------------------------------------------------------------
+
+from config import CITY_TO_STATE
+
+# Only non-capital municipalities — state capitals excluded to avoid false positives.
+# "president of PRI, Durango" = state-level (Durango is also the state capital).
+# "president of PRI, Iguala" = local (Iguala is clearly a municipality).
+# Excluded: state capitals AND cities that share names with states, politicians,
+# or other ambiguous terms (e.g. "veracruz"=city+state, "leon" in "Nuevo Leon",
+# "lazaro cardenas"=president+city, "obregon"=general+city).
+_EXCLUDED_LOWER = {
+    # State capitals
+    "aguascalientes", "mexicali", "la paz", "campeche", "tuxtla gutierrez",
+    "chihuahua", "saltillo", "colima", "toluca", "morelia", "cuernavaca",
+    "tepic", "monterrey", "oaxaca", "puebla", "queretaro", "chetumal",
+    "san luis potosi", "culiacan", "hermosillo", "villahermosa",
+    "ciudad victoria", "tlaxcala", "jalapa", "xalapa", "merida",
+    "zacatecas", "durango", "guadalajara", "chilpancingo",
+    # Ambiguous: both city and state, or politician name
+    "veracruz", "leon", "lazaro cardenas", "obregon",
+}
+
+# Safe non-capital municipalities from CITY_TO_STATE (no state/capital ambiguity)
+_CITY_NAMES_LOCAL = sorted(
+    [city for city in CITY_TO_STATE
+     if city.lower() not in _EXCLUDED_LOWER],
+    key=len, reverse=True,
+)
+
+# Additional non-capital municipalities unambiguously distinct from state names
+_EXTRA_CITIES_LOCAL = [
+    "iguala", "acapulco",
+    "ciudad juarez", "parral", "delicias",
+    "torreon", "monclova", "piedras negras",
+    "tampico", "nuevo laredo", "matamoros", "reynosa",
+    "mazatlan", "los mochis", "guasave",
+    "irapuato", "celaya", "salamanca", "silao",
+    "uruapan", "zamora",
+    "valladolid", "progreso",
+    "comalcalco",
+    "san cristobal de las casas", "tapachula", "comitan",
+    "cancun", "playa del carmen",
+    "manzanillo",
+    "apizaco", "huamantla",
+    "tulancingo",
+    "san juan del rio",
+    "fresnillo",
+    "gomez palacio", "lerdo",
+    "jochitlan", "metepec",
+    "juchitan", "tuxtepec",
+    "coatzacoalcos", "poza rica", "tuxpan",
+]
+
+_ALL_CITIES = sorted(
+    set(_CITY_NAMES_LOCAL + _EXTRA_CITIES_LOCAL),
+    key=len, reverse=True,
+)
+_CITY_LOCAL_RE = re.compile(
+    r"\b(" + "|".join(re.escape(c) for c in _ALL_CITIES) + r")\b", re.I
+)
+
+def _fix_city_to_local(level: Optional[str], text: str) -> Optional[str]:
+    if level != "state":
+        return level
+    if _CITY_LOCAL_RE.search(text):
+        return "local"
+    return level
+
+
+# ---------------------------------------------------------------------------
+# Fix 10: Null party_level → infer from context
+# ---------------------------------------------------------------------------
+
+_NATIONAL_BODY_RE = re.compile(
+    r"\b(Chamber\s+of\s+Deputies|Senate|Congress|federal\s+legislature|"
+    r"CEN\b|IEPES\b|national\s+committee|central\s+committee|"
+    r"national\s+council|national\s+assembly|national\s+convention|"
+    r"national\s+PRI|national\s+PAN|national\s+PRD|plurinominal)\b",
+    re.I,
+)
+
+def _fix_null_level(level: Optional[str], text: str, state) -> Optional[str]:
+    if pd.notna(level):
+        return level
+    if not isinstance(text, str):
+        return None
+    # Explicit national body keywords → national
+    if _NATIONAL_BODY_RE.search(text):
+        return "national"
+    # Unambiguous city → local
+    if _CITY_LOCAL_RE.search(text):
+        return "local"
+    # State column populated → state
+    if pd.notna(state):
+        return "state"
+    # No geographic context: leave NULL rather than guessing.
+    # Assigning "national" as a fallback would inflate national-level connections
+    # in network analysis with records like "Joined PRI, 1975" or "Member of PAN".
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -192,6 +343,7 @@ def _clean_row(row: pd.Series):
     rec_type   = row["record_type"] if pd.notna(row["record_type"]) else ""
     level      = row["party_level"] if pd.notna(row["party_level"]) else None
     state      = row["state"]
+    party      = row["party"]       if pd.notna(row["party"])       else None
 
     # Text / year fixes
     raw_clean = _clean_raw(raw)
@@ -207,10 +359,15 @@ def _clean_row(row: pd.Series):
     rank = _fix_state_dir_rank(rank, raw_clean, level or "")
     rank = _fix_camp_coord_rank(rank, raw_clean)
 
-    # party_level fix
-    level = _fix_party_level(level, state)
+    # party_level: NaN-state bug → null, then city→local, then fill nulls
+    level = _fix_party_level(level, state)       # NaN-state bug (fix 8)
+    level = _fix_city_to_local(level, raw_clean) # city in text → local (fix 9b)
+    level = _fix_null_level(level, raw_clean, state)  # fill remaining nulls (fix 10)
 
-    return raw_clean, role_text, yr_s, yr_e, org_clean, rank, level
+    # Minor party recognition
+    party = _fix_minor_party(party, str(org) if pd.notna(org) else "", raw_clean)
+
+    return raw_clean, role_text, yr_s, yr_e, org_clean, rank, level, party
 
 
 def main():
@@ -224,6 +381,7 @@ def main():
     orig_ye    = pp["year_end"].copy()
     orig_rank  = pp["party_rank"].copy()
     orig_level = pp["party_level"].copy()
+    orig_party = pp["party"].copy()
 
     print("Applying fixes …")
     results = pp.apply(_clean_row, axis=1)
@@ -235,6 +393,7 @@ def main():
     pp["organization"]  = [r[4] for r in results]
     pp["party_rank"]    = [r[5] for r in results]
     pp["party_level"]   = [r[6] for r in results]
+    pp["party"]         = [r[7] for r in results]
 
     def _n_chg(new, old):
         return (new.fillna("__N__").astype(str) != old.fillna("__N__").astype(str)).sum()
@@ -246,6 +405,7 @@ def main():
         | (pp["year_end"].fillna(-1)    != orig_ye.fillna(-1))
         | (pp["party_rank"].fillna("__N__")  != orig_rank.fillna("__N__"))
         | (pp["party_level"].fillna("__N__") != orig_level.fillna("__N__"))
+        | (pp["party"].fillna("__N__")       != orig_party.fillna("__N__"))
     ).astype(int)
 
     n_mod = pp["modified"].sum()
@@ -261,6 +421,7 @@ def main():
     print(f"  year_end      : {_n_chg(pp['year_end'],      orig_ye):4d} changes")
     print(f"  party_rank    : {_n_chg(pp['party_rank'],    orig_rank):4d} changes")
     print(f"  party_level   : {_n_chg(pp['party_level'],   orig_level):4d} changes")
+    print(f"  party         : {_n_chg(pp['party'],         orig_party):4d} changes")
 
     # party_rank change breakdown
     rank_chg = pp[pp["party_rank"].fillna("__N__") != orig_rank.fillna("__N__")].copy()
@@ -282,6 +443,24 @@ def main():
             print(f"\n  → {new_rank} ({len(rank_chg[rank_chg['party_rank']==new_rank])} total):")
             for _, row in subset.iterrows():
                 print(f"    {row['role_text_raw'][:80]}")
+
+    # party_level: show local changes and null→assigned breakdown
+    lev_chg2 = pp[pp["party_level"].fillna("__N__") != orig_level.fillna("__N__")].copy()
+    lev_chg2["orig"] = orig_level[lev_chg2.index]
+    print(f"\n--- party_level change breakdown ---")
+    print(lev_chg2.groupby(["orig","party_level"], dropna=False).size().to_string())
+
+    local_chg = lev_chg2[lev_chg2["party_level"] == "local"]
+    if not local_chg.empty:
+        print(f"\n  state→local sample (city detected):")
+        for _, row in local_chg.head(8).iterrows():
+            print(f"    [{row['orig']}→local]  {row['role_text_raw'][:75]}")
+
+    # party: minor party fills
+    party_chg = pp[pp["party"].fillna("__N__") != orig_party.fillna("__N__")]
+    if not party_chg.empty:
+        print(f"\n--- party fills (minor parties) ---")
+        print(party_chg[["role_text_raw","party"]].head(20).to_string())
 
 
 if __name__ == "__main__":
