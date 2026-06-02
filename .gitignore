@@ -1,5 +1,24 @@
+# Environment
 .venv/
+.env
+
+# Python
 __pycache__/
 *.pyc
-output/
-.env
+*.pyo
+
+# Claude Code — local permissions are machine-specific
+.claude/settings.local.json
+**/.claude/settings.local.json
+
+# R
+.Rhistory
+.RData
+.Rproj.user/
+
+# Mac
+.DS_Store
+Icon
+
+# Jupyter
+.ipynb_checkpoints/
