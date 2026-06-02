@@ -5,4 +5,5 @@ numpy
 openai
 pandas
 pdfplumber
+python-dotenv
 spacy

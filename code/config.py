@@ -7,11 +7,17 @@ import re
 import unicodedata
 from pathlib import Path
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+except ImportError:
+    pass
+
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
 ROOT = Path(__file__).resolve().parent.parent
-DB_ROOT = Path(os.environ.get("TAPADOSPRI_DB_ROOT", r"C:\Users\Dell\Dropbox\TapadosPRI")).expanduser()
+DB_ROOT = Path(os.environ.get("TAPADOSPRI_DB_ROOT", str(Path.home() / "Dropbox" / "TapadosPRI"))).expanduser()
 DATA_DIR = Path(os.environ.get("TAPADOSPRI_DATA_DIR", str(DB_ROOT / "data"))).expanduser()
 OUTPUT_DIR = Path(os.environ.get("TAPADOSPRI_OUTPUT_DIR", str(DB_ROOT / "output"))).expanduser()
 LITERATURE_DIR = Path(os.environ.get("TAPADOSPRI_LITERATURE_DIR", str(DB_ROOT / "literature"))).expanduser()
