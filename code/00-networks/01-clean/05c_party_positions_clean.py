@@ -310,23 +310,29 @@ _NATIONAL_BODY_RE = re.compile(
     re.I,
 )
 
-def _fix_null_level(level: Optional[str], text: str, state) -> Optional[str]:
+_STATE_LEVEL_RANKS = {"state_president", "state_secretary", "state_secretary_general"}
+
+def _fix_null_level(level: Optional[str], text: str, state, rank: str) -> Optional[str]:
     if pd.notna(level):
         return level
+    # Rank explicitly indicates state level — trust it even without a state name.
+    # 217 records have state_president/state_secretary rank but no state in text.
+    if rank in _STATE_LEVEL_RANKS:
+        return "state"
     if not isinstance(text, str):
         return None
     # Explicit national body keywords → national
     if _NATIONAL_BODY_RE.search(text):
         return "national"
-    # Unambiguous city → local
+    # Unambiguous municipality → local
     if _CITY_LOCAL_RE.search(text):
         return "local"
     # State column populated → state
     if pd.notna(state):
         return "state"
     # No geographic context: leave NULL rather than guessing.
-    # Assigning "national" as a fallback would inflate national-level connections
-    # in network analysis with records like "Joined PRI, 1975" or "Member of PAN".
+    # "national" as fallback inflates national connections in network analysis
+    # with records like "Joined PRI, 1975" or "Member of PAN".
     return None
 
 
@@ -362,7 +368,7 @@ def _clean_row(row: pd.Series):
     # party_level: NaN-state bug → null, then city→local, then fill nulls
     level = _fix_party_level(level, state)       # NaN-state bug (fix 8)
     level = _fix_city_to_local(level, raw_clean) # city in text → local (fix 9b)
-    level = _fix_null_level(level, raw_clean, state)  # fill remaining nulls (fix 10)
+    level = _fix_null_level(level, raw_clean, state, rank)  # fill remaining nulls (fix 10)
 
     # Minor party recognition
     party = _fix_minor_party(party, str(org) if pd.notna(org) else "", raw_clean)
