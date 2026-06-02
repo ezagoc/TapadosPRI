@@ -310,6 +310,40 @@ _NATIONAL_BODY_RE = re.compile(
     re.I,
 )
 
+# ---------------------------------------------------------------------------
+# Fix 11: record_type / party_rank consistency — 8 specific edge cases
+# ---------------------------------------------------------------------------
+
+# Group A: "joined [campaign]" → record_type should be 'campaign', not 'joined'
+# e.g. "joined Francisco Labastida's presidential campaign, 1999"
+_JOINED_CAMPAIGN_RE = re.compile(r"^joined\b.{0,60}\bcampaign\b", re.I)
+
+# Group B: "candidate/precandidate for president of CEN" → rank should be
+# 'cen_president', not 'cen_member' (text starts with "candidate for", so the
+# original regex never reached the cen_president branch)
+_CAND_CEN_PRES_RE = re.compile(
+    r"^(?:pre)?candidate\s+for\s+president\s+of\s+CEN\b", re.I
+)
+
+# Group C: "resigned from CEN to protest party's candidate for governor" →
+# record_type should be 'active_position' (the person was a CEN member who
+# resigned; the word "candidate" in the text refers to someone else)
+_RESIGNED_PROTEST_RE = re.compile(
+    r"^resigned\b.{0,60}\bprotest\b.{0,60}\bcandidate\b", re.I
+)
+
+
+def _fix_type_rank_consistency(record_type: str, rank: str, text: str):
+    """Fix 8 edge cases where record_type and party_rank are inconsistent."""
+    if _JOINED_CAMPAIGN_RE.search(text):
+        record_type = "campaign"          # "joined a campaign" ≠ "joined the party"
+    if _CAND_CEN_PRES_RE.search(text):
+        rank = "cen_president"            # candidate for CEN presidency → cen_president
+    if _RESIGNED_PROTEST_RE.search(text):
+        record_type = "active_position"   # resigned as protest; they were not a candidate
+    return record_type, rank
+
+
 _STATE_LEVEL_RANKS = {"state_president", "state_secretary", "state_secretary_general"}
 
 def _fix_null_level(level: Optional[str], text: str, state, rank: str) -> Optional[str]:
@@ -359,11 +393,12 @@ def _clean_row(row: pd.Series):
 
     org_clean = _clean_org(org)
 
-    # party_rank fixes (applied in priority order)
+    # party_rank / record_type fixes (applied in priority order)
     rank = _fix_candidate_rank(rank, rec_type)
     rank = _fix_adviser_rank(rank, raw_clean)
     rank = _fix_state_dir_rank(rank, raw_clean, level or "")
     rank = _fix_camp_coord_rank(rank, raw_clean)
+    rec_type, rank = _fix_type_rank_consistency(rec_type, rank, raw_clean)
 
     # party_level: NaN-state bug → null, then city→local, then fill nulls
     level = _fix_party_level(level, state)       # NaN-state bug (fix 8)
@@ -373,7 +408,7 @@ def _clean_row(row: pd.Series):
     # Minor party recognition
     party = _fix_minor_party(party, str(org) if pd.notna(org) else "", raw_clean)
 
-    return raw_clean, role_text, yr_s, yr_e, org_clean, rank, level, party
+    return raw_clean, role_text, yr_s, yr_e, org_clean, rank, level, party, rec_type
 
 
 def main():
@@ -381,13 +416,14 @@ def main():
     pp = pd.read_csv(PARTY_POSITIONS_CSV)
     print(f"  {len(pp):,} records")
 
-    orig_raw   = pp["role_text_raw"].copy()
-    orig_org   = pp["organization"].copy()
-    orig_ys    = pp["year_start"].copy()
-    orig_ye    = pp["year_end"].copy()
-    orig_rank  = pp["party_rank"].copy()
-    orig_level = pp["party_level"].copy()
-    orig_party = pp["party"].copy()
+    orig_raw     = pp["role_text_raw"].copy()
+    orig_org     = pp["organization"].copy()
+    orig_ys      = pp["year_start"].copy()
+    orig_ye      = pp["year_end"].copy()
+    orig_rank    = pp["party_rank"].copy()
+    orig_level   = pp["party_level"].copy()
+    orig_party   = pp["party"].copy()
+    orig_rectype = pp["record_type"].copy()
 
     print("Applying fixes …")
     results = pp.apply(_clean_row, axis=1)
@@ -400,6 +436,7 @@ def main():
     pp["party_rank"]    = [r[5] for r in results]
     pp["party_level"]   = [r[6] for r in results]
     pp["party"]         = [r[7] for r in results]
+    pp["record_type"]   = [r[8] for r in results]
 
     def _n_chg(new, old):
         return (new.fillna("__N__").astype(str) != old.fillna("__N__").astype(str)).sum()
@@ -411,7 +448,8 @@ def main():
         | (pp["year_end"].fillna(-1)    != orig_ye.fillna(-1))
         | (pp["party_rank"].fillna("__N__")  != orig_rank.fillna("__N__"))
         | (pp["party_level"].fillna("__N__") != orig_level.fillna("__N__"))
-        | (pp["party"].fillna("__N__")       != orig_party.fillna("__N__"))
+        | (pp["party"].fillna("__N__")          != orig_party.fillna("__N__"))
+        | (pp["record_type"].fillna("__N__")   != orig_rectype.fillna("__N__"))
     ).astype(int)
 
     n_mod = pp["modified"].sum()
@@ -428,6 +466,7 @@ def main():
     print(f"  party_rank    : {_n_chg(pp['party_rank'],    orig_rank):4d} changes")
     print(f"  party_level   : {_n_chg(pp['party_level'],   orig_level):4d} changes")
     print(f"  party         : {_n_chg(pp['party'],         orig_party):4d} changes")
+    print(f"  record_type   : {_n_chg(pp['record_type'],  orig_rectype):4d} changes")
 
     # party_rank change breakdown
     rank_chg = pp[pp["party_rank"].fillna("__N__") != orig_rank.fillna("__N__")].copy()
