@@ -235,6 +235,21 @@ def main():
     n_mod = lp["modified"].sum()
     print(f"  Modified: {n_mod:,} / {len(lp):,} records ({100*n_mod/len(lp):.1f}%)")
 
+    # Add work_state: for national union positions with null state, the headquarters
+    # are in the Federal District. When a national record has a state value it is
+    # the correct work location (e.g. "CNOP in Morelos" → worked in Morelos).
+    def _labor_work_state(is_nat, state):
+        if is_nat is True and pd.isna(state):
+            return "Federal District"
+        return state if pd.notna(state) else None
+
+    lp["work_state"] = lp.apply(
+        lambda r: _labor_work_state(r["is_national"], r["state"]), axis=1
+    )
+    n_ws = lp["work_state"].notna().sum()
+    print(f"  work_state filled: {n_ws} records "
+          f"({lp['work_state'].eq('Federal District').sum()} = Federal District)")
+
     CLEAN_DIR.mkdir(parents=True, exist_ok=True)
     lp.to_csv(LABOR_POSITIONS_CLEAN_CSV, index=False)
     print(f"\nSaved → {LABOR_POSITIONS_CLEAN_CSV}")

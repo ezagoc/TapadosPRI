@@ -455,6 +455,22 @@ def main():
     n_mod = pp["modified"].sum()
     print(f"  Modified: {n_mod:,} / {len(pp):,} records ({100*n_mod/len(pp):.1f}%)")
 
+    # Add work_state: for national positions with null state, physical location
+    # is the Federal District (CEN, IEPES, national committee offices in Mexico City).
+    # When a national-level person has a state value it is already the correct work
+    # location (e.g. "general delegate to Nuevo León" → worked in Nuevo León).
+    def _party_work_state(level, state):
+        if level == "national" and pd.isna(state):
+            return "Federal District"
+        return state if pd.notna(state) else None
+
+    pp["work_state"] = pp.apply(
+        lambda r: _party_work_state(r["party_level"], r["state"]), axis=1
+    )
+    n_ws = pp["work_state"].notna().sum()
+    print(f"  work_state filled: {n_ws} records "
+          f"({pp['work_state'].eq('Federal District').sum()} = Federal District)")
+
     CLEAN_DIR.mkdir(parents=True, exist_ok=True)
     pp.to_csv(PARTY_POSITIONS_CLEAN_CSV, index=False)
     print(f"\nSaved → {PARTY_POSITIONS_CLEAN_CSV}")

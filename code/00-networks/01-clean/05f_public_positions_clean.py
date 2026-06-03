@@ -22,6 +22,14 @@ Fixes applied:
         "mayor, Hidalgo del Parral, Chihuahua, 1952" → org = "Hidalgo del Parral"
         "Member, City Council of Aguascalientes, 1954" → org = "Aguascalientes"
   6.  Infer null state from extracted municipality (via CITY_TO_STATE in config)
+  7.  Add work_state column — physical work location, distinct from electoral
+      constituency stored in state:
+        Federal Deputy / Senator → work_state = "Federal District"
+          (they represent a state but sit in the Chamber/Senate in Mexico City)
+        Governor / Mayor / Local Deputy / Alternate Mayor → work_state = state
+          (they worked physically in their constituency)
+        All other federal-chamber positions (Member, President, Representative,
+          Secretary, Delegate, Vice President, Coordinator) → "Federal District"
 """
 
 import re
@@ -232,6 +240,36 @@ def _infer_state_from_municipality(state, municipality: Optional[str]) -> Option
 
 
 # ---------------------------------------------------------------------------
+# Fix 7: Add work_state — physical work location vs. electoral constituency
+# ---------------------------------------------------------------------------
+
+# Positions that are physically in the federal legislature (Mexico City)
+_FEDERAL_CHAMBER_TITLES = {
+    "Federal Deputy", "Senator", "Representative", "Vice President",
+    "Member", "President", "Secretary", "Delegate", "Coordinator",
+    "Head", "Oficial Mayor", "Director",
+}
+# Positions where work location = constituency state
+_LOCAL_STATE_TITLES = {
+    "Governor", "Mayor", "Local Deputy", "Alternate Mayor",
+}
+
+
+def _work_state(position_title, state) -> Optional[str]:
+    """
+    Physical work location. For senators and federal deputies the state column
+    holds their electoral constituency (e.g. 'Morelos'), but they worked in
+    the Chamber of Deputies / Senate in the Federal District.
+    """
+    title = str(position_title).strip() if pd.notna(position_title) else ""
+    if title in _LOCAL_STATE_TITLES:
+        return state if pd.notna(state) else None
+    if title in _FEDERAL_CHAMBER_TITLES or not title:
+        return "Federal District"
+    return state if pd.notna(state) else None
+
+
+# ---------------------------------------------------------------------------
 # Main pipeline
 # ---------------------------------------------------------------------------
 
@@ -267,7 +305,10 @@ def _clean_row(row: pd.Series):
     # Fix 6: infer state from municipality
     state = _infer_state_from_municipality(state, org if pd.isna(row["state"]) else None)
 
-    return raw_clean, role_text, yr_s, yr_e, title, org, state
+    # Fix 7: work_state (physical location, not electoral constituency)
+    wstate = _work_state(title, state)
+
+    return raw_clean, role_text, yr_s, yr_e, title, org, state, wstate
 
 
 def main():
@@ -292,6 +333,7 @@ def main():
     pp["position_title"] = [r[4] for r in results]
     pp["organization"]   = [r[5] for r in results]
     pp["state"]          = [r[6] for r in results]
+    pp["work_state"]     = [r[7] for r in results]
 
     def _n_chg(new, old):
         return (new.fillna("__N__").astype(str) != old.fillna("__N__").astype(str)).sum()
