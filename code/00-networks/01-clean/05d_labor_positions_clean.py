@@ -14,6 +14,11 @@ Fixes applied:
       1936–1938" for Rangel Couto, Hugo (person_id=2177, record_id=34724).
       This entry appears in education.csv as an academic_role — labor_positions
       captured it incorrectly as a union/labor position.
+  5.  Fill is_national=NaN where text contains clear geographic signals:
+        False — "Local No. X" / "Section No. X" (numbered union sections)
+        False — "of [Mexican state]" (state-level branch of a union)
+        False — "ejido" / "municipal" (inherently local bodies)
+      992 remaining NaN records are genuinely ambiguous and left as NaN.
 """
 
 import re
@@ -27,7 +32,7 @@ CODE_DIR = Path(__file__).resolve().parents[2]
 if str(CODE_DIR) not in sys.path:
     sys.path.append(str(CODE_DIR))
 
-from config import DATA_DIR
+from config import DATA_DIR, MEXICAN_STATES, strip_accents
 
 LABOR_POSITIONS_CSV       = DATA_DIR / "labor_positions.csv"
 CLEAN_DIR                 = DATA_DIR / "clean_positions"
@@ -95,6 +100,50 @@ def _clean_org(org) -> Optional[str]:
 
 
 # ---------------------------------------------------------------------------
+# Fix 5: Fill is_national=NaN with False where text has clear local/state signals
+# ---------------------------------------------------------------------------
+
+# "Local No. X" or "Section No. X" — numbered union sections are always non-national
+_LOCAL_SECTION_RE = re.compile(
+    r"\bLocal\s+No\.?\s*\d+\b|\bSection\s+No\.?\s*\d+\b|\bSeccion\s+No\.?\s*\d+\b",
+    re.I,
+)
+
+# "of [state]" — branch of a union in a specific state, not the national body
+_STATE_NAMES_NORM = sorted(
+    [strip_accents(v.lower())
+     for _, (variants, _, _) in MEXICAN_STATES.items()
+     for v in variants],
+    key=len, reverse=True,
+)
+_STATE_QUALIFIER_RE = re.compile(
+    r"\bof\s+(?:the\s+)?(?:state\s+of\s+)?(" +
+    "|".join(re.escape(s) for s in _STATE_NAMES_NORM) +
+    r")\b",
+    re.I,
+)
+
+# Ejido and municipal bodies are always local
+_LOCAL_BODY_RE = re.compile(r"\bejido\b|\bmunicipal\b|\bcity\s+of\b", re.I)
+
+
+def _fix_is_national(is_national, text: str):
+    """Fill NaN is_national using geographic signals in the text."""
+    if pd.notna(is_national):          # already classified — keep it
+        return is_national
+    if not isinstance(text, str):
+        return is_national
+    t = strip_accents(text.lower())
+    if _LOCAL_SECTION_RE.search(text):  # "Local No. 23" → definitely not national
+        return False
+    if _STATE_QUALIFIER_RE.search(t):   # "CTM of Sonora" → state-level branch
+        return False
+    if _LOCAL_BODY_RE.search(t):        # ejido committee, municipal league → local
+        return False
+    return is_national                  # genuinely ambiguous → keep NaN
+
+
+# ---------------------------------------------------------------------------
 # Fix 4: Drop cross-dataset duplicate
 # Rangel Couto, Hugo — "Secretary, National School of Economics, 1936–1938"
 # This is an academic role already present in education.csv (record_id 34732).
@@ -120,11 +169,12 @@ def _is_duplicate(row: pd.Series) -> bool:
 # ---------------------------------------------------------------------------
 
 def _clean_row(row: pd.Series):
-    raw  = row["role_text_raw"] if pd.notna(row["role_text_raw"]) else ""
-    org  = row["organization"]
+    raw       = row["role_text_raw"] if pd.notna(row["role_text_raw"]) else ""
+    org       = row["organization"]
     org_clean = row["org_clean"]
-    yr_s = row["year_start"]
-    yr_e = row["year_end"]
+    yr_s      = row["year_start"]
+    yr_e      = row["year_end"]
+    is_nat    = row["is_national"] if "is_national" in row.index else None
 
     raw_clean = _clean_raw(raw)
     role_text = _strip_years_from_text(raw_clean) if raw_clean else None
@@ -132,10 +182,11 @@ def _clean_row(row: pd.Series):
     if raw_clean != raw:
         yr_s, yr_e = _reextract_years(raw_clean)
 
-    org_out      = _clean_org(org)
+    org_out       = _clean_org(org)
     org_clean_out = _clean_org(org_clean)
+    is_nat_out    = _fix_is_national(is_nat, raw_clean)
 
-    return raw_clean, role_text, yr_s, yr_e, org_out, org_clean_out
+    return raw_clean, role_text, yr_s, yr_e, org_out, org_clean_out, is_nat_out
 
 
 def main():
@@ -151,13 +202,14 @@ def main():
         print(lp[dup_mask][["person_name","role_text_raw","year_start","year_end"]].to_string())
     lp = lp[~dup_mask].reset_index(drop=True)
 
-    orig_raw      = lp["role_text_raw"].copy()
-    orig_org      = lp["organization"].copy()
-    orig_org_clean= lp["org_clean"].copy()
-    orig_ys       = lp["year_start"].copy()
-    orig_ye       = lp["year_end"].copy()
+    orig_raw       = lp["role_text_raw"].copy()
+    orig_org       = lp["organization"].copy()
+    orig_org_clean = lp["org_clean"].copy()
+    orig_ys        = lp["year_start"].copy()
+    orig_ye        = lp["year_end"].copy()
+    orig_nat       = lp["is_national"].copy()
 
-    print("\nApplying text / year / org fixes …")
+    print("\nApplying fixes …")
     results = lp.apply(_clean_row, axis=1)
 
     lp["role_text_raw"] = [r[0] for r in results]
@@ -166,6 +218,7 @@ def main():
     lp["year_end"]      = [r[3] for r in results]
     lp["organization"]  = [r[4] for r in results]
     lp["org_clean"]     = [r[5] for r in results]
+    lp["is_national"]   = [r[6] for r in results]
 
     def _n_chg(new, old):
         return (new.fillna("__N__").astype(str) != old.fillna("__N__").astype(str)).sum()
@@ -173,9 +226,10 @@ def main():
     lp["modified"] = (
         (lp["role_text_raw"].fillna("__N__") != orig_raw.fillna("__N__"))
         | (lp["organization"].fillna("__N__").astype(str) != orig_org.fillna("__N__").astype(str))
-        | (lp["org_clean"].fillna("__N__").astype(str)   != orig_org_clean.fillna("__N__").astype(str))
-        | (lp["year_start"].fillna(-1) != orig_ys.fillna(-1))
-        | (lp["year_end"].fillna(-1)   != orig_ye.fillna(-1))
+        | (lp["org_clean"].fillna("__N__").astype(str)    != orig_org_clean.fillna("__N__").astype(str))
+        | (lp["year_start"].fillna(-1)  != orig_ys.fillna(-1))
+        | (lp["year_end"].fillna(-1)    != orig_ye.fillna(-1))
+        | (lp["is_national"].fillna("__N__").astype(str)  != orig_nat.fillna("__N__").astype(str))
     ).astype(int)
 
     n_mod = lp["modified"].sum()
@@ -192,6 +246,14 @@ def main():
     print(f"  org_clean     : {_n_chg(lp['org_clean'],     orig_org_clean):3d} changes")
     print(f"  year_start    : {_n_chg(lp['year_start'],    orig_ys):3d} changes")
     print(f"  year_end      : {_n_chg(lp['year_end'],      orig_ye):3d} changes")
+    print(f"  is_national   : {_n_chg(lp['is_national'],   orig_nat):3d} changes")
+
+    nat_filled = lp[lp["is_national"].fillna("__N__") != orig_nat.fillna("__N__")]
+    print(f"\n  is_national NaN→False breakdown:")
+    print(f"    Local No. X pattern:   {nat_filled['role_text_raw'].apply(lambda x: bool(_LOCAL_SECTION_RE.search(str(x)))).sum()}")
+    print(f"    of [state] pattern:    {nat_filled['role_text_raw'].apply(lambda x: bool(_STATE_QUALIFIER_RE.search(strip_accents(str(x).lower())))).sum()}")
+    print(f"    ejido/municipal:       {nat_filled['role_text_raw'].apply(lambda x: bool(_LOCAL_BODY_RE.search(str(x).lower()))).sum()}")
+    print(f"  is_national remaining NaN: {lp['is_national'].isna().sum()}")
 
     print("\n--- Sample year corrections ---")
     y_mask = (
