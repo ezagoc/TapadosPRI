@@ -20,8 +20,13 @@ Fixes applied:
   7.  Clear GPT-hallucinated org: org_gpt assigned a state name that does not
       appear anywhere in the raw text (2 records: Taxpayer Services / Income Division
       incorrectly assigned org="Guerrero")
-  8.  Infer state='Federal District' for records where is_federal=True and
-      state=NaN (793 federal positions with null state)
+  8.  Add work_state column — physical work location:
+        is_federal=True, not a foreign posting → work_state='Federal District'
+        is_federal=True, foreign posting (ambassador/consul/attaché) → work_state=NULL
+        state is not NULL → work_state=state (already reflects work location)
+        is_federal=False, state=NULL → work_state=NULL
+      state is kept as originally extracted from text (NOT filled with Federal
+      District). A null state just means the text didn't mention a state.
 """
 
 import re
@@ -257,15 +262,28 @@ def _fix_gpt_hallucination(org: str, org_gpt: str, raw: str) -> Optional[str]:
 
 
 # ---------------------------------------------------------------------------
-# Fix 8: is_federal=True + state=NaN → state='Federal District'
+# Fix 8: work_state — physical work location
+# state is kept unchanged (as extracted from text). work_state is inferred:
+#   - is_federal=True, non-foreign posting → Federal District
+#   - is_federal=True, foreign posting (ambassador/consul/attaché) → None
+#   - state already has a value → work_state = state
+#   - otherwise → None
 # ---------------------------------------------------------------------------
 
-def _fix_federal_state(state, is_federal) -> Optional[str]:
+_FOREIGN_POSTING_RE = re.compile(
+    r"\b(ambassador|consul\s+general|consul|diplomatic\s+attach[ée]|"
+    r"milit\w*\s+attach[ée]|charge\s+d.affaires|embassy|consulate)\b",
+    re.I,
+)
+
+def _govt_work_state(state, is_federal, raw: str) -> Optional[str]:
     if pd.notna(state):
-        return state
+        return state          # state from text already reflects work location
     if is_federal is True:
+        if _FOREIGN_POSTING_RE.search(raw):
+            return None       # physically abroad, location unknown
         return "Federal District"
-    return state
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -304,10 +322,10 @@ def _clean_row(row: pd.Series):
     if org is not None:
         org = _fix_state_as_org(org, raw_clean, _STATE_NAMES_LOWER)
 
-    # Fix 8: infer Federal District for federal positions
-    state = _fix_federal_state(state, is_fed)
+    # Fix 8: work_state (do NOT change state — keep as extracted from text)
+    work_state = _govt_work_state(state, is_fed, raw_clean)
 
-    return raw_clean, role_text, yr_s, yr_e, org, state
+    return raw_clean, role_text, yr_s, yr_e, org, state, work_state
 
 
 def main():
@@ -320,6 +338,8 @@ def main():
     orig_ys    = gp["year_start"].copy()
     orig_ye    = gp["year_end"].copy()
     orig_state = gp["state"].copy()
+    # is_federal column needed for work_state but not modified
+    gp["is_federal"] = gp["is_federal"].where(gp["is_federal"].notna(), None)
 
     print("Applying fixes …")
     results = gp.apply(_clean_row, axis=1)
@@ -330,6 +350,7 @@ def main():
     gp["year_end"]      = [r[3] for r in results]
     gp["organization"]  = [r[4] for r in results]
     gp["state"]         = [r[5] for r in results]
+    gp["work_state"]    = [r[6] for r in results]
 
     def _n_chg(new, old):
         return (new.fillna("__N__").astype(str) != old.fillna("__N__").astype(str)).sum()
@@ -340,6 +361,7 @@ def main():
         | (gp["year_start"].fillna(-1) != orig_ys.fillna(-1))
         | (gp["year_end"].fillna(-1)   != orig_ye.fillna(-1))
         | (gp["state"].fillna("__N__") != orig_state.fillna("__N__"))
+        # work_state is always new (not in original) — not counted in modified
     ).astype(int)
 
     n_mod = gp["modified"].sum()
@@ -353,7 +375,11 @@ def main():
     print(f"  organization  : {_n_chg(gp['organization'],  orig_org):4d} changes")
     print(f"  year_start    : {_n_chg(gp['year_start'],    orig_ys):4d} changes")
     print(f"  year_end      : {_n_chg(gp['year_end'],      orig_ye):4d} changes")
-    print(f"  state         : {_n_chg(gp['state'],         orig_state):4d} changes")
+    print(f"  state         : {_n_chg(gp['state'],         orig_state):4d} changes (NOTE: state NOT filled for federal positions — use work_state)")
+    n_ws_fed = (gp["work_state"] == "Federal District").sum()
+    n_ws_tot = gp["work_state"].notna().sum()
+    print(f"  work_state    : {n_ws_tot:4d} filled ({n_ws_fed} = Federal District, "
+          f"{gp['work_state'].isna().sum()} = NULL [abroad or unknown])")
 
     # Org change sample
     org_chg = gp[
@@ -367,14 +393,14 @@ def main():
         print(f"   TEXT:  {row['role_text_raw'][:75]}")
         print()
 
-    # State change sample
-    st_chg = gp[gp["state"].fillna("__N__") != orig_state.fillna("__N__")]
-    print(f"--- State changes: {len(st_chg)} ---")
-    print(f"  is_federal=True + state=NaN → Federal District: "
-          f"{st_chg[st_chg['state']=='Federal District'].shape[0]}")
-    print(f"\nSample state changes (first 5):")
-    for i, row in st_chg.head(5).iterrows():
-        print(f"  {orig_state[i]!r} → {row['state']!r}  |  {row['role_text_raw'][:65]}")
+    # work_state sample
+    print(f"\n--- work_state sample ---")
+    ws_fed = gp[gp["work_state"] == "Federal District"].head(3)
+    for _, row in ws_fed.iterrows():
+        print(f"  [FD]  state={row['state']!r}  |  {row['role_text_raw'][:65]}")
+    ws_none = gp[gp["work_state"].isna() & (gp["is_federal"]==True)].head(3)
+    for _, row in ws_none.iterrows():
+        print(f"  [NULL/abroad]  |  {row['role_text_raw'][:65]}")
 
 
 if __name__ == "__main__":

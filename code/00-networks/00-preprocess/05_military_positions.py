@@ -326,6 +326,9 @@ cols = [
 ]
 mil = mil[cols]
 
+# work_state = state for military: assignment location IS physical work location.
+mil["work_state"] = mil["state"]
+
 # ---------------------------------------------------------------------------
 # Save long format
 # ---------------------------------------------------------------------------

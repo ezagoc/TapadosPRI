@@ -537,6 +537,10 @@ def main():
     edu["year_end"]      = [r[5] for r in results]
     edu["degree_field"]  = [r[6] for r in results]
     edu["foreign_degree"]= [r[7] for r in results]
+    # work_state = state for education: institution location IS where the person
+    # studied or taught. Foreign degrees (foreign_degree=True) have state=NULL
+    # since no Mexican state was extracted — work_state stays NULL too.
+    edu["work_state"] = edu["state"]
 
     def _changed(new, old):
         return new.fillna("__NULL__") != old.fillna("__NULL__")
