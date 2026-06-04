@@ -42,6 +42,7 @@ LABOR_POSITIONS_WIDE_CSV   = DATA_DIR / "labor_positions_wide.csv"
 MILITARY_POSITIONS_CSV     = DATA_DIR / "military_positions.csv"
 MILITARY_POSITIONS_WIDE_CSV= DATA_DIR / "military_positions_wide.csv"
 OTHER_POSITIONS_CSV        = DATA_DIR / "other_positions.csv"
+PERSON_NAME_CORRECTIONS    = DATA_DIR / "person_name_corrections.csv"
 SHAPEFILE_DIR = DATA_DIR / "shapefiles"
 STATES_GEOJSON = SHAPEFILE_DIR / "mexico_states.json"
 MAIN_BIOGRAPHIES_PDF = BIOGRAPHIES_DIR / "Mexican_Political_Biographies_1935-2009_Fourth_Edi....pdf"
@@ -378,3 +379,37 @@ MONTH_ABBREV_MAP = {
     "June": "Jun",
     "July": "Jul",
 }
+
+# ---------------------------------------------------------------------------
+# Person name corrections
+# Maps person_id → real canonical name for biographies whose names were
+# corrupted in biographies_corrected.csv (fragment of deceased-date marker).
+# Real names recovered from biographies_full.txt by alphabetical context.
+# Used by all 01-clean/ scripts to fix person_name in clean outputs.
+# ---------------------------------------------------------------------------
+
+PERSON_NAME_CORRECTIONS_MAP = {
+     73: "Alamillo Flores, Luis",
+     82: "Alcala (Anaya), Manuel",
+    174: "Aranda Osorio, Efrain",
+    217: "Aznar Mendoza, Alonso",
+   1386: "Islas Bravo, Antonio",
+   1405: "Jimenez Castro, Alberto",
+   1469: "Lavalle Urbina, Maria",
+   2563: "Siurob Ramirez, Jose",
+}
+
+
+def fix_person_names(df):
+    """
+    Apply PERSON_NAME_CORRECTIONS_MAP to a DataFrame with person_id and
+    person_name columns. Returns the DataFrame with corrected names.
+    Called by all 01-clean/ scripts as a final step.
+    """
+    import pandas as pd
+    mask = df["person_id"].isin(PERSON_NAME_CORRECTIONS_MAP)
+    if mask.any():
+        df.loc[mask, "person_name"] = df.loc[mask, "person_id"].map(
+            PERSON_NAME_CORRECTIONS_MAP
+        )
+    return df

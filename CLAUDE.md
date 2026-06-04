@@ -127,3 +127,66 @@ git push origin master
 ```
 
 Never commit: `.env`, `settings.local.json`, `__pycache__/`, `*.pyc`, `.Rhistory`, `.DS_Store`.
+
+## Known data issue: 144 malformed person names
+
+### What happened
+
+`biographies_corrected.csv` has **144 entries where the person's name is corrupt** — instead of the real name, only a fragment of their death date appears. For example:
+
+```
+"25, 1980)"        ← should be "Alamillo Flores, Luis (Deceased Oct. 25, 1980)"
+"(Deceased 1953)"  ← should be a real name
+"7, 1999)"         ← should be "Alcalá (Anaya), Manuel (Deceased Oct. 7, 1999)"
+```
+
+This happened during the initial PDF parsing (`02_parse_biographies.py`): for some entries, the name field was extracted incorrectly, capturing only the death-date fragment instead of the full name.
+
+### Why it matters
+
+`parsed_positions.csv` (the master dataset) was generated from `biographies_corrected.csv`. Because 144 names are corrupt, those same corrupt names appear in `parsed_positions.csv` and in all derived datasets (education, govt, party, labor, public positions). This means **those 144 people are unidentifiable by name** in the data.
+
+### What has already been fixed (partially)
+
+We recovered the real names for **63 of the 144** by searching `biographies_full.txt` — since biographies are alphabetically sorted, the real name appears between the two surrounding entries. **8 of those 63 were safely applied** to `parsed_positions.csv` directly (those where the person_id was confirmed correct):
+
+| person_id | Malformed name | Real name |
+|---|---|---|
+| 73 | `25, 1980)` | Alamillo Flores, Luis |
+| 82 | `7, 1999)` | Alcalá (Anaya), Manuel |
+| 174 | `25, 1977)` | Aranda Osorio, Efraín |
+| 217 | `26, 1959)` | Aznar Mendoza, Alonso |
+| 1386 | `23, 1994)` | Islas Bravo, Antonio |
+| 1405 | `1, 1990)` | Jiménez Castro, Alberto |
+| 1469 | `28, 1984)` | Lavalle Urbina, María |
+| 2563 | `29, 1972)` | Siurob Ramírez, José |
+
+The remaining 55 recovered names + 81 unrecovered names were NOT applied because of a person_id misalignment problem (see below).
+
+### The person_id misalignment problem
+
+`04_parse_positions.py` assigns `person_id` based on the **order of appearance of unique cleaned names** in the output, NOT simply on the row number in the CSV. This means:
+
+- Bio row 287 (`bio_id=287`) has a corrupt name → `parsed_positions` assigns it some ID
+- But `person_id=287` in `parsed_positions` belongs to a **different person** (Bermúdez Limón, Carlos Gerardo)
+
+So if you correct the name at `bio_id=287` and try to apply it to `person_id=287` in `parsed_positions`, you'd overwrite the wrong person's name.
+
+### How to fix it properly
+
+The correct fix is a **full pipeline re-run**:
+
+1. Fix the 63 recovered names directly in `biographies_corrected.csv`
+   - The 63 corrections are in `config.py` → `PERSON_NAME_CORRECTIONS_MAP`
+   - Also try to recover the remaining 81 using the same approach: search `biographies_full.txt` between alphabetical neighbors
+2. Re-run `04_parse_positions.py` → regenerates `parsed_positions.csv` with correct names AND correctly re-assigned person_ids
+3. Re-run all `05_*.py` scripts (education, govt, party, labor, public, military)
+4. Re-run all `01-clean/05?_*_clean.py` scripts
+
+**We intentionally did NOT do this** to preserve the manual corrections already in `biographies_corrected.csv`. Before re-running, make sure no manual corrections would be lost.
+
+### Files to be aware of
+
+- `data/person_name_corrections.csv` — the 8 corrections already applied to parsed_positions
+- `config.py` → `PERSON_NAME_CORRECTIONS_MAP` — the 8 safe corrections, applied by all `01-clean/` scripts
+- `data/biographies_full.txt` — the raw text where real names can be recovered alphabetically
