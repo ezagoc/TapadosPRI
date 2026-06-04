@@ -19,6 +19,7 @@ Output: data/labor_positions.csv, data/labor_positions_wide.csv
 import re
 import json
 import getpass
+import os
 from typing import Optional
 from pathlib import Path
 import sys
@@ -296,7 +297,7 @@ labor["org_gpt"]            = None
 labor["position_title_gpt"] = None
 
 if missing_mask.any():
-    api_key = getpass.getpass("Enter your OpenAI API key: ")
+    api_key = os.getenv("OPENAI_API_KEY") or getpass.getpass("Enter your OpenAI API key: ")
     print(f"Running GPT (gpt-4o-mini) on {missing_mask.sum()} records...")
     gpt_results = gpt_fill_missing(labor.loc[missing_mask, "role_text_raw"], api_key)
 
