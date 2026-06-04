@@ -82,7 +82,10 @@ _SINGLE_YEAR_RE = re.compile(r"\b(1[89]\d{2}|20[0-2]\d)\b")
 def _extract_years(text: str):
     m = _YEAR_RANGE_RE.search(text)
     if m:
-        return int(m.group(1)), int(m.group(2))
+        ys, ye = int(m.group(1)), int(m.group(2))
+        if ys > ye:
+            ys, ye = ye, ys   # fix inversion
+        return ys, ye
     singles = _SINGLE_YEAR_RE.findall(text)
     if singles:
         yr = int(singles[-1])
@@ -98,6 +101,20 @@ def _strip_years(text: str) -> str:
 # ---------------------------------------------------------------------------
 # Branch classification
 # ---------------------------------------------------------------------------
+
+# Keywords that indicate an army entry even without the word "army"
+_LIKELY_ARMY_RE = re.compile(
+    r"\b(fought|fighting|battle|rank\s+of|commander\b|commanded|"
+    r"battalion|regiment|infantry|artillery|cavalry|brigade|division\b|"
+    r"military\s+zone|military\s+region|military\s+camp|military\s+college|"
+    r"joined\s+(?:the\s+)?(?:revolution|army|forces|federal)|"
+    r"constitutionalist|zapatist|villista|carrancista)\b",
+    re.I,
+)
+# Army-specific ranks (not shared with navy/air force in same form)
+_ARMY_RANKS = {"division_general","brigade_general","brigadier_general",
+               "general","colonel","lieutenant_colonel","major",
+               "captain","lieutenant","sergeant","corporal","private"}
 
 _BRANCH_PATTERNS = [
     ("air_force", re.compile(
@@ -226,6 +243,11 @@ def parse_military_entry(entry: str, is_career: bool, person_name: str) -> Optio
 
     branch      = classify_branch(entry)
     rank        = classify_rank(entry)
+    # Infer army branch when not explicit but context strongly indicates it
+    if branch == "unknown" and (
+        rank in _ARMY_RANKS or _LIKELY_ARMY_RE.search(entry)
+    ):
+        branch = "army"
     is_promo    = bool(_PROMOTION_RE.search(entry))
     is_cmd      = bool(_COMMANDER_RE.search(entry))
     is_rev      = bool(_REVOLUTIONARY_RE.search(entry))
@@ -278,40 +300,73 @@ print("Loading biographies_corrected.csv …")
 bio = pd.read_csv(BIOGRAPHIES_CSV)
 print(f"  {len(bio)} biographies loaded")
 
-# Assign person_id consistent with parsed_positions.csv approach
-# (sequential integer by order of appearance, 1-based)
-bio = bio.reset_index(drop=True)
-bio["person_id"] = bio.index + 1
+# ---------------------------------------------------------------------------
+# Build correct person_id mapping from parsed_positions.csv
+# IMPORTANT: using bio.index+1 is WRONG because 04_parse_positions assigns IDs
+# based on order of first appearance of unique cleaned names in the output —
+# skipped/duplicate entries cause the indices to diverge (2,574 mismatches).
+# Instead we look up each person by cleaned name in parsed_positions.
+# ---------------------------------------------------------------------------
+from config import PARSED_POSITIONS_CSV
 
-# Parse birth dates (reuse logic from 04_parse_positions)
-from config import strip_accents as _sa
+pp_ref = pd.read_csv(
+    PARSED_POSITIONS_CSV,
+    usecols=["person_id", "person_name", "birth_date_clean", "birth_date_precision"],
+)
+pp_ref = pp_ref.drop_duplicates("person_id").set_index("person_id")
+
+# Name → person_id lookup (using canonical names from parsed_positions)
+pp_name_to_id = {name: pid for pid, name in pp_ref["person_name"].items()}
+max_pp_id     = pp_ref.index.max()
+
+def _canonical_name(raw: str) -> str:
+    """Replicate the name cleaning done by 04_parse_positions.py."""
+    # Strip accents (applied globally before processing)
+    s = strip_accents(raw)
+    # Remove deceased marker
+    s = re.sub(r"\s*\(Deceased[^)]*\)", "", s, flags=re.I)
+    s = re.sub(r"\s{2,}", " ", s).strip()
+    return s.title()
+
+_mil_only_ids: dict[str, int] = {}   # for people not in parsed_positions
+_mil_only_counter = [max_pp_id]      # mutable counter
+
+def _get_person_id(raw_name: str) -> tuple:
+    """Return (person_id, canonical_name) using parsed_positions as source of truth."""
+    canonical = _canonical_name(raw_name)
+    if canonical in pp_name_to_id:
+        return pp_name_to_id[canonical], canonical
+    # Not in parsed_positions: assign new id beyond parsed_positions range
+    if canonical not in _mil_only_ids:
+        _mil_only_counter[0] += 1
+        _mil_only_ids[canonical] = _mil_only_counter[0]
+    return _mil_only_ids[canonical], canonical
+
 bio_mil = bio[bio["field_j"].notna() & (bio["field_j"].str.strip() != "")].copy()
 print(f"  {len(bio_mil)} biographies with military data")
 
-# Build birth date columns from existing parsed_positions if available
-# Fall back to None (we'll join from parsed_positions after)
 all_records = []
 for _, row in bio_mil.iterrows():
+    person_id, canonical = _get_person_id(str(row["name"]))
     recs = parse_person_military(
-        name=str(row["name"]),
+        name=canonical,
         field_j=str(row["field_j"]),
         birth_date_clean=None,
         birth_date_precision=None,
-        person_id=int(row["person_id"]),
+        person_id=person_id,
     )
     all_records.extend(recs)
 
 print(f"  {len(all_records)} military position entries extracted")
+print(f"  {len(_mil_only_ids)} persons only in military (new IDs assigned)")
 
 mil = pd.DataFrame(all_records)
 
 # Assign record_id
 mil.insert(0, "record_id", range(1, len(mil) + 1))
 
-# Join birth dates from parsed_positions.csv for consistency
-from config import PARSED_POSITIONS_CSV
-pp = pd.read_csv(PARSED_POSITIONS_CSV, usecols=["person_id","birth_date_clean","birth_date_precision"])
-pp_bd = pp.drop_duplicates("person_id").set_index("person_id")[["birth_date_clean","birth_date_precision"]]
+# Join birth dates from parsed_positions using now-correct person_ids
+pp_bd = pp_ref[["birth_date_clean", "birth_date_precision"]]
 mil["birth_date_clean"]     = mil["person_id"].map(pp_bd["birth_date_clean"])
 mil["birth_date_precision"] = mil["person_id"].map(pp_bd["birth_date_precision"])
 
@@ -328,6 +383,14 @@ mil = mil[cols]
 
 # work_state = state for military: assignment location IS physical work location.
 mil["work_state"] = mil["state"]
+
+# Remove exact duplicates (same person + same raw text from split artifacts)
+n_before = len(mil)
+mil = mil.drop_duplicates(subset=["person_id","role_text_raw"]).reset_index(drop=True)
+mil["record_id"] = range(1, len(mil) + 1)  # reassign after dedup
+n_dropped = n_before - len(mil)
+if n_dropped:
+    print(f"  Dropped {n_dropped} duplicate records")
 
 # ---------------------------------------------------------------------------
 # Save long format
