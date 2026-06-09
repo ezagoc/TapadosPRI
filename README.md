@@ -126,8 +126,9 @@ install.packages(c(
 
 1. Extract biography text from the source PDF.
 2. Parse biographies into structured rows.
-3. Parse positions into a unified long dataset.
-4. Build domain-specific datasets:
+3. Repair corrupted person names (`00-preprocess/03_fix_person_names.py`) — recovers names that were truncated to a death-date fragment or a trailing given name during parsing, validating each against `biographies_full.txt`. Run before step 4.
+4. Parse positions into a unified long dataset (assigns `person_id`; cleans names to plain ASCII).
+5. Build domain-specific datasets:
    - education
    - government
    - party
@@ -135,8 +136,8 @@ install.packages(c(
    - public
    - other
    - birthplace
-5. Build connection datasets.
-6. Run descriptive statistics and network visualizations.
+6. Build connection datasets.
+7. Run descriptive statistics and network visualizations.
 
 ## Notes
 

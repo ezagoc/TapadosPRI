@@ -225,10 +225,23 @@ def clean_name_col(raw_name: str) -> dict:
             if death_date:
                 death_year = death_date.year
 
-    # Strip deceased marker, collapse whitespace, title-case
+    # Strip deceased marker
     name_clean = re.sub(r"\s*\(Deceased[^)]*\)", "", raw_name, flags=re.IGNORECASE)
+    # Drop maternal-surname parentheses, keeping their content
+    #   "Bartlett (Diaz), Manuel" -> "Bartlett Diaz, Manuel"
+    name_clean = name_clean.replace("(", "").replace(")", "")
+    # Remove accents and any non-standard symbols; keep letters, comma, hyphen, space
+    name_clean = strip_accents(name_clean)
+    name_clean = re.sub(r"[^A-Za-z\s,\-]", " ", name_clean)
     name_clean = re.sub(r"\s{2,}", " ", name_clean).strip()
+    name_clean = re.sub(r"\s+,", ",", name_clean).strip(" ,")
+    # Title-case, then lower-case Spanish connectors for readable names
     name_clean = name_clean.title()
+    name_clean = re.sub(
+        r"\b(Y|E|De|Del|La|Las|Los|Da|Du)\b",
+        lambda m: m.group(1).lower(),
+        name_clean,
+    )
 
     return {
         "name_clean": name_clean,
