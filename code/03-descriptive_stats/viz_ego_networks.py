@@ -86,8 +86,8 @@ def _stack(ids, x, height=11.0):
     return {a: (x, y) for a, y in zip(ids, ys)}
 
 
-def draw_comparison(ax, edges, winner, loser, year):
-    """Two hubs (winner, runner-up) with shared ties in the middle column."""
+def draw_comparison(ax, edges, winner, loser, year, pop):
+    """Two hubs (winner=star, runner-up=circle) with shared ties (squares) in the middle."""
     W, L = hub_ties(edges, winner), hub_ties(edges, loser)
     shared = set(W) & set(L)
     wonly = set(W) - shared
@@ -108,25 +108,40 @@ def draw_comparison(ax, edges, winner, loser, year):
     for a in lonly: edge(a, posL, L)
     for a in shared: edge(a, posW, W); edge(a, posL, L)
 
-    def nodes(ids, src, size, ring):
+    def nodes(ids, src, size, ring, marker="o"):
         if not ids: return
         ax.scatter([pos[a][0] for a in ids], [pos[a][1] for a in ids], s=size,
-                   c=[EDGE_COLORS[src[a][1]] for a in ids],
+                   c=[EDGE_COLORS[src[a][1]] for a in ids], marker=marker,
                    edgecolors=ring, linewidths=0.8 if ring == "black" else 0.3, zorder=2)
     nodes(wonly, W, 45, "#555555")
     nodes(lonly, L, 45, "#555555")
-    nodes(shared, W, 75, "black")          # shared = highlighted
+    nodes(shared, W, 80, "black", marker="s")     # shared = square, highlighted
 
+    # winner = star, runner-up = circle
+    ax.scatter([posW[0]], [posW[1]], s=2900, marker="*", c="#ffd700",
+               edgecolors="black", linewidths=1.4, zorder=4)
+    ax.scatter([posL[0]], [posL[1]], s=1700, marker="o", c="#ffd700",
+               edgecolors="black", linewidths=1.6, zorder=4)
     for hub, nm in ((posW, winner), (posL, loser)):
-        ax.scatter([hub[0]], [hub[1]], s=1600, c="#ffd700", edgecolors="black",
-                   linewidths=1.6, zorder=4)
-        ax.text(hub[0], hub[1], nm.split(",")[0], ha="center", va="center",
+        ax.text(hub[0], hub[1] - 0.75, nm.split(",")[0], ha="center", va="top",
                 fontsize=10, fontweight="bold", zorder=5)
-    if len(shared) <= 30:                  # label shared people if legible
+
+    # labels: shared (if legible) + the most "popular" exclusive alters per side
+    if len(shared) <= 30:
         for a in shared:
             x, y = pos[a]
             ax.text(x, y + 0.12, W[a][0].split(",")[0], fontsize=5.5,
                     ha="center", va="bottom", color="#222222", zorder=5)
+
+    def label_top(ids, src, dx, ha, k=7):
+        for a in sorted(ids, key=lambda a: -pop.get(a, 0))[:k]:
+            if pop.get(a, 0) < 2:        # only label genuinely well-connected people
+                continue
+            x, y = pos[a]
+            ax.text(x + dx, y, src[a][0].split(",")[0], fontsize=6.5,
+                    ha=ha, va="center", color="#222222", zorder=5)
+    label_top(wonly, W, -0.4, "right")
+    label_top(lonly, L, 0.4, "left")
 
     ax.set_title(
         f"{year}: {winner.split(',')[0]} (winner) vs {loser.split(',')[0]} (runner-up)\n"
@@ -138,15 +153,24 @@ def draw_comparison(ax, edges, winner, loser, year):
 def main():
     edges = pd.read_csv(EDGES_CSV)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    # "popularity" = number of distinct tapados a person is tied to (used to pick
+    # which exclusive alters are worth labelling)
+    pop = edges.groupby("alter_id")["ego_id"].nunique().to_dict()
+
     handles = [Line2D([0], [0], color=EDGE_COLORS[k], lw=2, label=v)
                for k, v in EDGE_LABELS.items()]
-    handles.append(Line2D([0], [0], marker="o", color="w", markerfacecolor="#bbb",
-                          markeredgecolor="black", markersize=9,
-                          label="shared tie (connected to both)"))
+    handles += [
+        Line2D([0], [0], marker="*", color="w", markerfacecolor="#ffd700",
+               markeredgecolor="black", markersize=16, label="winner"),
+        Line2D([0], [0], marker="o", color="w", markerfacecolor="#ffd700",
+               markeredgecolor="black", markersize=11, label="runner-up"),
+        Line2D([0], [0], marker="s", color="w", markerfacecolor="#bbb",
+               markeredgecolor="black", markersize=9, label="shared tie (both)"),
+    ]
 
     for year, (winner, loser) in PAIRS.items():
         fig, ax = plt.subplots(figsize=(20, 11))
-        draw_comparison(ax, edges, winner, loser, year)
+        draw_comparison(ax, edges, winner, loser, year, pop)
         ax.legend(handles=handles, loc="lower center", ncol=3, fontsize=8,
                   frameon=False, bbox_to_anchor=(0.5, -0.02))
         fig.suptitle(f"PRI presidential succession {year}: shared political network",
