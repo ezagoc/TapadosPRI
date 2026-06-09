@@ -104,12 +104,40 @@ These files are never in git — they live only in Dropbox and are read/written 
 | `party_positions_wide.csv` | Dummies: pri_member, pan_member, ever_national_leader, ever_cen; highest_party_rank |
 | `labor_positions_wide.csv` | Dummies by sector and rank |
 
-### Network / connections
+### Tapado networks (`data/networks/`) — current
+
+Built by `06_build_networks.py` + `07_family_surname_edges.py` from the cleaned
+position datasets, keyed on `person_id`. One ego-network per tapado (the 73
+pre-candidates in `corcholatas_historicas.xlsx`). An **edge** means the two people
+plausibly knew each other:
+
+- **co_education** — same educational focus + overlapping years. Large institutions
+  (>60 people, e.g. UNAM) are refined to `(institution, faculty)` via `degree_field`;
+  small/specific schools link on the institution alone. Both studying and teaching
+  roles count (captures professor–student). *Note: big faculties like `UNAM | law`
+  produce large same-generation cohorts — a real but broad "milieu" tie.*
+- **co_work** — same organization + overlapping years, refined to a sub-unit and
+  size-capped (≤60) so generic party membership / mega-ministries don't over-link;
+  party is refined geographically (`PRI – Jalisco`, `PRI – Youth Organization`).
+- **family / mentorship / personal** — stated in the biography `personal_info`.
+- **family_surname** — shared paternal/maternal surname, GPT-confirmed (≤2nd cousins)
+  and **human-curated** (see below).
+
 | File | Description |
 |---|---|
-| `parsed_connections.csv` | 6,656 dyads. Cols: person_a, person_b, connection_type (family/mentorship/personal/shared_government/shared_education/shared_party/shared_labor), detail, shared_state, year_start, year_end |
-| `parsed_connections_1982.csv` | Connections filtered/weighted for the 1982 election |
-| `parsed_connections_1994.csv` | Connections filtered/weighted for the 1994 election |
+| `networks/tapado_edges.csv` | Edge list: `ego_id, ego_name, election_year, is_winner, alter_id, alter_name, edge_type, focus, focus_size, ego_role, alter_role, year_start, year_end, confirmed_by`. Ego-net = filter by `ego_id`. |
+| `networks/tapado_nodes.csv` | `person_id, name, is_tapado, election_year, is_winner` |
+| `networks/family_surname_candidates.csv` | All shared-surname pairs + GPT verdict + `in_scope` (audit trail for hallucination review) |
+| `networks/family_surname_review.csv` | **Human curation** of the family ties: `keep` (1/0) + `corrected_relationship`; consumed by `07` to override GPT. Lives in Dropbox like other curated data. |
+
+Viz: `03-descriptive_stats/viz_ego_networks.py` → `output/ego_network_<year>.png`
+(winner = star, runner-up = circle, shared ties = squares in the middle).
+
+### Legacy connections (superseded by the `networks/` pipeline above)
+| File | Description |
+|---|---|
+| `parsed_connections.csv` | 6,656 dyads (older approach, name-keyed, pre name-fix). Kept for reference. |
+| `parsed_connections_1982.csv` / `_1994.csv` | Older per-election connection files |
 
 ### Reference
 | File | Description |
