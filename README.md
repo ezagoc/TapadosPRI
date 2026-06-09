@@ -18,7 +18,7 @@ The code is written so you and your coauthor can work from the GitHub repo while
 : PDF extraction, biography parsing, structured position parsing, and dataset builders.
 
 `code/03-descriptive_stats/`
-: R descriptive-statistics scripts and Python visualization scripts.
+: Network visualization scripts (e.g. `viz_ego_networks.py` — winner vs. closest runner-up per election).
 
 `code/extra-03_clean_biographies.R`
 : Extra R cleaning workflow for biographies.

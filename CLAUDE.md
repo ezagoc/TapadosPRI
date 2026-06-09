@@ -42,11 +42,11 @@ Never hardcode absolute paths — always use constants from `config.py`:
 | `00-preprocess/02_parse_biographies.py` | Parses raw text into structured CSV using field markers a–l | txt → `biographies.csv` |
 | `00-preprocess/03_fix_person_names.py` | Repairs corrupted person names (death-date fragments / name bleed) in place, recovering them from `biographies_full.txt` | `biographies_corrected.csv` → `biographies_corrected.csv` |
 | `00-preprocess/04_parse_positions.py` | Extracts state/org/dates/title; assigns `person_id`; cleans names (no accents, no parens) | `biographies_corrected.csv` → `parsed_positions.csv` (15K+ rows) |
-| `00-preprocess/05_*.py` | One script per position type (education, govt, party, labor, public, birthplace, connections) | `parsed_positions.csv` → specialized CSVs |
-| `03-descriptive_stats/viz_network.py` | Network graphs: top connections to winner vs. loser candidate | CSVs → PNGs |
-| `03-descriptive_stats/viz_geo_network.py` | Geographic maps by state, pre/post election | CSVs + GeoJSON → PNGs |
-| `03-descriptive_stats/viz_timeline.py` | Gantt-style timeline: tapado locations year by year | CSVs → PNGs |
-| `03-descriptive_stats/viz_influence_map.py` | Influence map with temporal gradient | CSVs → PNGs |
+| `00-preprocess/05_*.py` | One script per position type (education, govt, party, labor, public, birthplace) | `parsed_positions.csv` → specialized CSVs |
+| `01-clean/05?_*_clean.py` | Post-processing cleaners, one per position type | specialized CSVs → `clean_positions/*.csv` |
+| `00-preprocess/06_build_networks.py` | Build a per-tapado ego-network: explicit + co-education (faculty) + co-work (sub-unit) ties | `clean_positions/*` → `networks/tapado_edges.csv`, `tapado_nodes.csv` |
+| `00-preprocess/07_family_surname_edges.py` | Add GPT-confirmed family-by-surname ties (human-curated via `family_surname_review.csv`) | → `networks/tapado_edges.csv` |
+| `03-descriptive_stats/viz_ego_networks.py` | Per-election plot: winner vs. closest runner-up, shared ties in the middle | `networks/tapado_edges.csv` → `ego_network_<year>.png` |
 
 ## Code conventions
 
