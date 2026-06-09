@@ -47,6 +47,7 @@ PAIRS = {
 EDGE_COLORS = {
     "co_education":   "#1f77b4",   # blue
     "co_work":        "#2ca02c",   # green
+    "co_military":    "#8c564b",   # brown
     "family":         "#d62728",   # red
     "family_surname": "#d62728",   # red (same family family)
     "mentorship":     "#9467bd",   # purple
@@ -55,6 +56,7 @@ EDGE_COLORS = {
 EDGE_LABELS = {
     "co_education": "Co-education (same faculty, overlapping years)",
     "co_work":      "Co-work (same unit, overlapping years)",
+    "co_military":  "Co-service (military unit, overlapping years)",
     "family":       "Family / family (stated or surname)",
     "mentorship":   "Mentorship",
     "personal":     "Personal / friendship",
@@ -63,7 +65,7 @@ EDGE_LABELS = {
 
 # Most-specific tie wins when a person is tied to the ego in several ways
 _PRIORITY = {"family": 0, "family_surname": 0, "mentorship": 1, "personal": 2,
-             "co_work": 3, "co_education": 4}
+             "co_work": 3, "co_military": 4, "co_education": 5}
 
 
 def hub_ties(edges: pd.DataFrame, ego_name: str) -> dict:

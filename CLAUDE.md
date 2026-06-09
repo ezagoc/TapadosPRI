@@ -119,6 +119,9 @@ plausibly knew each other:
 - **co_work** — same organization + overlapping years, refined to a sub-unit and
   size-capped (≤60) so generic party membership / mega-ministries don't over-link;
   party is refined geographically (`PRI – Jalisco`, `PRI – Youth Organization`).
+- **co_military** — same military unit / commander (extracted from `military_positions`
+  role text: "Nth Battalion/Military Zone…", "under General X") + overlapping years.
+  Sparse (sequential commands rarely overlap) but precise.
 - **family / mentorship / personal** — stated in the biography `personal_info`.
 - **family_surname** — shared paternal/maternal surname, GPT-confirmed (≤2nd cousins)
   and **human-curated** (see below).

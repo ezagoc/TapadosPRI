@@ -226,7 +226,29 @@ def work_focus_key(d: dict):
 def focus_label(key) -> str:
     if key[0] == "edu":
         return f"{key[1]} | {key[2]}" if key[2] else key[1]
-    return key[1]  # work focus is already a readable label
+    return key[1]  # work / military focus is already a readable label
+
+
+# Military co-service focus: a specific unit or the commander served under.
+# Factions ("Zapatistas") and bare "Division" (the rank) are intentionally ignored.
+_MIL_UNIT = re.compile(
+    r"\b(\d{1,3})(?:st|nd|rd|th)?\s+"
+    r"(Battalion|Regiment|Division|Brigade|Cavalry|Infantry|Corps|Military Zone)\b", re.I)
+_MIL_GEN = re.compile(
+    r"under (?:General|Gen\.?|Col\.?|Colonel|Brigadier(?: General)?|Brig\.?) "
+    r"([A-ZÁÉÍÓÚ][\wÁÉÍÓÚáéíóúñ.]+(?:\s+[A-ZÁÉÍÓÚ][\wÁÉÍÓÚáéíóúñ.]+){1,3})")
+
+
+def military_foci(text) -> set:
+    """Specific units / shared commander extracted from a military role text."""
+    if not isinstance(text, str):
+        return set()
+    foci = set()
+    for m in _MIL_UNIT.finditer(text):
+        foci.add(f"{int(m.group(1))} {m.group(2).title()}")
+    for m in _MIL_GEN.finditer(text):
+        foci.add("under Gen. " + m.group(1).strip())
+    return foci
 
 
 def _build_focus_index(df: pd.DataFrame, key_fn) -> tuple[dict, dict]:
@@ -302,6 +324,21 @@ def main():
     print(f"  work foci (with years): {len(work_index)} kept "
           f"(dropped {len(dropped_big)} foci larger than {TAU_WORK} people)")
 
+    # ── military co-service index (unit / commander extracted from role text) ─
+    mil = pd.read_csv(CLEAN_DIR / "military_positions.csv")
+    mil_rows = []
+    for row in mil.itertuples(index=False):
+        d = row._asdict()
+        text = d.get("role_text") if isinstance(d.get("role_text"), str) else d.get("role_text_raw")
+        for fk in military_foci(text):
+            d2 = dict(d); d2["mil_focus"] = fk; mil_rows.append(d2)
+    mil_exp = pd.DataFrame(mil_rows)
+    mil_key_fn = lambda d: ("mil", d["mil_focus"]) if d.get("mil_focus") else None
+    mil_index, mil_size = _build_focus_index(mil_exp, mil_key_fn)
+    for k in [k for k, n in mil_size.items() if n > TAU_WORK]:
+        del mil_index[k]
+    print(f"  military foci (with years): {len(mil_index)}")
+
     # ── biographies personal_info, mapped to person_id ───────────────────────
     bio = pd.read_csv(BIOGRAPHIES_CSV)
     name_to_pid = {v: k for k, v in pid_name.items()}
@@ -345,6 +382,8 @@ def main():
     colocation(edu, edu_index, edu_size, edu_key_fn, "co_education")
     print("Building co-work edges …")
     colocation(work, work_index, work_size, work_focus_key, "co_work")
+    print("Building co-military edges …")
+    colocation(mil_exp, mil_index, mil_size, mil_key_fn, "co_military")
 
     # ── explicit edges (family / mentorship / personal) ──────────────────────
     print("Building explicit edges …")
