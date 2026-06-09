@@ -341,6 +341,35 @@ def normalize_name(name: str) -> str:
     return name
 
 
+# Spanish surname connectors kept lower-case for readability after title-casing
+_NAME_CONNECTORS_RE = re.compile(r"\b(Y|E|De|Del|La|Las|Los|Da|Du)\b")
+
+
+def clean_person_name(raw_name: str) -> str:
+    """
+    Canonical display name used for `person_name` across every dataset.
+
+    Strips the "(Deceased …)" marker and maternal-surname parentheses, removes
+    accents and non-standard symbols, title-cases, and lower-cases Spanish
+    connectors. Keeps the surname/given-name comma.
+    e.g. 'Bartlett (diaz), Manuel (Deceased 1990)' -> 'Bartlett Diaz, Manuel'
+
+    Used by 04_parse_positions.py and 05_military_positions.py so that
+    person_id (assigned by unique name) and person_name stay consistent.
+    """
+    if not isinstance(raw_name, str):
+        return ""
+    name = re.sub(r"\s*\(Deceased[^)]*\)", "", raw_name, flags=re.IGNORECASE)
+    name = name.replace("(", "").replace(")", "")          # drop maternal-surname parens
+    name = strip_accents(name)
+    name = re.sub(r"[^A-Za-z\s,\-]", " ", name)            # keep letters, comma, hyphen, space
+    name = re.sub(r"\s{2,}", " ", name).strip()
+    name = re.sub(r"\s+,", ",", name).strip(" ,")
+    name = name.title()
+    name = _NAME_CONNECTORS_RE.sub(lambda m: m.group(1).lower(), name)
+    return name
+
+
 def extract_last_name(name: str) -> str:
     """Extract the primary last name (before comma or first word)."""
     normalized = normalize_name(name)

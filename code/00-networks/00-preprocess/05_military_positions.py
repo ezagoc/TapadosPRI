@@ -51,6 +51,7 @@ from config import (
     CITY_TO_STATE_NORM,
     FEDERAL_KEYWORDS_NORM,
     strip_accents,
+    clean_person_name,
     clean_text,
     MONTH_ABBREV_MAP,
 )
@@ -320,13 +321,8 @@ pp_name_to_id = {name: pid for pid, name in pp_ref["person_name"].items()}
 max_pp_id     = pp_ref.index.max()
 
 def _canonical_name(raw: str) -> str:
-    """Replicate the name cleaning done by 04_parse_positions.py."""
-    # Strip accents (applied globally before processing)
-    s = strip_accents(raw)
-    # Remove deceased marker
-    s = re.sub(r"\s*\(Deceased[^)]*\)", "", s, flags=re.I)
-    s = re.sub(r"\s{2,}", " ", s).strip()
-    return s.title()
+    """Canonical person_name — same cleaning as 04_parse_positions.py."""
+    return clean_person_name(raw)
 
 _mil_only_ids: dict[str, int] = {}   # for people not in parsed_positions
 _mil_only_counter = [max_pp_id]      # mutable counter
