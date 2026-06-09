@@ -48,6 +48,9 @@ from config import (
 NETWORK_DIR    = DATA_DIR / "networks"
 EDGES_CSV      = NETWORK_DIR / "tapado_edges.csv"
 CANDIDATES_CSV = NETWORK_DIR / "family_surname_candidates.csv"
+# Optional human review: if present, its `keep` (1/0) and `corrected_relationship`
+# columns OVERRIDE the automatic scope filter (manual one-by-one curation).
+REVIEW_CSV     = NETWORK_DIR / "family_surname_review.csv"
 
 BATCH_SIZE = 15
 MODEL      = "gpt-4o-mini"
@@ -260,18 +263,42 @@ def main():
                    .agg(election_year=("election_year",
                                        lambda s: ";".join(map(str, sorted(set(s))))),
                         is_winner=("is_winner", "max")).to_dict("index"))
+    # If a human review file exists, it is the source of truth (keep==1) and may
+    # correct the relationship label; otherwise fall back to the scope heuristic.
+    manual = None
+    if REVIEW_CSV.exists():
+        rev = pd.read_csv(REVIEW_CSV)
+        keep = rev[rev["keep"].astype(str).str.strip().isin(["1", "1.0", "yes", "true", "True"])]
+        manual = {(int(x.ego_id), int(x.alter_id)):
+                  (str(x.corrected_relationship).strip()
+                   if isinstance(x.corrected_relationship, str) and str(x.corrected_relationship).strip()
+                   else str(x.relationship_gpt))
+                  for x in keep.itertuples()}
+        print(f"  manual review applied: {len(manual)} family edges kept "
+              f"(from {REVIEW_CSV.name})")
+
+    base = cand_df[(cand_df["related"] == "yes") & cand_df["in_scope"]]
     fam_edges = []
-    for _, r in cand_df[(cand_df["related"] == "yes") & cand_df["in_scope"]].iterrows():
+    for _, r in base.iterrows():
+        pair = (int(r["ego_id"]), int(r["alter_id"]))
+        if manual is not None:
+            if pair not in manual:
+                continue
+            relationship = manual[pair]
+            confirmed = "gpt+human"
+        else:
+            relationship = r["relationship"]
+            confirmed = "gpt"
         meta = ego_elec.get(r["ego_id"], {"election_year": "", "is_winner": ""})
         fam_edges.append({
             "ego_id": r["ego_id"], "ego_name": r["ego_name"],
             "election_year": meta["election_year"], "is_winner": meta["is_winner"],
             "alter_id": r["alter_id"], "alter_name": r["alter_name"],
             "edge_type": "family_surname",
-            "focus": r["relationship"] or f"shared surname: {r['shared_surname']}",
-            "focus_size": "", "ego_role": r["relationship"],
+            "focus": relationship or f"shared surname: {r['shared_surname']}",
+            "focus_size": "", "ego_role": relationship,
             "alter_role": f"shared surname: {r['shared_surname']}",
-            "year_start": "", "year_end": "", "confirmed_by": "gpt",
+            "year_start": "", "year_end": "", "confirmed_by": confirmed,
         })
 
     core = pd.read_csv(EDGES_CSV)
