@@ -51,6 +51,8 @@ from config import (
     PARSED_POSITIONS_CSV,
     CORCHOLATAS_XLSX,
     DATA_DIR,
+    MEXICAN_STATES,
+    strip_accents,
     clean_text,
     clean_person_name,
 )
@@ -264,6 +266,31 @@ def military_foci(text) -> set:
     return foci
 
 
+# Revolutionary co-service: fought in the Revolution in the same state and years.
+# Faction is rarely tagged in the source, so the focus is the state (extracted from
+# the text); the specific faction stays visible in each person's role text.
+_REVOLUTION = re.compile(
+    r"revolution|zapatist|villist|carrancist|maderist|constitutionalist|obregonist|"
+    r"cristero|huertist|insurgent|rebel|joined|fought|forces|brigade|division|battalion",
+    re.I)
+_STATE_VARIANTS = sorted(
+    [(strip_accents(v.lower()), canon)
+     for canon, (variants, _, _) in MEXICAN_STATES.items() for v in variants],
+    key=lambda x: -len(x[0]))
+
+
+def revolution_foci(text) -> set:
+    """States where a revolutionary military role was served (one focus per state)."""
+    if not isinstance(text, str) or not _REVOLUTION.search(text):
+        return set()
+    norm = strip_accents(text.lower())
+    foci = set()
+    for variant, canon in _STATE_VARIANTS:
+        if re.search(r"\b" + re.escape(variant) + r"\b", norm):
+            foci.add(f"Revolution ({canon})")
+    return foci
+
+
 def _build_focus_index(df: pd.DataFrame, key_fn) -> tuple[dict, dict]:
     """focus_key -> [(person_id, year_start, year_end, role)]; and focus_size."""
     index: dict = defaultdict(list)
@@ -353,6 +380,20 @@ def main():
         del mil_index[k]
     print(f"  military foci (with years): {len(mil_index)}")
 
+    # revolutionary co-service: same state in the Revolution + overlapping years
+    revo_rows = []
+    for row in mil.itertuples(index=False):
+        d = row._asdict()
+        text = d.get("role_text") if isinstance(d.get("role_text"), str) else d.get("role_text_raw")
+        for fk in revolution_foci(text):
+            d2 = dict(d); d2["revo_focus"] = fk; revo_rows.append(d2)
+    revo_exp = pd.DataFrame(revo_rows)
+    revo_key_fn = lambda d: ("revo", d["revo_focus"]) if d.get("revo_focus") else None
+    revo_index, revo_size = _build_focus_index(revo_exp, revo_key_fn)
+    for k in [k for k, n in revo_size.items() if n > TAU_WORK]:
+        del revo_index[k]
+    print(f"  revolution foci (with years): {len(revo_index)}")
+
     # ── biographies personal_info, mapped to person_id ───────────────────────
     bio = pd.read_csv(BIOGRAPHIES_CSV)
     name_to_pid = {v: k for k, v in pid_name.items()}
@@ -398,6 +439,8 @@ def main():
     colocation(work, work_index, work_size, work_focus_key, "co_work")
     print("Building co-military edges …")
     colocation(mil_exp, mil_index, mil_size, mil_key_fn, "co_military")
+    print("Building co-revolution edges …")
+    colocation(revo_exp, revo_index, revo_size, revo_key_fn, "co_revolution")
 
     # ── explicit edges (family / mentorship / personal) ──────────────────────
     print("Building explicit edges …")
