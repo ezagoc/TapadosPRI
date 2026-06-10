@@ -285,8 +285,11 @@ def revolution_foci(text) -> set:
         return set()
     norm = strip_accents(text.lower())
     foci = set()
+    # a state name followed by a unit word ("Sonora Brigade") is a unit name, not a
+    # battle location — exclude it.
+    unit_after = r"(?!\s+(?:brigade|battalion|regiment|division|corps|cavalry|infantry|zone))"
     for variant, canon in _STATE_VARIANTS:
-        if re.search(r"\b" + re.escape(variant) + r"\b", norm):
+        if re.search(r"\b" + re.escape(variant) + r"\b" + unit_after, norm):
             foci.add(f"Revolution ({canon})")
     return foci
 
