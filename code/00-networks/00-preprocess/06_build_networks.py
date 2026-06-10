@@ -168,17 +168,24 @@ _MENTION_TAIL = re.compile(
 _TRUNCATED_SCHOOL = re.compile(r"\bNo\.?\s*$", re.I)  # "Secondary School No" (number lost)
 
 
-def edu_focus_key(org, field, inst_size: dict):
-    """Education focus: institution, refined to (institution, faculty) when large."""
+def edu_focus_key(org, field, level, inst_size: dict):
+    """Education focus: institution, refined to (institution, faculty, degree_level).
+
+    Degree level is part of the focus so that an undergraduate and a master's/PhD
+    student in the same faculty are NOT linked — they did not share classes. Records
+    with no degree level (preparatory, teaching roles) fall in a single 'pre/other'
+    level bucket so prep classmates still link.
+    """
     if not isinstance(org, str) or len(org) < 3:
         return None
     if _TRUNCATED_SCHOOL.search(org):
         return None  # generic "... School No" (number dropped) links different schools
+    lvl = level if isinstance(level, str) and level.strip() and level != "nan" else "pre/other"
     if inst_size.get(org, 0) > TAU_INST:
         if not isinstance(field, str) or not field.strip() or field == "nan":
             return None  # large institution with no faculty info → too coarse to link
-        return ("edu", org, field)
-    return ("edu", org, None)
+        return ("edu", org, field, lvl)
+    return ("edu", org, None, lvl)
 
 
 def _s(v):
@@ -225,7 +232,9 @@ def work_focus_key(d: dict):
 
 def focus_label(key) -> str:
     if key[0] == "edu":
-        return f"{key[1]} | {key[2]}" if key[2] else key[1]
+        _, org, field, lvl = key
+        base = f"{org} | {field}" if field else org
+        return f"{base} [{lvl}]"
     return key[1]  # work / military focus is already a readable label
 
 
@@ -310,7 +319,8 @@ def main():
     edu = pd.read_csv(CLEAN_DIR / "education.csv")
     inst_size = (edu.dropna(subset=["organization"])
                     .groupby("organization")["person_id"].nunique().to_dict())
-    edu_key_fn = lambda d: edu_focus_key(d.get("organization"), d.get("degree_field"), inst_size)
+    edu_key_fn = lambda d: edu_focus_key(d.get("organization"), d.get("degree_field"),
+                                         d.get("degree_level"), inst_size)
     edu_index, edu_size = _build_focus_index(edu, edu_key_fn)
     print(f"  education foci (with years): {len(edu_index)}")
 
