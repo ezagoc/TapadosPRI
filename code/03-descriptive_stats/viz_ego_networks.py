@@ -32,15 +32,20 @@ from config import DATA_DIR, OUTPUT_DIR
 EDGES_CSV = DATA_DIR / "networks" / "tapado_edges.csv"
 
 # Election → (winner person_name, closest runner-up person_name) as they appear in
-# tapado_edges.csv. Runner-up is the strongest documented contender with a network;
-# swap freely. (* uses a richer documented aspirant where the principal rival has
-# almost no data: 1970 Martínez Manatou and 1982 García Paniagua are too sparse.)
+# tapado_edges.csv. Runner-up is the strongest documented contender; swap freely.
+# (1970 Martínez Manatou is absent from the dataset, so Corona del Rosal is used.)
 PAIRS = {
+    1940: ("Avila Camacho, Manuel",         "Mugica Velazquez, Francisco Jose"),
+    1946: ("Aleman Valdes, Miguel",         "Rojo Gomez, Javier"),
+    1952: ("Ruiz Cortines, Adolfo",         "Casas Aleman, Fernando"),
     1958: ("Lopez Mateos, Adolfo",          "Flores Munoz, Gilberto"),
+    1964: ("Diaz Ordaz, Gustavo",           "Ortiz Mena, Antonio"),
     1970: ("Echeverria Alvarez, Luis",      "Corona del Rosal, Alfonso"),
     1976: ("Lopez Portillo Pacheco, Jose",  "Moya Palencia, Mario"),
-    1982: ("de la Madrid Hurtado, Miguel",  "Ojeda Paullada, Pedro"),
+    1982: ("de la Madrid Hurtado, Miguel",  "Diaz Serrano, Jorge"),
     1988: ("Salinas de Gortari, Carlos",    "Bartlett Diaz, Manuel"),
+    1994: ("Colosio Murrieta, Luis Donaldo", "Camacho Solis, Victor Manuel"),
+    2000: ("Labastida Ochoa, Francisco",    "Madrazo Pintado, Roberto"),
 }
 
 # Tie type → colour
