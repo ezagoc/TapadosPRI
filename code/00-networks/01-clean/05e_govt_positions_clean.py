@@ -20,6 +20,9 @@ Fixes applied:
   7.  Clear GPT-hallucinated org: org_gpt assigned a state name that does not
       appear anywhere in the raw text (2 records: Taxpayer Services / Income Division
       incorrectly assigned org="Guerrero")
+  9.  Recover organization from role_text when it was never structured out
+      (~15% of dated records): take text after the title, strip years/state,
+      keep it only if it carries an institution signal.
   8.  Add work_state column — physical work location:
         is_federal=True, not a foreign posting → work_state='Federal District'
         is_federal=True, foreign posting (ambassador/consul/attaché) → work_state=NULL
@@ -262,6 +265,38 @@ def _fix_gpt_hallucination(org: str, org_gpt: str, raw: str) -> Optional[str]:
 
 
 # ---------------------------------------------------------------------------
+# Fix 9: Recover organization from role_text when it was never structured out.
+# ~15% of dated govt records have organization=NaN even though the institution
+# is present in the raw text ("director general, Guanos and Fertilizers of
+# Mexico"). Take the text after the leading title, strip trailing years/state,
+# and accept it as the org only if it carries an institution signal (so generic
+# entries like "private secretary to X during his campaign" stay NaN).
+# ---------------------------------------------------------------------------
+
+_INST_SIGNAL_RE = re.compile(
+    r"\b(Secretariat|Ministry|Bank|Commission|Institute|Department|Office|"
+    r"National|Federal|Company|Petroleos|PEMEX|CFE|IMSS|ISSSTE|CONASUPO|"
+    r"BANRURAL|Police|Court|Tribunal|Council|Fund|Authority|Agency|"
+    r"Railroads?|Railways?|University|Corporation|Committee|Board|Trust|"
+    r"Telefonos|Comision|Fertilizers|Industries|of\s+Mexico|de\s+Mexico)\b"
+    r"|\bS\.?A\.?(?:\s*de\s*C\.?V\.?| de CV| CV)?\b",
+    re.I,
+)
+
+def _recover_org_from_text(raw: str) -> Optional[str]:
+    if not isinstance(raw, str) or "," not in raw:
+        return None
+    after = _strip_years(raw.split(",", 1)[1]).strip().rstrip(".,; ")
+    parts = [p.strip() for p in after.split(",") if p.strip()]
+    while parts and strip_accents(parts[-1].lower()) in _STATE_NAMES_LOWER:
+        parts.pop()                       # drop trailing pure-state segments
+    cand = ", ".join(parts).strip().rstrip(".,; ")
+    if len(cand) < 4 or strip_accents(cand.lower()) in _STATE_NAMES_LOWER:
+        return None
+    return cand if _INST_SIGNAL_RE.search(cand) else None
+
+
+# ---------------------------------------------------------------------------
 # Fix 8: work_state — physical work location
 # state is kept unchanged (as extracted from text). work_state is inferred:
 #   - is_federal=True, non-foreign posting → Federal District
@@ -321,6 +356,10 @@ def _clean_row(row: pd.Series):
     # Fix 6: state-as-org with real institution before it
     if org is not None:
         org = _fix_state_as_org(org, raw_clean, _STATE_NAMES_LOWER)
+
+    # Fix 9: recover org from text when still missing
+    if org is None or (isinstance(org, float) and pd.isna(org)):
+        org = _recover_org_from_text(raw_clean)
 
     # Fix 8: work_state (do NOT change state — keep as extracted from text)
     work_state = _govt_work_state(state, is_fed, raw_clean)
