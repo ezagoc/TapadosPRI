@@ -19,8 +19,10 @@ This repo (`TapadosCode`) **contains code only**. Data, outputs, and literature 
 ~/Dropbox/TapadosCode/    ← this repo (git + GitHub)
   code/
     config.py             ← central path configuration
-    00-networks/00-preprocess/   ← ETL pipeline (scripts 01–05)
-    03-descriptive_stats/        ← visualizations and stats (scripts 06–09)
+    00-networks/00-preprocess/   ← ETL pipeline (scripts 01–07)
+    00-networks/01-clean/        ← post-processing cleaners (05?_*_clean.py)
+    03-descriptive_stats/        ← visualizations and stats
+    04-analysis/                 ← analysis exports (export_candidate_networks.py)
 ```
 
 ## Path configuration
@@ -43,10 +45,11 @@ Never hardcode absolute paths — always use constants from `config.py`:
 | `00-preprocess/03_fix_person_names.py` | Repairs corrupted person names (death-date fragments / name bleed) in place, recovering them from `biographies_full.txt` | `biographies_corrected.csv` → `biographies_corrected.csv` |
 | `00-preprocess/04_parse_positions.py` | Extracts state/org/dates/title; assigns `person_id`; cleans names (no accents, no parens) | `biographies_corrected.csv` → `parsed_positions.csv` (15K+ rows) |
 | `00-preprocess/05_*.py` | One script per position type (education, govt, party, labor, public, birthplace) | `parsed_positions.csv` → specialized CSVs |
-| `01-clean/05?_*_clean.py` | Post-processing cleaners, one per position type | specialized CSVs → `clean_positions/*.csv` |
+| `01-clean/05?_*_clean.py` | Post-processing cleaners, one per position type. `05e_govt_positions_clean.py` Fix 9 recovers `organization` from `role_text` when it was never structured out (~15%→12% of dated govt records left without an institution) | specialized CSVs → `clean_positions/*.csv` |
 | `00-preprocess/06_build_networks.py` | Build a per-tapado ego-network: explicit + co-education (faculty) + co-work (sub-unit) ties | `clean_positions/*` → `networks/tapado_edges.csv`, `tapado_nodes.csv` |
 | `00-preprocess/07_family_surname_edges.py` | Add GPT-confirmed family-by-surname ties (human-curated via `family_surname_review.csv`) | → `networks/tapado_edges.csv` |
 | `03-descriptive_stats/viz_ego_networks.py` | Per-election plot: winner vs. closest runner-up, shared ties in the middle | `networks/tapado_edges.csv` → `ego_network_<year>.png` |
+| `04-analysis/export_candidate_networks.py` | Per election, one Excel per candidate (winner + 3 largest-network competitors): every tie (name, type, full focus detail) + each alter's position the year before the election and each year of the sexenio after. Winner status is per-election (corcholatas ✓), not the per-person flag | `networks/tapado_edges.csv` + `clean_positions/*` → `output/candidate_networks/<year>/<year>_<role>_<surname>.xlsx` |
 
 ## Code conventions
 

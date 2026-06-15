@@ -20,6 +20,9 @@ The code is written so you and your coauthor can work from the GitHub repo while
 `code/03-descriptive_stats/`
 : Network visualization scripts (e.g. `viz_ego_networks.py` — winner vs. closest runner-up per election).
 
+`code/04-analysis/`
+: Analysis exports (e.g. `export_candidate_networks.py` — per election, one Excel per candidate listing each network tie and the alter's position the year before the election and each year of the sexenio after).
+
 `code/extra-03_clean_biographies.R`
 : Extra R cleaning workflow for biographies.
 
@@ -136,8 +139,9 @@ install.packages(c(
    - public
    - other
    - birthplace
-6. Build connection datasets.
-7. Run descriptive statistics and network visualizations.
+6. Build connection datasets and per-tapado ego-networks (`06_build_networks.py`, `07_family_surname_edges.py`).
+7. Run descriptive statistics and network visualizations (`03-descriptive_stats/`).
+8. Export per-candidate network workbooks (`04-analysis/export_candidate_networks.py`).
 
 ## Notes
 
