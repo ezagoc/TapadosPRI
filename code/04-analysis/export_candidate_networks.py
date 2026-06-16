@@ -70,7 +70,9 @@ def winner_by_election(people: pd.DataFrame) -> dict:
     return flag
 
 N_COMPETITORS = 3
-PRE_YEARS, POST_YEARS = 1, 6   # show year e-1 .. e+6
+# Symmetric event-study window for DiD: the full previous sexenio (e-6..e-1),
+# the election/transition year (e), and the candidate's sexenio (e+1..e+6).
+PRE_YEARS, POST_YEARS = 6, 6
 
 RANK_LVL = {  # to pick the most senior position a person holds in a given year
     "secretary": 6, "attorney_general": 6, "assistant_secretary": 5, "oficial_mayor": 5,
@@ -183,8 +185,8 @@ def main():
                     "confirmed_by": t.confirmed_by,
                 }
                 for y in year_cols:
-                    tag = f"pos_{y}" + (" (pre)" if y < year else "")
-                    row[tag] = position_in_year(posidx, a, y)
+                    phase = "pre" if y < year else ("election" if y == year else "post")
+                    row[f"pos_{y} ({phase})"] = position_in_year(posidx, a, y)
                 rows.append(row)
             df = pd.DataFrame(rows).sort_values(["tie_type", "connection_name"])
             surname = str(cand.ego_name).split(",")[0].strip().replace("/", "-")
