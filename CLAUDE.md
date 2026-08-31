@@ -21,8 +21,10 @@ This repo (`TapadosCode`) **contains code only**. Data, outputs, and literature 
     config.py             ← central path configuration
     00-networks/00-preprocess/   ← ETL pipeline (scripts 01–07)
     00-networks/01-clean/        ← post-processing cleaners (05?_*_clean.py)
+    02-rank/                     ← manual institution/title rank curation (generator + panel)
     03-descriptive_stats/        ← visualizations and stats
     04-analysis/                 ← analysis exports (export_candidate_networks.py)
+    05-investment/               ← federal public-investment ETL (Azure JSON → real-peso DB)
 ```
 
 ## Path configuration
@@ -50,13 +52,19 @@ Never hardcode absolute paths — always use constants from `config.py`:
 | `00-preprocess/07_family_surname_edges.py` | Add GPT-confirmed family-by-surname ties (human-curated via `family_surname_review.csv`) | → `networks/tapado_edges.csv` |
 | `03-descriptive_stats/viz_ego_networks.py` | Per-election plot: winner vs. closest runner-up, shared ties in the middle | `networks/tapado_edges.csv` → `ego_network_<year>.png` |
 | `04-analysis/export_candidate_networks.py` | Per election, one Excel per candidate (winner + 3 largest-network competitors): every tie (name, type, full focus detail) + each alter's position the year before the election and each year of the sexenio after. Winner status is per-election (corcholatas ✓), not the per-person flag | `networks/tapado_edges.csv` + `clean_positions/*` → `output/candidate_networks/<year>/<year>_<role>_<surname>.xlsx` |
+| `02-rank/01_generate_rank_tables.py` | Emit editable rank lookup tables (institution + title) per domain, pre-seeded with heuristic `suggested_*_tier`. **Manual step**: fill the blank `domain_tier`/`global_tier`/`title_tier` columns by hand | `clean_positions/{govt,party,labor}_positions.csv` → `rank/<domain>_{institution,title}_rank.csv` |
+| `05-investment/01_extract_investment_tables.py` | Extract the federal public-investment matrices (institution × state) from the Azure Document Intelligence JSON (cuadros 15–23, fiscal years 1959–63); stitch split section-tables, clean OCR values/states; validates subtotals vs. grand totals | `literature/InversionPublicaFederal_*.json` → `investment/federal_investment_long.csv`, `_institutions.csv`, `_wide_<year>.csv`, `_validation.csv` |
+| `05-investment/02_build_deflator.py` | Build a Mexican CPI price deflator (World Bank WDI xls), rebased base=1960=100; 1959 takes the 1960 value | `investment/API_FP.*.xls` → `investment/price_deflator_mexico.csv` |
+| `05-investment/03_link_investment_to_ranks.py` | Deflate investment to real 1960 pesos, rank institutions by budget, and join a budget signal onto the govt rank table via a curated Spanish→English crosswalk (`match_confidence` exact/approx) | investment + `rank/govt_institution_rank.csv` → `investment/federal_investment_budget_reference.csv`, `rank/govt_institution_rank_budget.csv` |
+| `05-investment/plan/investment_descriptives.Rmd` | Professor-facing descriptive report (real pesos): totals by year/president, top institutions/states, choropleths, heatmap, sector mix, growth, concentration (Gini/Lorenz). Needs R pkgs `sf`,`kableExtra` + pandoc | investment CSVs → knitted HTML |
 
 ## Code conventions
 
 - All paths go through `config.py` — never `Path(__file__).parent / "data"` or hardcoded absolute paths
-- Scripts in subdirectories prepend `CODE_DIR = Path(__file__).resolve().parents[2]` to `sys.path` to locate `config.py`
+- Scripts in subdirectories prepend `CODE_DIR` to `sys.path` to locate `config.py`. Depth depends on nesting: `00-networks/*/` uses `parents[2]`, top-level stage folders (`02-rank/`, `05-investment/`) use `parents[1]`
 - Outputs always to `OUTPUT_DIR`, data always from `DATA_DIR`
 - The master dataset is `parsed_positions.csv` (15K+ records) — do not edit manually
+- Python runs in a repo-local `.venv` (Python 3.14; `pandas`, `xlrd` for the investment xls, `openai`, `spacy`, etc.). R 4.6 is used for `.Rmd` reports
 
 ## Elections analyzed
 
@@ -67,6 +75,7 @@ Never hardcode absolute paths — always use constants from `config.py`:
 ## Collaborators
 
 - `ezagoc` (Emilio Zagoc) — Windows, `C:\Users\Dell\Dropbox\TapadosPRI`
+- `ezagoc` (Emilio Zagoc) — Mac, `/Users/ezagoc/Dropbox/TapadosPRI`
 - `quinoba` (Joaquín Barrutia) — Mac, `/Users/joaquinbarrutia/Dropbox/TapadosPRI`
 
 Each person maintains their own `.env` and `settings.local.json` (both gitignored).
@@ -150,6 +159,27 @@ Viz: `03-descriptive_stats/viz_ego_networks.py` → `output/ego_network_<year>.p
 |---|---|
 | `candidates/corcholatas_historicas.xlsx` | Historical list of tapado candidates per election |
 | `shapefiles/mexico_states.json` | GeoJSON of Mexican states (used by geo visualization scripts) |
+
+### Rank curation (`data/rank/`) — human-edited
+| File | Description |
+|---|---|
+| `<domain>_institution_rank.csv` | One row per institution (govt/party/labor); pre-seeded `suggested_*_tier` + blank `domain_tier`/`global_tier` to fill by hand. Higher tier = more senior; combined score is institution-dominant lexicographic |
+| `<domain>_title_rank.csv` | One row per job title; blank `title_tier` to fill |
+| `govt_institution_rank_budget.csv` | Auto-generated copy of the govt table + investment budget columns (do not hand-edit; regenerated by `05-investment/03`) |
+
+### Federal public investment (`data/investment/`)
+Source: `literature/InversionPublicaFederal_1925-1963-66-129.pdf.json` (Azure
+Document Intelligence layout output). This excerpt = cuadros 15–23, **fiscal years
+1959–1963, all under one president (Adolfo López Mateos)**. Amounts are *millones
+de pesos*; `03` deflates to real 1960 pesos.
+
+| File | Description |
+|---|---|
+| `federal_investment_long.csv` | One row per (year, institution, state); `row_type` ∈ line_item / sector_subtotal / grand_total; `sector` ∈ gobierno_federal / organismos_descentralizados / empresas_participacion_estatal |
+| `federal_investment_institutions.csv` | 86-institution catalog (Spanish names, by sector) |
+| `federal_investment_budget_reference.csv` | Catalog + real total/annual investment, `budget_tier` (1–5), `govt_rank_name` crosswalk + `match_confidence` |
+| `price_deflator_mexico.csv` | CPI deflator (1960=100), inflation %, WPI, 1959–2000 |
+| `federal_investment_wide_<year>.csv`, `federal_investment_validation.csv` | Per-year pivots; subtotal-vs-total QA (~97.5% reconcile) |
 
 ## Git workflow
 

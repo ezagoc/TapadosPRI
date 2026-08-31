@@ -42,6 +42,29 @@ LABOR_POSITIONS_WIDE_CSV   = DATA_DIR / "labor_positions_wide.csv"
 MILITARY_POSITIONS_CSV     = DATA_DIR / "military_positions.csv"
 MILITARY_POSITIONS_WIDE_CSV= DATA_DIR / "military_positions_wide.csv"
 OTHER_POSITIONS_CSV        = DATA_DIR / "other_positions.csv"
+
+# Post-processed ("clean") position datasets — outputs of 01-clean/05?_*_clean.py
+CLEAN_POSITIONS_DIR        = DATA_DIR / "clean_positions"
+CLEAN_GOVT_POSITIONS_CSV   = CLEAN_POSITIONS_DIR / "govt_positions.csv"
+CLEAN_PARTY_POSITIONS_CSV  = CLEAN_POSITIONS_DIR / "party_positions.csv"
+CLEAN_LABOR_POSITIONS_CSV  = CLEAN_POSITIONS_DIR / "labor_positions.csv"
+CLEAN_PUBLIC_POSITIONS_CSV = CLEAN_POSITIONS_DIR / "public_positions.csv"
+
+# Manual rank curation (02-rank stage) — hand-edited lookup tables + outputs
+RANK_DIR                   = DATA_DIR / "rank"
+
+# Federal public investment tables — Azure Document Intelligence JSON of the
+# "Inversion Publica Federal 1925-1963" volume (pp. 66-129 = cuadros for 1959-1963).
+# Institution x state investment matrices (millones de pesos).
+INVERSION_PUBLICA_JSON     = LITERATURE_DIR / "InversionPublicaFederal_1925-1963-66-129.pdf.json"
+INVESTMENT_DIR             = DATA_DIR / "investment"
+
+# World Bank price series (WDI) for deflating investment to real pesos.
+CPI_LEVEL_XLS              = INVESTMENT_DIR / "API_FP.CPI.TOTL_DS2_es_excel_v2_4600.xls"     # CPI, 2010=100
+INFLATION_XLS              = INVESTMENT_DIR / "API_FP.CPI.TOTL.ZG_DS2_es_excel_v2_4662.xls"  # CPI inflation, % annual
+WPI_XLS                    = INVESTMENT_DIR / "API_FP.WPI.TOTL_DS2_es_excel_v2_28789.xls"    # wholesale price index
+PRICE_DEFLATOR_CSV         = INVESTMENT_DIR / "price_deflator_mexico.csv"                    # tidy, rebased 1960=100
+DEFLATOR_BASE_YEAR         = 1960
 SHAPEFILE_DIR = DATA_DIR / "shapefiles"
 STATES_GEOJSON = SHAPEFILE_DIR / "mexico_states.json"
 MAIN_BIOGRAPHIES_PDF = BIOGRAPHIES_DIR / "Mexican_Political_Biographies_1935-2009_Fourth_Edi....pdf"

@@ -1,0 +1,484 @@
+---
+title: "Federal Public Investment in Mexico, 1959-1963"
+subtitle: "Descriptive statistics — institutions and states (Cuadros 15–23, *Inversión Pública Federal*)"
+author: "TapadosPRI"
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+output:
+  pdf_document:
+    toc: true
+    number_sections: true
+    latex_engine: xelatex
+    fig_caption: true
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    code_folding: hide
+    theme: flatly
+    df_print: kable
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE, message = FALSE, warning = FALSE,
+  fig.width = 9, fig.height = 5.2, dpi = 110
+)
+
+library(tidyverse)
+library(scales)
+library(knitr)
+library(kableExtra)
+
+# Choropleth maps need `sf`; if it isn't installed the map chunks are skipped
+# gracefully (the rest of the report still renders).
+has_sf <- requireNamespace("sf", quietly = TRUE)
+if (has_sf) library(sf)
+
+theme_set(theme_minimal(base_size = 13) +
+            theme(panel.grid.minor = element_blank(),
+                  plot.title = element_text(face = "bold")))
+
+# Format-robust table helper (renders in both PDF/LaTeX and HTML)
+ktab <- function(x, caption = NULL) {
+  kableExtra::kable_styling(
+    knitr::kable(x, caption = caption, booktabs = TRUE, linesep = ""),
+    full_width = FALSE,
+    latex_options = c("striped", "HOLD_position"),
+    bootstrap_options = c("striped", "condensed"))
+}
+
+# --- Locate the Dropbox data root the same way config.py does ------------------
+read_db_root <- function() {
+  root <- Sys.getenv("TAPADOSPRI_DB_ROOT")
+  if (nzchar(root)) return(path.expand(root))
+  # fall back to parsing the repo .env (…/code/05-investment/plan/ -> repo root)
+  for (up in 1:5) {
+    envf <- file.path(paste(rep("..", up), collapse = "/"), ".env")
+    if (file.exists(envf)) {
+      ln <- grep("^TAPADOSPRI_DB_ROOT=", readLines(envf), value = TRUE)
+      if (length(ln)) return(path.expand(sub("^[^=]*=", "", ln[1])))
+    }
+  }
+  path.expand("~/Dropbox/TapadosPRI")
+}
+DB   <- read_db_root()
+DATA <- file.path(DB, "data")
+INV  <- file.path(DATA, "investment")
+```
+
+```{r load-data}
+long <- read_csv(file.path(INV, "federal_investment_long.csv"), show_col_types = FALSE)
+
+# Line items = actual institution × state values (subtotals/grand totals excluded)
+items <- long %>% filter(row_type == "line_item", !is.na(investment_mdp))
+
+sector_lab <- c(
+  gobierno_federal              = "Gobierno Federal",
+  organismos_descentralizados   = "Organismos Descentralizados",
+  empresas_participacion_estatal = "Empresas de Participación Estatal"
+)
+items <- items %>% mutate(sector_lab = factor(sector_lab[sector], levels = sector_lab))
+
+# --- Year -> president lookup (Mexican sexenios). Attribution: a fiscal year is
+# assigned to whoever governed during it; the Dec-1 handovers mean 1959–1963 are
+# entirely Adolfo López Mateos. The table generalizes if earlier years are added.
+presidents <- tribble(
+  ~start, ~end, ~president,                ~party,
+  1946,   1952, "Miguel Alemán Valdés",    "PRI",
+  1952,   1958, "Adolfo Ruiz Cortines",    "PRI",
+  1958,   1964, "Adolfo López Mateos",     "PRI",
+  1964,   1970, "Gustavo Díaz Ordaz",      "PRI"
+)
+year_president <- function(y) {
+  presidents %>% filter(y > start, y <= end) %>% slice(1) %>%
+    pull(president) %>% (\(x) if (length(x)) x else NA_character_)()
+}
+items <- items %>% mutate(president = map_chr(year, year_president))
+
+# --- Deflate to REAL pesos (constant 1960 = 100) ------------------------------
+# Deflator built by 02_build_deflator.py from the World Bank CPI series; 1959 is
+# assigned the 1960 value. Real = nominal * 100 / deflator. Downstream code sums
+# `investment_mdp`, so we overwrite it with the real value and keep the nominal.
+defl <- read_csv(file.path(INV, "price_deflator_mexico.csv"), show_col_types = FALSE)
+items <- items %>%
+  left_join(defl %>% select(year, deflator, inflation_pct), by = "year") %>%
+  mutate(investment_nominal = investment_mdp,
+         investment_mdp      = investment_nominal * 100 / deflator)
+
+# Canonical state -> GeoJSON `name` (mirrors config.py STATE_TO_GEOJSON)
+state_to_geojson <- c(
+  "Aguascalientes"="Aguascalientes","Baja California"="Baja California",
+  "Baja California Sur"="Baja California Sur","Campeche"="Campeche",
+  "Chiapas"="Chiapas","Chihuahua"="Chihuahua","Coahuila"="Coahuila",
+  "Colima"="Colima","Durango"="Durango","Federal District"="Ciudad de México",
+  "Guanajuato"="Guanajuato","Guerrero"="Guerrero","Hidalgo"="Hidalgo",
+  "Jalisco"="Jalisco","Mexico"="México","Michoacan"="Michoacán",
+  "Morelos"="Morelos","Nayarit"="Nayarit","Nuevo Leon"="Nuevo León",
+  "Oaxaca"="Oaxaca","Puebla"="Puebla","Queretaro"="Querétaro",
+  "Quintana Roo"="Quintana Roo","San Luis Potosi"="San Luis Potosí",
+  "Sinaloa"="Sinaloa","Sonora"="Sonora","Tabasco"="Tabasco",
+  "Tamaulipas"="Tamaulipas","Tlaxcala"="Tlaxcala","Veracruz"="Veracruz",
+  "Yucatan"="Yucatán","Zacatecas"="Zacatecas"
+)
+```
+
+# Overview {-}
+
+This report summarises **federal public investment** recorded in the yearly cuadros
+*"Inversión de las dependencias, organismos y empresas del sector público, por
+entidades federativas"* for **`r min(items$year)`–`r max(items$year)`**.
+Each observation is one institution's investment in one state in one year.
+All figures are reported in **real *millones de pesos*, constant 1960 prices**,
+deflated with the World Bank consumer price index (see below).
+
+> **Deflation.** Nominal pesos are converted to constant 1960 pesos using the
+> Mexican CPI (World Bank WDI), rebased so 1960 = 100. Because the series begins
+> in 1960, fiscal year 1959 is assigned the 1960 price level. Inflation was low in
+> this window (about 3.4% cumulative 1960-1963), so the real adjustment is modest but
+> makes the yearly totals directly comparable and consistent with the eventual
+> 1925–2000 panel.
+
+> **Presidency note.** All five fiscal years fall within a single sexenio —
+> **Adolfo López Mateos (PRI, Dec 1958 – Nov 1964)**. "By presidency" cuts below
+> therefore describe López Mateos' term; the code carries a general year-to-president
+> map so the same tables extend automatically if earlier cuadros (back to 1925)
+> are added.
+
+```{r overview-tab}
+tibble(
+  Metric = c("Years", "Institutions (distinct)", "States", "Sectors",
+             "Institution × state records", "Total investment (real mdp, 1960)"),
+  Value  = c(
+    paste(min(items$year), "–", max(items$year)),
+    comma(n_distinct(items$institution)),
+    as.character(n_distinct(items$state)),
+    as.character(n_distinct(items$sector)),
+    comma(nrow(items)),
+    comma(round(sum(items$investment_mdp)))
+  )
+) %>% ktab(caption = "Coverage of the extracted database")
+```
+
+# Total federal investment by year
+
+```{r total-by-year}
+by_year <- items %>% group_by(year, president) %>%
+  summarise(real = sum(investment_mdp),
+            nominal = sum(investment_nominal), .groups = "drop")
+
+ggplot(by_year, aes(year, real)) +
+  geom_col(aes(fill = president), width = 0.7) +
+  geom_text(aes(label = comma(round(real))), vjust = -0.5, size = 3.4) +
+  scale_y_continuous(labels = comma, expand = expansion(mult = c(0, 0.12))) +
+  scale_fill_brewer(palette = "Set2") +
+  labs(title = "Total federal public investment by year",
+       subtitle = "Real millones de pesos (constant 1960 prices). Colour = president in office.",
+       x = NULL, y = "Investment (real mdp, 1960)", fill = "President")
+```
+
+```{r nominal-vs-real, fig.height=4}
+by_year %>%
+  pivot_longer(c(real, nominal), names_to = "measure", values_to = "total") %>%
+  mutate(measure = recode(measure, real = "Real (1960 pesos)", nominal = "Nominal")) %>%
+  ggplot(aes(year, total, colour = measure)) +
+  geom_line(linewidth = 1) + geom_point(size = 2) +
+  scale_y_continuous(labels = comma) +
+  scale_colour_manual(values = c("Nominal" = "grey55", "Real (1960 pesos)" = "#d95f02")) +
+  labs(title = "Nominal vs. real federal investment",
+       subtitle = "The gap widens as prices drift up over the sexenio",
+       x = NULL, y = "Investment (mdp)", colour = NULL)
+```
+
+```{r sector-by-year}
+items %>% group_by(year, sector_lab) %>%
+  summarise(total = sum(investment_mdp), .groups = "drop") %>%
+  ggplot(aes(year, total, fill = sector_lab)) +
+  geom_col(position = "fill", width = 0.7) +
+  scale_y_continuous(labels = percent) +
+  scale_fill_brewer(palette = "Dark2") +
+  labs(title = "Composition of investment by sector",
+       subtitle = "Share of yearly total across the three public-sector families",
+       x = NULL, y = "Share of total", fill = "Sector")
+```
+
+# Rankings
+
+## Top institutions overall
+
+```{r top-institutions}
+top_inst <- items %>% group_by(institution, sector_lab) %>%
+  summarise(total = sum(investment_mdp), .groups = "drop") %>%
+  slice_max(total, n = 12)
+
+ggplot(top_inst, aes(reorder(institution, total), total, fill = sector_lab)) +
+  geom_col() +
+  coord_flip() +
+  scale_y_continuous(labels = comma) +
+  scale_fill_brewer(palette = "Dark2") +
+  labs(title = "Top 12 institutions by total investment, 1959-1963",
+       x = NULL, y = "Investment (real mdp, 1960)", fill = "Sector")
+```
+
+## Top 10 states overall
+
+```{r top-states}
+by_state <- items %>% group_by(state) %>%
+  summarise(total = sum(investment_mdp), .groups = "drop") %>%
+  arrange(desc(total))
+
+by_state %>% slice_max(total, n = 10) %>%
+  ggplot(aes(reorder(state, total), total)) +
+  geom_col(fill = "#2c7fb8") +
+  geom_text(aes(label = comma(round(total))), hjust = -0.1, size = 3.2) +
+  coord_flip() +
+  scale_y_continuous(labels = comma, expand = expansion(mult = c(0, 0.15))) +
+  labs(title = "Top 10 states by total federal investment, 1959-1963",
+       subtitle = "Real millones de pesos (constant 1960 prices)",
+       x = NULL, y = "Investment (real mdp, 1960)")
+```
+
+## Top 5 states and institutions by presidency
+
+```{r top-by-presidency}
+# One row per rank (PDF-friendly). All years fall in the López Mateos sexenio.
+st5 <- items %>% group_by(state) %>%
+  summarise(t = sum(investment_mdp), .groups = "drop") %>%
+  slice_max(t, n = 5) %>%
+  transmute(Rank = row_number(), State = state, `State (real mdp)` = comma(round(t)))
+
+in5 <- items %>% group_by(institution) %>%
+  summarise(t = sum(investment_mdp), .groups = "drop") %>%
+  slice_max(t, n = 5) %>%
+  transmute(Rank = row_number(), Institution = institution,
+            `Inst. (real mdp)` = comma(round(t)))
+
+left_join(st5, in5, by = "Rank") %>%
+  ktab(caption = sprintf("Top 5 states and institutions, %s sexenio (%d–%d)",
+                         unique(items$president), min(items$year), max(items$year)))
+```
+
+# State analysis {.tabset}
+
+The volume is organised *por entidades federativas*, so the state dimension is its
+strongest feature. This section maps where federal money went, how concentrated it
+was, and how state allocations shifted across the sexenio.
+
+## Choropleth — where the money went
+
+```{r map, fig.height=6, eval=has_sf}
+geo <- st_read(file.path(DATA, "shapefiles", "mexico_states.json"), quiet = TRUE)
+
+state_tot <- by_state %>% mutate(geo_name = state_to_geojson[state])
+geo2 <- geo %>% left_join(state_tot, by = c("name" = "geo_name"))
+
+ggplot(geo2) +
+  geom_sf(aes(fill = total), colour = "white", linewidth = 0.2) +
+  scale_fill_viridis_c(labels = comma, option = "C", na.value = "grey90",
+                       trans = "sqrt") +
+  labs(title = "Total federal investment by state, 1959-1963",
+       subtitle = "Millones de pesos (sqrt colour scale). Grey = unmatched.",
+       fill = "real mdp") +
+  theme_void(base_size = 12)
+```
+
+Because the **Federal District** and a few industrial states dominate, the map
+below drops the Federal District to reveal variation across the rest of the country.
+
+```{r map-no-df, fig.height=6, eval=has_sf}
+geo3 <- geo2 %>% mutate(total = if_else(name == "Ciudad de México", NA_real_, total))
+ggplot(geo3) +
+  geom_sf(aes(fill = total), colour = "white", linewidth = 0.2) +
+  scale_fill_viridis_c(labels = comma, option = "C", na.value = "grey85") +
+  labs(title = "Total federal investment by state (excl. Federal District)",
+       fill = "real mdp") +
+  theme_void(base_size = 12)
+```
+
+## State × year heatmap
+
+```{r heatmap, fig.height=7}
+items %>% group_by(state, year) %>%
+  summarise(total = sum(investment_mdp), .groups = "drop") %>%
+  mutate(state = fct_reorder(state, total, .fun = sum)) %>%
+  ggplot(aes(factor(year), state, fill = total)) +
+  geom_tile(colour = "white") +
+  scale_fill_viridis_c(labels = comma, option = "D", trans = "sqrt") +
+  labs(title = "Federal investment by state and year",
+       subtitle = "States ordered by cumulative investment (sqrt colour scale)",
+       x = NULL, y = NULL, fill = "real mdp")
+```
+
+## Sector mix by state
+
+```{r state-sector, fig.height=6}
+items %>%
+  semi_join(by_state %>% slice_max(total, n = 15), by = "state") %>%
+  group_by(state, sector_lab) %>%
+  summarise(total = sum(investment_mdp), .groups = "drop") %>%
+  mutate(state = fct_reorder(state, total, .fun = sum)) %>%
+  ggplot(aes(total, state, fill = sector_lab)) +
+  geom_col(position = "fill") +
+  scale_x_continuous(labels = percent) +
+  scale_fill_brewer(palette = "Dark2") +
+  labs(title = "Sector composition of investment, top 15 states",
+       subtitle = "Federal ministries vs. decentralised organisms vs. state enterprises",
+       x = "Share of state total", y = NULL, fill = "Sector")
+```
+
+## Growth across the sexenio
+
+```{r growth, fig.height=6}
+growth <- items %>% filter(year %in% c(min(year), max(year))) %>%
+  group_by(state, year) %>% summarise(total = sum(investment_mdp), .groups = "drop") %>%
+  pivot_wider(names_from = year, values_from = total, names_prefix = "y") %>%
+  rename(y0 = 2, y1 = 3) %>%
+  mutate(change = y1 - y0) %>% arrange(desc(change))
+
+growth %>%
+  ggplot(aes(change, reorder(state, change), fill = change > 0)) +
+  geom_col() +
+  scale_x_continuous(labels = comma) +
+  scale_fill_manual(values = c(`TRUE` = "#1a9850", `FALSE` = "#d73027"), guide = "none") +
+  labs(title = sprintf("Change in state investment, %d vs %d",
+                       min(items$year), max(items$year)),
+       subtitle = "Real millones de pesos (constant 1960 prices)",
+       x = "Change in real investment (mdp, 1960)", y = NULL)
+```
+
+## Concentration & inequality
+
+```{r concentration}
+gini <- function(x) {
+  x <- sort(x[!is.na(x)]); n <- length(x)
+  if (n < 2 || sum(x) == 0) return(NA_real_)
+  sum((2 * seq_len(n) - n - 1) * x) / (n * sum(x))
+}
+conc <- function(d) {
+  d <- arrange(d, desc(total))
+  tibble(
+    `Top-1 share`  = percent(d$total[1] / sum(d$total), 0.1),
+    `Top-5 share`  = percent(sum(d$total[1:5]) / sum(d$total), 0.1),
+    `HHI`          = round(sum((d$total / sum(d$total))^2), 3),
+    `Gini`         = round(gini(d$total), 3)
+  )
+}
+bind_rows(
+  conc(by_state) %>% mutate(Sample = "All states", .before = 1),
+  conc(by_state %>% filter(state != "Federal District")) %>%
+    mutate(Sample = "Excl. Federal District", .before = 1)
+) %>% ktab(caption = "Geographic concentration of federal investment")
+```
+
+```{r lorenz, fig.height=4.6, fig.width=6}
+lor <- by_state %>% arrange(total) %>%
+  mutate(p_states = row_number() / n(),
+         p_inv    = cumsum(total) / sum(total))
+ggplot(lor, aes(p_states, p_inv)) +
+  geom_abline(linetype = "dashed", colour = "grey60") +
+  geom_line(linewidth = 1, colour = "#2c7fb8") +
+  geom_point(size = 1.5, colour = "#2c7fb8") +
+  scale_x_continuous(labels = percent) + scale_y_continuous(labels = percent) +
+  labs(title = "Lorenz curve: investment across states",
+       subtitle = "Distance from the 45° line = geographic inequality",
+       x = "Cumulative share of states", y = "Cumulative share of investment")
+```
+
+# Infrastructure view — excluding PEMEX and the Federal District Department
+
+Two line items dominate and distort the geography: **Petróleos Mexicanos** (oil
+investment, concentrated in a handful of producing states) and the **Departamento
+del Distrito Federal** (Mexico City's own municipal budget). Together they are
+**about 27% of all investment**. Removing both isolates cross-state federal
+*infrastructure* — roads, irrigation, electrification, schools, hospitals, ports.
+
+```{r infra-data}
+excl  <- c("Petróleos Mexicanos", "Departamento del Distrito Federal")
+infra <- items %>% filter(!institution %in% excl)
+infra_state <- infra %>% group_by(state) %>%
+  summarise(total = sum(investment_mdp), .groups = "drop")
+```
+
+```{r infra-year, fig.height=4.4}
+bind_rows(
+  items %>% group_by(year) %>% summarise(total = sum(investment_mdp), .groups = "drop") %>%
+    mutate(view = "All institutions"),
+  infra %>% group_by(year) %>% summarise(total = sum(investment_mdp), .groups = "drop") %>%
+    mutate(view = "Excl. PEMEX & DDF")
+) %>%
+  ggplot(aes(year, total, colour = view)) +
+  geom_line(linewidth = 1) + geom_point(size = 2) +
+  scale_y_continuous(labels = comma, limits = c(0, NA)) +
+  scale_colour_manual(values = c("All institutions" = "grey55",
+                                 "Excl. PEMEX & DDF" = "#1b9e77")) +
+  labs(title = "Federal investment: all institutions vs. infrastructure only",
+       subtitle = "Real millones de pesos (1960). PEMEX and the DDF removed.",
+       x = NULL, y = "Investment (real mdp, 1960)", colour = NULL)
+```
+
+```{r infra-top-states, fig.height=5}
+infra_state %>% slice_max(total, n = 10) %>%
+  ggplot(aes(reorder(state, total), total)) +
+  geom_col(fill = "#1b9e77") +
+  geom_text(aes(label = comma(round(total))), hjust = -0.1, size = 3.2) +
+  coord_flip() +
+  scale_y_continuous(labels = comma, expand = expansion(mult = c(0, 0.15))) +
+  labs(title = "Top 10 states by infrastructure investment (excl. PEMEX & DDF)",
+       subtitle = "Real millones de pesos (constant 1960 prices)",
+       x = NULL, y = "Investment (real mdp, 1960)")
+```
+
+```{r infra-map, fig.height=6, eval=has_sf}
+istate <- infra_state %>% mutate(geo_name = state_to_geojson[state])
+geo_i  <- geo %>% left_join(istate, by = c("name" = "geo_name"))
+ggplot(geo_i) +
+  geom_sf(aes(fill = total), colour = "white", linewidth = 0.2) +
+  scale_fill_viridis_c(labels = comma, option = "C", na.value = "grey90", trans = "sqrt") +
+  labs(title = "Infrastructure investment by state (excl. PEMEX & DDF)",
+       subtitle = "Real millones de pesos (sqrt colour scale). Grey = Federal District / unmatched.",
+       fill = "real mdp") +
+  theme_void(base_size = 12)
+```
+
+The share each state loses when PEMEX and the DDF are removed reveals who the
+"headline" numbers really flattered:
+
+```{r infra-shift}
+full_state <- by_state %>% rename(all = total)
+infra_state %>% rename(infra = total) %>%
+  right_join(full_state, by = "state") %>%
+  mutate(infra = coalesce(infra, 0),
+         removed_mdp = all - infra,
+         removed_pct = removed_mdp / all) %>%
+  slice_max(removed_pct, n = 8) %>%
+  transmute(State = state,
+            `All (real mdp)` = comma(round(all)),
+            `Infra only` = comma(round(infra)),
+            `Removed %` = percent(removed_pct, 0.1)) %>%
+  ktab(caption = "States most reduced by removing PEMEX and the DDF")
+```
+
+# Recommended further analysis {-}
+
+- **Deflator robustness.** Figures are now real (CPI, 1960 = 100). A wholesale or
+  gross-fixed-capital-formation deflator (INEGI/Banxico) is arguably better for
+  *investment* than the CPI and would be a useful sensitivity check; the WPI series
+  here is empty before ~1970, so it can only anchor the later panel.
+- **Per-capita and per-area allocation.** Join 1960-census state population to see
+  whether high totals (Federal District, Coahuila) survive normalisation, or whether
+  poorer states received more *per head* — the real distributive question.
+- **Extend the panel to 1925–1963.** The full volume covers earlier cuadros; adding
+  them turns the president lookup into a genuine cross-sexenio comparison
+  (Cárdenas, Ávila Camacho, Alemán, Ruiz Cortines, López Mateos).
+- **Volatility of allocations.** Coefficient of variation of each state's yearly
+  share flags politically "swing" vs. stable recipients.
+- **Link to the biography networks (project payoff).** Cross the leading
+  institutions here (SOP, SRH, PEMEX, CFE) with the `govt_positions` careers: did
+  tapados and their network alters cluster in the highest-investment ministries?
+  Use `total_mdp` from `federal_investment_institutions.csv` as a **budget-based
+  institution-importance weight** for the manual rank tables in `data/rank/`.
+- **Regional politics.** Aggregate to regions (North, Bajío, Centre, South-East)
+  and test whether investment tracked governors' alignment with the president.
+
+```{r sessioninfo, echo=FALSE}
+cat("Data source:", INV, "\nRendered:", format(Sys.time()))
+```
