@@ -57,6 +57,7 @@ RANK_DIR                   = DATA_DIR / "rank"
 # "Inversion Publica Federal 1925-1963" volume (pp. 66-129 = cuadros for 1959-1963).
 # Institution x state investment matrices (millones de pesos).
 INVERSION_PUBLICA_JSON     = LITERATURE_DIR / "InversionPublicaFederal_1925-1963-66-129.pdf.json"
+INVERSION_PUBLICA_1965_1970_JSON = LITERATURE_DIR / "federal_investment_1965_1970-73-128.pdf.json"
 INVESTMENT_DIR             = DATA_DIR / "investment"
 
 # World Bank price series (WDI) for deflating investment to real pesos.

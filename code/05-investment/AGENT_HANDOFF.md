@@ -83,6 +83,29 @@ Config constants added: `INVERSION_PUBLICA_JSON`, `INVESTMENT_DIR`, `CPI_LEVEL_X
 
 ## Open threads / next steps
 
+### Added: realized investment by purpose and state, 1965–1969
+
+`04_extract_purpose_state_1965_1969.py` parses
+`literature/federal_investment_1965_1970-73-128.pdf.json`, cuadros 18–23.
+Cuadro 18 is the 1965–1969 aggregate and cuadros 19–23 are the annual realized
+matrices for 1965–1969. The source has no realized 1970-by-state matrix; 1970
+appears only in programmed national tables. Cuadro 17 is a redundant transposed
+summary and is skipped.
+
+Outputs in `data/investment/`:
+
+- `federal_investment_purpose_state_long.csv`
+- `federal_investment_purpose_state_wide_1965_1969.csv`
+- `federal_investment_purpose_state_wide_<year>.csv` for 1965–1969
+- `federal_investment_purpose_state_validation.csv`
+
+The long file has 4,950 rows: 25 concepts × 33 geographies (32 states plus the
+national total) × 6 matrices. It retains raw OCR strings and parse flags. Six
+unambiguous OCR errors are corrected only where independent grand/category,
+state, and annual-period sums establish the value; they are marked
+`corrected_reconciled_ocr`. Remaining small printed/OCR discrepancies stay in
+the validation file rather than being silently changed.
+
 - **`02-rank/` manual tiering is still pending** — the human fills the blank
   `domain_tier`/`global_tier`/`title_tier` columns in `data/rank/*_rank.csv`.
 - **`02-rank/02_build_rank_panel.py` is NOT written yet** — the script that joins the
