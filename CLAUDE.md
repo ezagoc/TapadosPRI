@@ -60,6 +60,9 @@ Never hardcode absolute paths — always use constants from `config.py`:
 | `05-investment/01_extract_investment_tables.py` | Extract the federal public-investment matrices (institution × state) from the Azure Document Intelligence JSON (cuadros 15–23, fiscal years 1959–63); stitch split section-tables, clean OCR values/states; validates subtotals vs. grand totals | `literature/InversionPublicaFederal_*.json` → `investment/federal_investment_long.csv`, `_institutions.csv`, `_wide_<year>.csv`, `_validation.csv` |
 | `05-investment/02_build_deflator.py` | Build a Mexican CPI price deflator (World Bank WDI xls), rebased base=1960=100; 1959 takes the 1960 value | `investment/API_FP.*.xls` → `investment/price_deflator_mexico.csv` |
 | `05-investment/03_link_investment_to_ranks.py` | Deflate investment to real 1960 pesos, rank institutions by budget, and join a budget signal onto the govt rank table via a curated Spanish→English crosswalk (`match_confidence` exact/approx) | investment + `rank/govt_institution_rank.csv` → `investment/federal_investment_budget_reference.csv`, `rank/govt_institution_rank_budget.csv` |
+| `05-investment/05_download_inegi_investment.py` | Download INEGI digital-library scans with realized federal investment by state, 1970–2003 (SPP 1970–80; "El ingreso y el gasto público en México" 1986/87/93/99/2000/01/04 eds.) + manifest | → `literature/inegi_investment/*.pdf`, `manifest.csv` |
+| `05-investment/06_extract_inegi_state_investment.py` | Read the state-total tables with vision LLMs (no Azure): two independent reads per crop (gpt-5.5 / gpt-5.4), 3rd read breaks ties; parts vs printed total, single-cell reconciliation, focused re-reads, 2 documented manual corrections (SLP 1974 misprint, Sonora 1976). Units → millions of new pesos | → `investment/inegi_state_investment_long.csv`, `_validation.csv`, `inegi_raw/` (cache) |
+| `05-investment/07_build_state_investment_panel.py` | State × year panel 1959–2003: 1959–69 books + 1970–2003 INEGI (most recent balanced edition per year); nominal, real (1960 pesos), share of states | → `investment/state_investment_panel.csv`, `state_investment_sources.csv` |
 | `05-investment/plan/investment_descriptives.Rmd` | Professor-facing descriptive report (real pesos): totals by year/president, top institutions/states, choropleths, heatmap, sector mix, growth, concentration (Gini/Lorenz). Needs R pkgs `sf`,`kableExtra` + pandoc | investment CSVs → knitted HTML |
 
 ## Code conventions
@@ -212,6 +215,17 @@ Viz: `03-descriptive_stats/viz_ego_networks.py` → `output/ego_network_<year>.p
 |---|---|
 | `candidates/corcholatas_historicas.xlsx` | Historical list of tapado candidates per election |
 | `shapefiles/mexico_states.json` | GeoJSON of Mexican states (used by geo visualization scripts) |
+
+### State investment panel (`data/investment/state_investment_panel.csv`) — main distributive outcome
+32 states × 1959–2003 (45 years) of realized federal public investment: `nominal_mn_new_pesos`,
+`real_mn_1960_pesos` (CPI, 1960=100; deflator now runs to 2010), `share_of_states`, `source`.
+- **No state data exist for 1940–1958** (the 1925–1963 book is national-only before 1959) →
+  investment outcomes cover the 1964–2000 successions only.
+- 1970–2003 read from scans by LLMs, validated: every year used adds up to its printed total;
+  overlapping editions give identical state shares except 1999 (revision, max diff 1.5 pp).
+- "No distribuible geográficamente" is 20–24% in 1983–84 (≤12% otherwise) → prefer `share_of_states`.
+- 1965–69 (`04_*`): cuadros 19–23 are annual (sum to cuadro 18); their `period_start` is mislabelled 1965.
+- Visible political budget cycle: investment peaks in election years and drops in each sexenio's first year.
 
 ### Rank curation (`data/rank/`) — human-edited
 | File | Description |

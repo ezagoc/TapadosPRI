@@ -128,3 +128,15 @@ the validation file rather than being silently changed.
 - Top-level stage folders (`02-rank/`, `05-investment/`) locate `config.py` via
   `parents[1]`; the deeper `00-networks/*/` scripts use `parents[2]`.
 - Data lives only in Dropbox (`TAPADOSPRI_DB_ROOT`), never in git.
+
+### Added: state panel 1959–2003 from INEGI scans (2026-09-24, Joaquín + Claude)
+
+- `05_download_inegi_investment.py` → `literature/inegi_investment/` (INEGI digital library; the server
+  returns HTTP 200 for missing files, so downloads are checked for the `%PDF` header).
+- `06_extract_inegi_state_investment.py`: no Azure on this machine → vision LLMs with a dual-read +
+  tiebreak protocol and parts-vs-total validation (see its docstring). Raw answers cached in
+  `data/investment/inegi_raw/`.
+- `07_build_state_investment_panel.py` → `data/investment/state_investment_panel.csv`.
+- `02_build_deflator.py` now keeps years ≤ 2010 (was ≤ 2000); 1959–2000 values unchanged.
+- Note for `04_*`: cuadros 19–23 are annual (they sum to cuadro 18) but `period_start` is written as
+  1965 for all of them — worth relabelling to the year itself.

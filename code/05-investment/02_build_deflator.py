@@ -51,7 +51,7 @@ def main() -> None:
     wpi = _mexico_series(WPI_XLS, "wpi")
 
     df = pd.concat([cpi, inf, wpi], axis=1).reset_index(names="year")
-    df = df[df["year"] <= 2000].copy()
+    df = df[df["year"] <= 2010].copy()   # covers the 1959–2003 state investment panel
 
     # 1959 := 1960 (series begins in 1960; investment data starts in 1959)
     first = df.loc[df["year"] == 1960].iloc[0].copy()
