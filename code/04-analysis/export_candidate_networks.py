@@ -1,75 +1,38 @@
 """
 export_candidate_networks.py
 
-For each PRI/PRM election, export one Excel per candidate — the winner and the 3
-runner-ups with the largest networks — listing every network connection (name, tie
-type and all tie detail) together with the connected person's POSITION the year
-before the election and each year of the sexenio after it.
+For each PRI/PRM election, export one Excel per pre-candidate — the winner(s), the
+documented runner-up and every other losing corcholata (the control group) —
+listing every network connection (name, tie
+type and all tie detail) together with the connected person's POSITION in each year
+of the e−6..e+6 window. Only ties formed by the destape year (e−1) are listed, so
+the network is pre-determined with respect to the succession. Every tie carries its
+calibrated `tie_weight` (08_tie_weights.py) — no size cutoff. Each file
+is named by the candidate's `role` in the crosswalk (winner, runner_up, loser,
+designated_removed = 1994 Colosio, nominee_lost = 2000 Labastida).
 
 Output: OUTPUT_DIR/candidate_networks/<year>/<year>_<role>_<surname>.xlsx
 """
 
 from __future__ import annotations
 
-import re
 import shutil
 import sys
-import unicodedata
-from collections import Counter, defaultdict
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 CODE_DIR = Path(__file__).resolve().parents[1]
 if str(CODE_DIR) not in sys.path:
     sys.path.append(str(CODE_DIR))
 
-from config import DATA_DIR, OUTPUT_DIR, CORCHOLATAS_XLSX
+from config import DATA_DIR, OUTPUT_DIR
+from network_utils import ego_view, load_corcholatas, load_network
 
 CLEAN = DATA_DIR / "clean_positions"
-EDGES = DATA_DIR / "networks" / "tapado_edges.csv"
 OUT = OUTPUT_DIR / "candidate_networks"
 
 
-def _toks(s):
-    s = unicodedata.normalize("NFKD", str(s))
-    s = "".join(c for c in s if not unicodedata.category(c).startswith("M"))
-    return {w for w in re.sub(r"[^a-z ]+", " ", s.lower()).split() if len(w) > 2}
-
-
-def winner_by_election(people: pd.DataFrame) -> dict:
-    """(election_year, person_id) -> 1 if that person is the ✓ winner of that election.
-
-    Derived from the corcholatas ✓ per election row, not the per-person flag (which
-    would mislabel a future winner who was a runner-up in an earlier election)."""
-    tok2pid = defaultdict(set)
-    pid_tok = {}
-    for pid, name in zip(people.person_id, people.person_name):
-        t = _toks(name); pid_tok[pid] = t
-        for w in t:
-            tok2pid[w].add(pid)
-
-    def match(name):
-        q = _toks(name)
-        sc = Counter()
-        for w in q:
-            for pid in tok2pid.get(w, ()):
-                sc[pid] += 1
-        if not sc:
-            return None
-        pid, ov = max(sc.items(), key=lambda kv: (kv[1], -len(pid_tok[kv[0]])))
-        return pid if (ov >= 2 and ov >= len(q) - 1) else None
-
-    corch = pd.read_excel(CORCHOLATAS_XLSX, header=1).dropna(subset=["Nombre"])
-    flag = {}
-    for _, r in corch.iterrows():
-        pid = match(str(r["Nombre"]).replace("✓", "").strip())
-        if pid is not None:
-            flag[(int(r["Elección"]), pid)] = int("✓" in str(r["Nombre"]))
-    return flag
-
-N_COMPETITORS = 3
 # Symmetric event-study window for DiD: the full previous sexenio (e-6..e-1),
 # the election/transition year (e), and the candidate's sexenio (e+1..e+6).
 PRE_YEARS, POST_YEARS = 6, 6
@@ -128,59 +91,54 @@ def position_in_year(idx, pid, year):
 
 
 def main():
-    edges = pd.read_csv(EDGES)
+    edges, nodes = load_network()
     posidx = build_position_index()
-    people = pd.read_csv(DATA_DIR / "parsed_positions.csv")[["person_id", "person_name"]] \
-        .dropna().drop_duplicates("person_id")
-    win_flag = winner_by_election(people)   # (election, person_id) -> ✓ winner of THAT election
-    bp = pd.read_csv(DATA_DIR / "birthplace.csv")[["person_id", "state"]].dropna() \
-        .drop_duplicates("person_id").set_index("person_id")["state"].to_dict()
-    pp = pd.read_csv(DATA_DIR / "parsed_positions.csv")[["person_id", "birth_date_clean"]] \
-        .dropna().drop_duplicates("person_id")
-    byear = {r.person_id: str(r.birth_date_clean)[:4] for r in pp.itertuples(index=False)}
+    corch = load_corcholatas()          # per-election winner flag (corcholatas ✓)
+    bp = nodes.set_index("person_id")["birth_state"].to_dict()
+    byear = nodes.set_index("person_id")["birth_year"].to_dict()
 
     if OUT.exists():                 # wipe stale files from previous runs
         shutil.rmtree(OUT)
 
-    # ego -> election years; winner status is PER ELECTION (from the corcholatas ✓),
-    # not the per-person flag, so a future president who was a runner-up earlier is
-    # correctly listed as a competitor in that earlier election.
-    egos = []
-    for ego_id, grp in edges.groupby("ego_id"):
-        name = grp["ego_name"].iloc[0]
-        years = set()
-        for s in grp["election_year"].astype(str):
-            years.update(int(y) for y in s.split(";") if y.strip().isdigit())
-        for y in years:
-            winner = win_flag.get((y, ego_id), int(grp["is_winner"].iloc[0]))
-            egos.append((y, winner, ego_id, name, grp["alter_id"].nunique()))
-    egos = pd.DataFrame(egos, columns=["election", "winner", "ego_id", "ego_name", "n"])
+    # one ego-network per (election, candidate), with ties formed by the destape (e−1)
+    nets = {(r.election_year, r.person_id): ego_view(edges, [r.person_id],
+                                                     as_of=r.election_year - 1)
+            for r in corch.itertuples()}
+    egos = pd.DataFrame([{"election": r.election_year, "role": r.role,
+                          "ego_id": r.person_id, "ego_name": r.person_name,
+                          "n": nets[(r.election_year, r.person_id)]["alter_id"].nunique()}
+                         for r in corch.itertuples()])
 
     n_files = 0
     for year in sorted(egos["election"].unique()):
         sub = egos[egos.election == year]
-        winners = sub[sub.winner == 1]
-        comps = sub[sub.winner == 0].sort_values("n", ascending=False).head(N_COMPETITORS)
+        order = {"winner": 0, "nominee_lost": 0, "designated_removed": 1,
+                 "runner_up": 2, "loser": 3}
+        sub = sub.sort_values(["role", "n"], key=lambda c: c.map(order) if c.name == "role"
+                              else -c)
         outdir = OUT / str(year)
         outdir.mkdir(parents=True, exist_ok=True)
         year_cols = list(range(year - PRE_YEARS, year + POST_YEARS + 1))
 
-        for role, cand in [("WINNER", r) for r in winners.itertuples()] + \
-                          [("COMPETITOR", r) for r in comps.itertuples()]:
-            ties = edges[edges.ego_id == cand.ego_id].copy()
+        for cand in sub.itertuples():
+            role = cand.role.upper().replace("_", "-")   # WINNER, RUNNER-UP, LOSER, …
+            ties = nets[(year, cand.ego_id)]
             rows = []
             for t in ties.itertuples(index=False):
                 a = t.alter_id
                 row = {
                     "connection_name": t.alter_name,
-                    "birth_year": byear.get(a, ""),
+                    "birth_year": byear.get(a),
                     "birthplace_state": bp.get(a, ""),
                     "tie_type": t.edge_type,
                     "tie_detail (focus)": t.focus,
-                    "focus_size": t.focus_size,
+                    "focus_size (people at once)": t.focus_size,
+                    "tie_weight": t.tie_weight,
+                    "weight_newman": t.weight_newman,
                     "their_role_at_focus": t.alter_role,
                     "candidate_role_at_focus": t.ego_role,
                     "tie_year_start": t.year_start,
+                    "tie_date_basis": t.date_basis,
                     "tie_year_end": t.year_end,
                     "confirmed_by": t.confirmed_by,
                 }
@@ -188,12 +146,15 @@ def main():
                     phase = "pre" if y < year else ("election" if y == year else "post")
                     row[f"pos_{y} ({phase})"] = position_in_year(posidx, a, y)
                 rows.append(row)
+            if not rows:
+                print(f"    ! {cand.ego_name}: no ties formed by {year - 1}; skipped")
+                continue
             df = pd.DataFrame(rows).sort_values(["tie_type", "connection_name"])
             surname = str(cand.ego_name).split(",")[0].strip().replace("/", "-")
             path = outdir / f"{year}_{role}_{surname}.xlsx"
             df.to_excel(path, index=False)
             n_files += 1
-        print(f"  {year}: winner(s)={len(winners)} + {len(comps)} competitors")
+        print(f"  {year}: " + ", ".join(f"{k}={v}" for k, v in sub.role.value_counts().items()))
 
     print(f"\nWrote {n_files} Excel files under {OUT}")
 

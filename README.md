@@ -139,7 +139,7 @@ install.packages(c(
    - public
    - other
    - birthplace
-6. Build connection datasets and per-tapado ego-networks (`06_build_networks.py`, `07_family_surname_edges.py`).
+6. Match the candidate list to person_ids (`05_match_corcholatas.py`), then build the full politician network (`06_build_networks.py`, then `07_bio_ties_gpt.py`). Tapado ego-networks are views of it (`network_utils.ego_view`).
 7. Run descriptive statistics and network visualizations (`03-descriptive_stats/`).
 8. Export per-candidate network workbooks (`04-analysis/export_candidate_networks.py`).
 

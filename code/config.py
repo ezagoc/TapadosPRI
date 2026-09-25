@@ -27,6 +27,10 @@ BIOGRAPHIES_RAW_TXT = DATA_DIR / "biographies_full.txt"
 BIOGRAPHIES_CSV = DATA_DIR / "biographies_corrected.csv"
 BIOGRAPHIES_PARSED_CSV = DATA_DIR / "biographies.csv"
 CORCHOLATAS_XLSX = DATA_DIR / "candidates" / "corcholatas_historicas.xlsx"
+CORCHOLATAS_MATCHED_CSV = DATA_DIR / "candidates" / "corcholatas_matched.csv"  # built by 05_match_corcholatas.py
+NETWORK_DIR       = DATA_DIR / "networks"
+NETWORK_EDGES_CSV = NETWORK_DIR / "network_edges.csv"   # full undirected network (06 + 07)
+NETWORK_NODES_CSV = NETWORK_DIR / "network_nodes.csv"
 PARSED_POSITIONS_CSV       = DATA_DIR / "parsed_positions.csv"
 PARSED_CONNECTIONS_CSV     = DATA_DIR / "parsed_connections.csv"
 EDUCATION_CSV              = DATA_DIR / "education.csv"
@@ -257,34 +261,11 @@ CITY_TO_STATE = {
 }
 
 # ---------------------------------------------------------------------------
-# Election pairs: year -> (winner name in CSV, closest loser name in CSV)
-# Names must match exactly as they appear in biographies.csv
+# Candidates per election: see CORCHOLATAS_MATCHED_CSV (built by
+# 00-preprocess/05_match_corcholatas.py) — the single source of truth for who ran
+# and who won each election. (The old hard-coded ELECTION_PAIRS / TAPADOS_1988
+# lists were unused and used a pre-cleaning name format; removed.)
 # ---------------------------------------------------------------------------
-ELECTION_PAIRS = {
-    1988: (
-        "salinas de gortari, carlos",
-        "Bartlett (diaz), Manuel",
-    ),
-    1982: (
-        "de la Madrid (hurtado), Miguel",
-        # Diaz Serrano — need to confirm exact CSV name
-        None,
-    ),
-    1994: (
-        "colosio (Murrieta), luis donaldo",
-        # Aspe Armella — need to confirm exact CSV name
-        None,
-    ),
-}
-
-# 1988 "seis distinguidos" and other tapados
-TAPADOS_1988 = [
-    "salinas de gortari, carlos",
-    "Bartlett (diaz), Manuel",
-    "del Mazo gonzalez, alfredo",
-    "garcia raMirez, sergio",
-    # Others to be matched from corcholatas xlsx
-]
 
 # ---------------------------------------------------------------------------
 # Mapping from canonical state names to GeoJSON 'name' property

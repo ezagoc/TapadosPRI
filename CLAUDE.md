@@ -2,7 +2,7 @@
 
 ## What this project is
 
-Political network analysis of the "tapado" system in Mexico's PRI party (1921–2000): how presidential candidates were secretly selected. Compares the 1988 and 1994 elections (winner vs. loser candidate networks).
+Political network analysis of the "tapado" system in Mexico's PRI party (1921–2000): how presidential candidates were secretly selected. Compares the networks of the chosen successor vs. the losing pre-candidates across all successions 1940–2000.
 
 Source data: ~1,200 biographies from *Mexican Political Biographies 1935–2009*.
 
@@ -48,10 +48,14 @@ Never hardcode absolute paths — always use constants from `config.py`:
 | `00-preprocess/04_parse_positions.py` | Extracts state/org/dates/title; assigns `person_id`; cleans names (no accents, no parens) | `biographies_corrected.csv` → `parsed_positions.csv` (15K+ rows) |
 | `00-preprocess/05_*.py` | One script per position type (education, govt, party, labor, public, birthplace) | `parsed_positions.csv` → specialized CSVs |
 | `01-clean/05?_*_clean.py` | Post-processing cleaners, one per position type. `05e_govt_positions_clean.py` Fix 9 recovers `organization` from `role_text` when it was never structured out (~15%→12% of dated govt records left without an institution) | specialized CSVs → `clean_positions/*.csv` |
-| `00-preprocess/06_build_networks.py` | Build a per-tapado ego-network: explicit + co-education (faculty) + co-work (sub-unit) ties | `clean_positions/*` → `networks/tapado_edges.csv`, `tapado_nodes.csv` |
-| `00-preprocess/07_family_surname_edges.py` | Add GPT-confirmed family-by-surname ties (human-curated via `family_surname_review.csv`) | → `networks/tapado_edges.csv` |
-| `03-descriptive_stats/viz_ego_networks.py` | Per-election plot: winner vs. closest runner-up, shared ties in the middle | `networks/tapado_edges.csv` → `ego_network_<year>.png` |
-| `04-analysis/export_candidate_networks.py` | Per election, one Excel per candidate (winner + 3 largest-network competitors): every tie (name, type, full focus detail) + each alter's position the year before the election and each year of the sexenio after. Winner status is per-election (corcholatas ✓), not the per-person flag | `networks/tapado_edges.csv` + `clean_positions/*` → `output/candidate_networks/<year>/<year>_<role>_<surname>.xlsx` |
+| `00-preprocess/05_match_corcholatas.py` | Crosswalk each corcholata × election to a `person_id` (strict matcher), per-election winner, documented runner-up | `corcholatas_historicas.xlsx` → `candidates/corcholatas_matched.csv` |
+| `00-preprocess/06_build_networks.py` | Build the FULL politician network: co-education (generation), co-work (sub-unit), co-military, co-revolution, regex-stated family/mentorship/personal | `clean_positions/*` → `networks/network_edges.csv`, `network_nodes.csv` |
+| `00-preprocess/08_tie_weights.py` | Estimate how P(stated tie) decays with focus size; add `tie_weight` = (n−1)^b and `weight_newman`. Run after 07 | → `networks/network_edges.csv`, `tie_weight_params.csv` |
+| `03-descriptive_stats/animate_network.py` | Animated history: the whole network grows in grey (nodes at birth, dated ties the year they formed; x ≈ birth year); the circle of the president in office is highlighted (direct ties coloured by kind) and jumps each sexenio; bottom strip = new ties per year with sexenio markers. All labels in English | → `output/network_history.gif`, `network_history_final.png` |
+| `03-descriptive_stats/validate_network.py` | Stated-tie rate and lift by tie type × size bin (construct validity) | → `output/network_validation.csv` |
+| `00-preprocess/07_bio_ties_gpt.py` | GPT reads every bio's `personal_info`; grounded, matched family/mentorship/personal ties + 30 curated `family_surname` ties. Run after 06 | → `networks/network_edges.csv`, `bio_mentions_gpt.csv` |
+| `03-descriptive_stats/viz_ego_networks.py` | Per-election plot: winner vs. documented runner-up (ties as of e−1), shared ties in the middle | `networks/network_edges.csv` → `ego_network_<year>.png` |
+| `04-analysis/export_candidate_networks.py` | Per election, one Excel per pre-candidate (winner, runner-up, every other loser): every tie formed by e−1 (name, type, focus detail) + each alter's position each year e−6..e+6 | `networks/network_edges.csv` + `clean_positions/*` → `output/candidate_networks/<year>/<year>_<role>_<surname>.xlsx` |
 | `02-rank/01_generate_rank_tables.py` | Emit editable rank lookup tables (institution + title) per domain, pre-seeded with heuristic `suggested_*_tier`. **Manual step**: fill the blank `domain_tier`/`global_tier`/`title_tier` columns by hand | `clean_positions/{govt,party,labor}_positions.csv` → `rank/<domain>_{institution,title}_rank.csv` |
 | `05-investment/01_extract_investment_tables.py` | Extract the federal public-investment matrices (institution × state) from the Azure Document Intelligence JSON (cuadros 15–23, fiscal years 1959–63); stitch split section-tables, clean OCR values/states; validates subtotals vs. grand totals | `literature/InversionPublicaFederal_*.json` → `investment/federal_investment_long.csv`, `_institutions.csv`, `_wide_<year>.csv`, `_validation.csv` |
 | `05-investment/02_build_deflator.py` | Build a Mexican CPI price deflator (World Bank WDI xls), rebased base=1960=100; 1959 takes the 1960 value | `investment/API_FP.*.xls` → `investment/price_deflator_mexico.csv` |
@@ -68,14 +72,16 @@ Never hardcode absolute paths — always use constants from `config.py`:
 
 ## Elections analyzed
 
-- **1988**: Salinas de Gortari (winner) vs. Bartlett Díaz (loser)
-- **1994**: Colosio Murrieta (winner) vs. Aspe Armella (loser)
-- Candidates defined in `config.py` → `ELECTION_PAIRS` and `TAPADOS_1988`
+- All 11 PRI/PRM successions 1940–2000 (83 corcholata-elections, 71 people matched).
+- Candidates, winners (per election) and the documented runner-up live in
+  `data/candidates/corcholatas_matched.csv` (built by `05_match_corcholatas.py`).
+- 1994 has two ✓: Colosio (`designated_removed`) and Zedillo (`winner`, took office).
+- 2000: Labastida (`nominee_lost`) — the PRI lost the presidency.
 
 ## Collaborators
 
-- `ezagoc` (Emilio Zagoc) — Windows, `C:\Users\Dell\Dropbox\TapadosPRI`
-- `ezagoc` (Emilio Zagoc) — Mac, `/Users/ezagoc/Dropbox/TapadosPRI`
+- `ezagoc` (Eduardo Zago) — Windows, `C:\Users\Dell\Dropbox\TapadosPRI`
+- `ezagoc` (Eduardo Zago) — Mac, `/Users/ezagoc/Dropbox/TapadosPRI`
 - `quinoba` (Joaquín Barrutia) — Mac, `/Users/joaquinbarrutia/Dropbox/TapadosPRI`
 
 Each person maintains their own `.env` and `settings.local.json` (both gitignored).
@@ -116,37 +122,84 @@ These files are never in git — they live only in Dropbox and are read/written 
 | `party_positions_wide.csv` | Dummies: pri_member, pan_member, ever_national_leader, ever_cen; highest_party_rank |
 | `labor_positions_wide.csv` | Dummies by sector and rank |
 
-### Tapado networks (`data/networks/`) — current
+### Full politician network (`data/networks/`) — current
 
-Built by `06_build_networks.py` + `07_family_surname_edges.py` from the cleaned
-position datasets, keyed on `person_id`. One ego-network per tapado (the 73
-pre-candidates in `corcholatas_historicas.xlsx`). An **edge** means the two people
-plausibly knew each other:
+Built by `05_match_corcholatas.py` → `06_build_networks.py` → `07_bio_ties_gpt.py`
+from the cleaned position datasets, keyed on `person_id`. It is the **full network
+of all ~2,900 politicians** (every pair that plausibly knew each other), not just the
+tapados. A tapado's ego-network is a view of it: `network_utils.ego_view(edges,
+[pid], as_of=year)`. **Always pass `as_of`** (e.g. `election_year − 1`, the destape
+year) so treatment is defined by ties formed *before* the succession — ~9% of dated
+ties (19% of co_work) form after the election.
 
-- **co_education** — same educational focus + overlapping years. Large institutions
-  (>60 people, e.g. UNAM) are refined to `(institution, faculty)` via `degree_field`;
-  small/specific schools link on the institution alone. Both studying and teaching
-  roles count (captures professor–student). *Note: big faculties like `UNAM | law`
-  produce large same-generation cohorts — a real but broad "milieu" tie.*
-- **co_work** — same organization + overlapping years, refined to a sub-unit and
-  size-capped (≤60) so generic party membership / mega-ministries don't over-link;
-  party is refined geographically (`PRI – Jalisco`, `PRI – Youth Organization`).
-- **co_military** — same military unit / commander (extracted from `military_positions`
-  role text: "Nth Battalion/Military Zone…", "under General X") + overlapping years.
-  Sparse (sequential commands rarely overlap) but precise.
-- **family / mentorship / personal** — stated in the biography `personal_info`.
-- **family_surname** — shared paternal/maternal surname, GPT-confirmed (≤2nd cousins)
-  and **human-curated** (see below).
+- **co_education** — same school, level and role (student–student or staff–staff;
+  never student–teacher). A single year is the degree year → enrollment window
+  `[degree − program_length + 1, degree]` (lic 5, masters 2, PhD 3). Small schools:
+  overlapping windows. Large institutions (>60 people, e.g. UNAM): refined to faculty
+  **and same generation** (entry years ±1) — classmates, not the whole faculty.
+  Teaching staff link on overlap (faculty inferred from role text) and are size-capped
+  like a workplace.
+- **co_work** — same organization + overlapping years (±1), refined to a sub-unit;
+  party refined geographically (`PRI – Jalisco`, `PRI – Youth Organization`); non-federal
+  govt posts carry their state (`Secretariat of Government (Quintana Roo)`); elected
+  office only for state legislatures / DF Assembly (committees such as Gran Comisión
+  and the federal Congress are not used); fragment labels ("administration and") dropped.
+- **Age plausibility:** a record starting before age 14 (university, work), 18
+  (teaching) or 4 (primary/secondary) is a mis-parsed year and forms no ties; a stated
+  year before the younger person's birth is dropped. → no tie predates a birth.
+- **Size = people at the focus AT THE SAME TIME** (not over its whole history: SPP had
+  105 people over 1973–92 but ≤44 at once). `focus_size` = people there the year the
+  tie began. The file keeps every focus with ≤60 at once (max observed: 57).
+- **Tie weights, no cutoff** (`08_tie_weights.py`): P(stated tie | co-location) decays
+  smoothly with size as a power law, logit slope on log(n−1) ≈ −0.3 (co_work −0.34,
+  SE 0.09; co_education −0.30) — no natural threshold, and much flatter than Newman's
+  1/(n−1). Main spec: `tie_weight = (n−1)^b` (b estimated per type; stated ties = 1).
+  Robustness curve: unweighted, `weight_newman`, caps 10/20/30/60
+  (`network_utils.ROBUSTNESS_CAPS`, `ego_view(max_focus_size=…)`). Caveat: the
+  benchmark (stated ties) is incomplete and may over-represent small prominent groups,
+  so results must hold across the whole curve.
+- **family / mentorship / personal** — stated in a biography's `personal_info`, from
+  two sources (`confirmed_by`): `rule` (regex in 06) and `gpt_bio` (07: GPT reads every
+  bio and lists each named person + relationship + verbatim quote; kept only if name
+  and quote appear in the text, resolved with the strict matcher, age-consistent with
+  the kin term). `*_given_name` = a bare given name completed with the biographee's
+  surname (lower precision).
+- **Dating** (`date_basis`): `overlap` (co-location years); `birth` (blood kin: the
+  younger one's birth year); `stated_exact` / `stated_decade` (year the relationship
+  began, as written in the bio — verified to appear in the text); `inferred` (GPT from a
+  stated life stage + birth year, e.g. "secondary school classmate"); empty = unknown
+  (`ego_view(..., undated="drop")` for robustness).
+- **family_surname** — only the 30 human-kept pairs of `family_surname_review.csv`
+  (`gpt+human`). GPT confirming kinship from surnames alone had ~21% precision in that
+  review (30/142), so it is **not** run on the full network.
+
+**Name matching** (`network_utils.StrictNameMatcher`): Spanish order "Given Paternal
+Maternal"; the paternal surname must be preceded only by the person's given names, a
+stated maternal surname must match (fuzzy), optional age bounds. The old token-overlap
+matcher had linked Manuel Pérez Treviño → Avila Pérez, Manuel and Ezequiel Padilla
+(b. 1890) → Padilla Couttolenc (b. 1942).
 
 | File | Description |
 |---|---|
-| `networks/tapado_edges.csv` | Edge list: `ego_id, ego_name, election_year, is_winner, alter_id, alter_name, edge_type, focus, focus_size, ego_role, alter_role, year_start, year_end, confirmed_by`. Ego-net = filter by `ego_id`. |
-| `networks/tapado_nodes.csv` | `person_id, name, is_tapado, election_year, is_winner` |
-| `networks/family_surname_candidates.csv` | All shared-surname pairs + GPT verdict + `in_scope` (audit trail for hallucination review) |
-| `networks/family_surname_review.csv` | **Human curation** of the family ties: `keep` (1/0) + `corrected_relationship`; consumed by `07` to override GPT. Lives in Dropbox like other curated data. |
+| `candidates/corcholatas_matched.csv` | Crosswalk corcholata × election → `person_id`, `is_winner` (per election), `is_runner_up` + `runner_up_source`, `match_status`. Single source of truth for candidates. Pérez Treviño (1940) has no own entry in the 1935–2009 volume. |
+| `networks/network_edges.csv` | Undirected edges (`person_a < person_b`): `name_a/b, edge_type, focus, focus_size, role_a/b, year_start, year_end, date_basis, stated_by, confirmed_by, tie_weight, weight_newman` |
+| `networks/tie_weight_params.csv` | Estimated decay slope per tie type (08) |
+| `networks/network_nodes.csv` | Everyone: `birth_year, birth_state, degree, n_records, n_dated_records, personal_info_chars` (network size grows with biography length — control for these), `is_tapado, tapado_elections, winner_elections` |
+| `output/network_validation.csv` | Stated-tie rate and lift by tie type × focus size (`validate_network.py`) |
+| `networks/bio_mentions_gpt.csv` | 07 cache + audit: every GPT mention, quote, grounding checks, match result. Delete to re-query. |
+| `networks/family_surname_review.csv` | Human curation of surname kinship (`keep`, `corrected_relationship`) |
+| `networks/family_surname_candidates.csv` | Old GPT surname verdicts for tapado pairs (audit only) |
+| `networks/legacy_ego_v1/` | Superseded per-tapado edge lists (`tapado_edges.csv`, …) |
+
+**Treatment / control** (`role` in the crosswalk): `winner` (took office; 1994 =
+Zedillo), `runner_up` (documented, with source; robustness), `loser` (main control =
+all losers), `designated_removed` (1994 Colosio, assassinated — excluded from the
+pooled design; special Zedillo-vs-Colosio comparison), `nominee_lost` (2000
+Labastida won the primary but lost to Fox — nomination, not the presidency).
+`took_office` = 1 only for the person who became president.
 
 Viz: `03-descriptive_stats/viz_ego_networks.py` → `output/ego_network_<year>.png`
-(winner = star, runner-up = circle, shared ties = squares in the middle).
+(winner = star, documented runner-up = circle, shared ties = squares; ties as of e−1).
 
 ### Legacy connections (superseded by the `networks/` pipeline above)
 | File | Description |
@@ -226,7 +279,15 @@ preserving all manual corrections in the other columns.
 04_parse_positions.py       # re-assign person_id, clean names (no accents, no parens)
 05_*.py                     # education, govt, party, labor, public, military, other, birthplace, connections
 01-clean/05?_*_clean.py     # post-processing cleaners
+05_match_corcholatas.py     # candidate crosswalk (person_id per corcholata × election)
+06_build_networks.py        # full network (rule-based ties)
+07_bio_ties_gpt.py          # + GPT-read biography ties (cached) + curated family_surname
+08_tie_weights.py           # calibrated tie weights
 ```
+
+Re-running `04` can re-assign person_ids: `07` drops cached GPT answers whose
+person_id no longer carries the same name (re-queried), and asserts that
+`family_surname_review.csv` ids still match their names.
 
 `04_parse_positions.py` assigns `person_id` by order of first appearance of each
 unique cleaned name, so the names **must** be correct before `04` runs (hence `03`).

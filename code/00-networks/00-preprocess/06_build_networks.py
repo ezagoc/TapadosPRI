@@ -1,43 +1,51 @@
 """
 06_build_networks.py
 
-Build an ego-network for every "tapado" (PRI/PRM presidential pre-candidate) listed
-in candidates/corcholatas_historicas.xlsx, using the cleaned position datasets.
+Build the FULL network of Mexican politicians in the dataset: every pair of people
+(person_a < person_b) with a high-precision signal that they plausibly knew each
+other. Tapado ego-networks are just views of this network (network_utils.ego_view).
 
-An edge links a tapado T to another person P when there is a high-precision signal that
-the two plausibly knew each other:
+Edge types
+  co_education  — same school, same level, same role (student–student or
+                  staff–staff; never student–teacher). Years are normalised to an
+                  ENROLLMENT WINDOW: a record with a single year is the degree year,
+                  so the window is [degree_year − program_length + 1, degree_year].
+                  • Small institutions (≤ TAU_INST people): windows overlap.
+                  • Large institutions (> TAU_INST, e.g. UNAM): refined to faculty
+                    (`degree_field`) AND students must be of the same GENERATION
+                    (entry years within ±GEN_WIN) — classmates, not the whole milieu.
+                  • Teaching staff link on overlapping years, faculty inferred from
+                    the role text; a staff focus is a workplace, so it gets the
+                    co_work size cap.
+  co_work       — same organisation refined to a sub-unit (party body/state, govt
+                  sub-department/secretariat), overlapping years (±WIN). A focus is
+                  dropped only if it had more than TAU_WORK people AT THE SAME TIME
+                  (size over its whole history would drop e.g. the Supreme Court:
+                  160 justices over a century, ≤25 at once).
+  co_military   — same military unit / commander extracted from role text + overlap.
+  co_revolution — fought in the Revolution in the same state + overlapping years.
+  family / mentorship / personal — stated in a biography's `personal_info`; the
+                  mentioned name is resolved with StrictNameMatcher. Undated.
+(GPT-read biography ties and curated family_surname edges are appended by
+07_bio_ties_gpt.py.)
 
-  1. explicit  — a family / mentorship / personal tie stated in the biography
-                 (parsed from `personal_info`); no year requirement.
-  2. co_education — same educational focus with overlapping years. The focus is the
-                 institution, refined to faculty level for large institutions: an
-                 institution with more than TAU_INST distinct people (e.g. UNAM, 1280)
-                 only links people who also share the same `degree_field` (faculty
-                 grain: law, economics, engineering, ...). Small/specific schools
-                 (primary, secondary, preparatory, regional or military colleges) link
-                 on the institution alone. Both studying and teaching roles count, so
-                 professor–student ties are captured.
-  3. co_work   — same organization with overlapping years. Large ministries are allowed
-                 because the mandatory year overlap is the control (they only link people
-                 who served there in the same years).
+Every edge carries where the two coincided (`focus`), how many people were there in
+the year the tie began (`focus_size`; use 1/focus_size to weight), what
+each did there (`role_a`, `role_b`) and the years of coincidence (`year_start` =
+first year the tie existed). Analyses must use ties formed BEFORE the event they
+study (ego_view(..., as_of=year)).
 
-Birthplace ties are intentionally excluded from this first network. A separate, lower
--precision "family by surname" stage (GPT-confirmed) is added afterwards.
-
-Every edge records where the two coincided (`focus`), how big that focus is
-(`focus_size`), and what each person was doing there (`ego_role`, `alter_role`).
-
-Inputs : corcholatas_historicas.xlsx, parsed_positions.csv, biographies_corrected.csv,
-         clean_positions/{education,govt,party,labor,public,other}_positions.csv
-Outputs: data/networks/tapado_edges.csv, data/networks/tapado_nodes.csv
+Inputs : parsed_positions.csv, biographies_corrected.csv,
+         clean_positions/*.csv, candidates/corcholatas_matched.csv
+Outputs: networks/network_edges.csv, networks/network_nodes.csv
 """
 
 from __future__ import annotations
 
 import re
 import sys
-import unicodedata
 from collections import defaultdict
+from itertools import combinations
 from pathlib import Path
 
 import pandas as pd
@@ -48,155 +56,111 @@ if str(CODE_DIR) not in sys.path:
 
 from config import (
     BIOGRAPHIES_CSV,
-    PARSED_POSITIONS_CSV,
-    CORCHOLATAS_XLSX,
-    DATA_DIR,
+    BIRTHPLACE_CSV,
+    CLEAN_POSITIONS_DIR,
     MEXICAN_STATES,
+    NETWORK_DIR,
+    NETWORK_EDGES_CSV,
+    NETWORK_NODES_CSV,
+    PARSED_POSITIONS_CSV,
     strip_accents,
     clean_text,
     clean_person_name,
 )
-
-CLEAN_DIR    = DATA_DIR / "clean_positions"
-NETWORK_DIR  = DATA_DIR / "networks"
-EDGES_CSV    = NETWORK_DIR / "tapado_edges.csv"
-NODES_CSV    = NETWORK_DIR / "tapado_nodes.csv"
+from network_utils import StrictNameMatcher, load_corcholatas, name_tokens
 
 WORK_DATASETS = ["govt_positions", "party_positions", "labor_positions",
                  "public_positions", "other_positions"]
 
 # ── tunable parameters ───────────────────────────────────────────────────────
-TAU_INST = 60   # an institution with more distinct people than this is "large"
-                # and is refined to (institution, faculty) before linking.
-TAU_WORK = 60   # a work focus (after sub-unit refinement) with more distinct people
-                # than this is too diffuse to imply a tie and is dropped.
-WIN      = 1    # year-overlap tolerance: intervals within this many years overlap.
-
-# ── name normalisation / matching ────────────────────────────────────────────
-_STOPWORDS = {"de", "la", "del", "los", "las", "y", "e", "van", "von", "jr", "sr"}
-
-
-def _norm(s: str) -> str:
-    if not isinstance(s, str):
-        return ""
-    s = unicodedata.normalize("NFKD", s)
-    s = "".join(c for c in s if not unicodedata.category(c).startswith("M"))
-    return re.sub(r"[^a-z ]+", " ", s.lower()).strip()
+TAU_INST = 60   # an institution with more distinct people than this is "large":
+                # refined to faculty and linked by generation only.
+TAU_WORK = 60   # a work/military/teaching focus with more people AT THE SAME TIME
+                # (max over years) is dropped; the per-tie size is kept in focus_size.
+WIN      = 1    # year-overlap tolerance for work / military / revolution.
+GEN_WIN  = 1    # same generation = entry years within this many years.
+# program length (years) used to turn a single degree year into an enrollment window
+PROGRAM_YEARS = {"undergraduate": 5, "masters": 2, "phd": 3, "specialization": 1,
+                 "diploma": 1, "certificate": 1, "pre/other": 3}
 
 
-def _tokens(s: str) -> set:
-    return {t for t in _norm(s).split() if len(t) >= 3 and t not in _STOPWORDS}
-
-
-def _role_of(row) -> str:
+def _role_of(d: dict) -> str:
     """Readable role for a position record (what the person did at the focus)."""
-    rt = row.get("role_text")
-    if isinstance(rt, str) and rt.strip():
-        return rt.strip()
-    raw = row.get("role_text_raw")
-    return raw.strip() if isinstance(raw, str) else ""
+    for col in ("role_text", "role_text_raw"):
+        v = d.get(col)
+        if isinstance(v, str) and v.strip():
+            return v.strip()
+    return ""
 
 
-def _overlaps(a0: int, a1: int, b0: int, b1: int, w: int = WIN) -> bool:
+def _s(v):
+    """Return a clean non-empty string or None."""
+    return v.strip() if isinstance(v, str) and v.strip() and v != "nan" else None
+
+
+def _overlaps(a0: int, a1: int, b0: int, b1: int, w: int) -> bool:
     return a0 <= b1 + w and b0 <= a1 + w
-
-
-class PersonMatcher:
-    """Fuzzy-match a free-text name to a person_id via normalised token overlap."""
-
-    def __init__(self, people: pd.DataFrame):
-        self.pid_name = dict(zip(people["person_id"], people["person_name"]))
-        self.pid_tokens = {pid: _tokens(name) for pid, name in self.pid_name.items()}
-        self.token_to_pids: dict[str, set] = defaultdict(set)
-        for pid, toks in self.pid_tokens.items():
-            for t in toks:
-                self.token_to_pids[t].add(pid)
-
-    def match(self, query: str, *, require_cover: bool = True) -> int | None:
-        q = _tokens(query)
-        if not q:
-            return None
-        score: dict[int, int] = defaultdict(int)
-        for t in q:
-            for pid in self.token_to_pids.get(t, ()):
-                score[pid] += 1
-        if not score:
-            return None
-        pid, ov = max(score.items(), key=lambda kv: (kv[1], -len(self.pid_tokens[kv[0]])))
-        if ov < 2:
-            return None
-        if require_cover and ov < len(q) - 1:  # most query tokens must be present
-            return None
-        return pid
-
-
-# ── explicit relationship patterns (from biographies personal_info) ───────────
-FAMILY_PATTERNS = [
-    r"(?:son|daughter)\s+of\s+([^,;]+)",
-    r"(?:brother|sister)\s+(?:of\s+)?([^,;]+)",
-    r"married\s+([^,;]+)",
-    r"(?:nephew|niece)\s+of\s+([^,;]+)",
-    r"(?:uncle|aunt)\s+(?:of\s+)?([^,;]+)",
-    r"(?:cousin)\s+(?:of\s+)?([^,;]+)",
-    r"(?:father|mother)-in-law\s+(?:of\s+)?([^,;]+)",
-    r"(?:son-in-law|daughter-in-law)\s+(?:of\s+)?([^,;]+)",
-    r"(?:grandson|granddaughter)\s+(?:of\s+)?([^,;]+)",
-]
-MENTORSHIP_PATTERNS = [
-    r"student\s+of\s+([^,;]+)",
-    r"studied\s+(?:under|with)\s+([^,;]+)",
-    r"(?:prot[eé]g[eé])\s+of\s+([^,;]+)",
-    r"(?:political\s+)?(?:patron|mentor)\s+(?:was\s+)?([^,;]+)",
-    r"disciple\s+of\s+([^,;]+)",
-]
-PERSONAL_PATTERNS = [
-    r"(?:close\s+)?friends?\s+(?:of|with|included)\s+([^,;]+)",
-    r"came\s+in\s+contact\s+with\s+([^,;]+)",
-]
-EXPLICIT_PATTERNS = (
-    [(p, "family") for p in FAMILY_PATTERNS]
-    + [(p, "mentorship") for p in MENTORSHIP_PATTERNS]
-    + [(p, "personal") for p in PERSONAL_PATTERNS]
-)
-# trailing role words that should be trimmed from a mentioned name
-_MENTION_TAIL = re.compile(
-    r"\s+(?:who|whose|was|is|a|an|the|secretary|director|governor|president|senator|"
-    r"federal|head|mayor|former|general|leader|chief|deputy|ambassador)\b.*$",
-    re.IGNORECASE,
-)
 
 
 # ── focus-key derivation ──────────────────────────────────────────────────────
 _TRUNCATED_SCHOOL = re.compile(r"\bNo\.?\s*$", re.I)  # "Secondary School No" (number lost)
 
 
-def edu_focus_key(org, field, level, record_type, inst_size: dict):
-    """Education focus: (institution, faculty, degree_level, role).
+def edu_focus_key(d: dict, inst_size: dict):
+    """Education focus: (institution, faculty or None, degree_level, role, is_large).
 
-    - degree_level: an undergraduate and a master's/PhD student in the same faculty
-      are NOT linked — they did not share classes.
-    - role: students link to students (classmates) and staff link to staff
-      (colleagues), but a student is NOT linked to a teacher/professor (co-presence
-      at a school as student vs teacher does not imply they knew each other).
-    Records with no degree level (prep, teaching roles) share a 'pre/other' level
-    bucket so prep classmates still link.
+    Students link to students and staff to staff (no student–teacher ties), and an
+    undergraduate is not linked to a graduate student. Records without a degree
+    level (prep, teaching roles) share a 'pre/other' level bucket.
     """
-    if not isinstance(org, str) or len(org) < 3:
+    org = d.get("organization")
+    if not isinstance(org, str) or len(org) < 3 or _TRUNCATED_SCHOOL.search(org):
         return None
-    if _TRUNCATED_SCHOOL.search(org):
-        return None  # generic "... School No" (number dropped) links different schools
-    lvl = level if isinstance(level, str) and level.strip() and level != "nan" else "pre/other"
-    role = "staff" if record_type == "academic_role" else "student"
+    lvl = _s(d.get("degree_level")) or "pre/other"
+    role = "staff" if d.get("record_type") == "academic_role" else "student"
     if inst_size.get(org, 0) > TAU_INST:
-        if not isinstance(field, str) or not field.strip() or field == "nan":
+        field = _s(d.get("degree_field"))
+        if not field and role == "staff":
+            field = staff_faculty(_role_of(d))
+        if not field:
             return None  # large institution with no faculty info → too coarse to link
-        return ("edu", org, field, lvl, role)
-    return ("edu", org, None, lvl, role)
+        return ("edu", org, field, lvl, role, True)
+    return ("edu", org, None, lvl, role, False)
 
 
-def _s(v):
-    """Return a clean non-empty string or None."""
-    return v.strip() if isinstance(v, str) and v.strip() and v != "nan" else None
+# Faculty of a teaching/staff record (degree_field is only coded for degrees), from
+# the school or subject named in the role text: "professor, National School of Law".
+_STAFF_FACULTY = [
+    ("law", r"\blaw\b|legal|jurisprudence"),
+    ("economics", r"econom"),
+    ("business", r"business|accounting|commerce|administration"),
+    ("political_sci", r"political|social sciences"),
+    ("engineering", r"engineer"),
+    ("medicine", r"medic|dentist|nursing"),
+    ("architecture", r"architect"),
+    ("science", r"chemi|physics|mathemat|sciences?\b"),
+    ("humanities", r"philosoph|letters|history"),
+    ("military", r"military|war college"),
+]
+
+
+def staff_faculty(text: str):
+    for field, pat in _STAFF_FACULTY:
+        if re.search(pat, text or "", re.I):
+            return field
+    return None
+
+
+def edu_window(d: dict, key) -> tuple[int, int] | None:
+    """Enrollment (student) or service (staff) window of an education record."""
+    ys, ye = d.get("year_start"), d.get("year_end")
+    if pd.isna(ys):
+        return None
+    ys = int(ys)
+    ye = int(ye) if pd.notna(ye) and int(ye) >= ys else ys
+    if key[4] == "student" and ye == ys:     # single year = degree year
+        ys = ye - PROGRAM_YEARS.get(key[3], 3) + 1
+    return ys, ye
 
 
 def work_focus_key(d: dict):
@@ -207,9 +171,25 @@ def work_focus_key(d: dict):
       geographic unit (party of a given state). Generic national membership
       ("PRI" with no body and no state) is dropped — being co-members is not co-work.
     - govt: refined by sub_department or a secretariat finer than the organization,
-      else the organization itself (large ones are then dropped by the size cap).
-    - labor / public / other: the organization.
+      else the organization itself; a non-federal post carries its state
+      ("Secretariat of Government (Quintana Roo)" ≠ federal Gobernación).
+    - public (elected office): only state legislatures and the DF Assembly — small
+      bodies whose members sat together. Legislative committees ("Gran Comision",
+      "Department of the Federal District Committee") are not shared workplaces and
+      the federal Congress is too large → dropped.
+    - labor / other: the organization.
+    Labels that are parsing fragments ("administration and", "government") are dropped.
     """
+    key = _work_focus_key(d)
+    if key is None or not key[1][:1].isupper():
+        return None
+    return key
+
+
+_PUBLIC_BODY = re.compile(r"^(?:State Legislature|Assembly of the Federal District)")
+
+
+def _work_focus_key(d: dict):
     src = d.get("source")
     org = _s(d.get("organization"))
     if src == "party_positions":
@@ -227,10 +207,17 @@ def work_focus_key(d: dict):
             return None
         sub, sec = _s(d.get("sub_department")), _s(d.get("secretariat_norm"))
         if sub:
-            return ("work", f"{org} – {sub}")
-        if sec and sec != org:
-            return ("work", sec)
-        return ("work", org)
+            label = f"{org} – {sub}"
+        elif sec and sec != org:
+            label = sec
+        else:
+            label = org
+        st = _s(d.get("work_state"))
+        if d.get("is_federal") != True and st and st != "Federal District":  # noqa: E712
+            label = f"{label} ({st})"
+        return ("work", label)
+    if src == "public_positions":
+        return ("work", org) if org and _PUBLIC_BODY.match(org) else None
     if org:
         return ("work", org)
     return None
@@ -238,9 +225,10 @@ def work_focus_key(d: dict):
 
 def focus_label(key) -> str:
     if key[0] == "edu":
-        _, org, field, lvl, role = key
+        _, org, field, lvl, role, large = key
         base = f"{org} | {field}" if field else org
-        return f"{base} [{lvl}/{role}]"
+        gen = "/generation" if large and role == "student" else ""
+        return f"{base} [{lvl}/{role}{gen}]"
     return key[1]  # work / military focus is already a readable label
 
 
@@ -294,223 +282,314 @@ def revolution_foci(text) -> set:
     return foci
 
 
-def _build_focus_index(df: pd.DataFrame, key_fn) -> tuple[dict, dict]:
-    """focus_key -> [(person_id, year_start, year_end, role)]; and focus_size."""
+# ── explicit relationship patterns (from biographies personal_info) ───────────
+# (pattern, edge_type, blood_kin) — for blood kin a bare given name ("brother of
+# Rafael") is completed with the biographee's own surnames before matching.
+FAMILY_PATTERNS = [
+    (r"(?:son|daughter)\s+of\s+([^,;]+)", True),
+    (r"(?:brother|sister)\s+(?:of\s+)?([^,;]+)", True),
+    (r"married\s+([^,;]+)", False),
+    (r"(?:nephew|niece)\s+of\s+([^,;]+)", False),
+    (r"(?:uncle|aunt)\s+(?:of\s+)?([^,;]+)", False),
+    (r"(?:cousin)\s+(?:of\s+)?([^,;]+)", False),
+    (r"(?:father|mother)-in-law\s+(?:of\s+)?([^,;]+)", False),
+    (r"(?:son-in-law|daughter-in-law)\s+(?:of\s+)?([^,;]+)", False),
+    (r"(?:grandson|granddaughter)\s+(?:of\s+)?([^,;]+)", False),
+]
+MENTORSHIP_PATTERNS = [
+    r"student\s+of\s+([^,;]+)",
+    r"studied\s+(?:under|with)\s+([^,;]+)",
+    r"(?:prot[eé]g[eé])\s+of\s+([^,;]+)",
+    r"(?:political\s+)?(?:patron|mentor)\s+(?:was\s+)?([^,;]+)",
+    r"disciple\s+of\s+([^,;]+)",
+]
+PERSONAL_PATTERNS = [
+    r"(?:close\s+)?friends?\s+(?:of|with|included)\s+([^,;]+)",
+    r"came\s+in\s+contact\s+with\s+([^,;]+)",
+]
+EXPLICIT_PATTERNS = (
+    [(p, "family", blood) for p, blood in FAMILY_PATTERNS]
+    + [(p, "mentorship", False) for p in MENTORSHIP_PATTERNS]
+    + [(p, "personal", False) for p in PERSONAL_PATTERNS]
+)
+# trailing role words that should be trimmed from a mentioned name
+_MENTION_TAIL = re.compile(
+    r"\s+(?:who|whose|was|is|a|an|the|at|in|since|during|when|from|secretary|director|"
+    r"governor|president|senator|federal|head|mayor|former|general|leader|chief|"
+    r"deputy|ambassador)\b.*$",
+    re.IGNORECASE,
+)
+_AND = re.compile(r"\s+and\s+|\s*&\s*", re.IGNORECASE)
+
+
+# ── co-location machinery ─────────────────────────────────────────────────────
+# Minimum plausible age at the start of a record. Younger = a mis-parsed year (e.g.
+# "law student at UNAM, 1945" for someone born 1951): such records are not used to
+# form ties. Primary/secondary school records (level 'pre/other') may start at 4.
+MIN_AGE_WORK, MIN_AGE_STUDENT, MIN_AGE_STAFF, MIN_AGE_SCHOOL, MAX_AGE = 14, 14, 18, 4, 100
+
+
+def min_age(key) -> int:
+    if key[0] == "edu":
+        if key[4] == "staff":
+            return MIN_AGE_STAFF
+        return MIN_AGE_SCHOOL if key[3] == "pre/other" else MIN_AGE_STUDENT
+    return MIN_AGE_WORK
+
+
+def build_focus_index(df: pd.DataFrame, key_fn, window_fn=None, byear=None) -> dict:
+    """focus_key -> [(person_id, year_start, year_end, role)] for dated records
+    whose start is at a plausible age (records failing min_age / MAX_AGE are skipped)."""
     index: dict = defaultdict(list)
-    for row in df.itertuples(index=False):
-        d = row._asdict()
+    byear = byear or {}
+    skipped = 0
+    for d in df.to_dict("records"):
         key = key_fn(d)
         if key is None:
             continue
-        ys, ye = d.get("year_start"), d.get("year_end")
-        if pd.isna(ys):
+        if window_fn is not None:
+            win = window_fn(d, key)
+        elif pd.notna(d.get("year_start")):
+            ys = int(d["year_start"])
+            ye = int(d["year_end"]) if pd.notna(d.get("year_end")) else ys
+            win = (ys, max(ys, ye))
+        else:
+            win = None
+        if win is None:
             continue  # co-location requires a year
-        ys = int(ys)
-        ye = int(ye) if pd.notna(ye) else ys
-        index[key].append((d["person_id"], ys, ye, _role_of(d)))
-    size = {k: len({r[0] for r in recs}) for k, recs in index.items()}
-    return index, size
-
-
-# ── main ─────────────────────────────────────────────────────────────────────
-def load_tapados(matcher: PersonMatcher) -> pd.DataFrame:
-    """Return DataFrame: person_id, name, election_year, is_winner (one row per election)."""
-    corch = pd.read_excel(CORCHOLATAS_XLSX, header=1).dropna(subset=["Nombre"])
-    rows, unmatched = [], []
-    for _, r in corch.iterrows():
-        raw = str(r["Nombre"])
-        is_winner = "✓" in raw
-        name = raw.replace("✓", "").strip()
-        pid = matcher.match(name, require_cover=True)
-        if pid is None:
-            unmatched.append(name)
+        by = byear.get(int(d["person_id"]))
+        if by and not (min_age(key) <= win[0] - by <= MAX_AGE):
+            skipped += 1
             continue
-        rows.append({
-            "person_id": pid,
-            "corcholata_name": name,
-            "election_year": int(r["Elección"]),
-            "is_winner": int(is_winner),
-        })
-    if unmatched:
-        print(f"  ⚠ {len(unmatched)} corcholatas without a clear match:")
-        for n in unmatched:
-            print(f"      {n}")
+        index[key].append((int(d["person_id"]), win[0], win[1], _role_of(d)))
+    if skipped:
+        print(f"    skipped {skipped} records starting at an implausible age")
+    return index
+
+
+def concurrent_sizes(index: dict) -> dict:
+    """focus_key -> {year: number of distinct people there that year}.
+
+    Size is measured SIMULTANEOUSLY, not over the focus' whole history: the
+    Secretariat of Programming and Budget had 105 people in the dataset over
+    1973–92 but at most 44 at once — a small elite who plausibly all knew each other.
+    """
+    out = {}
+    for k, recs in index.items():
+        per_year: dict = defaultdict(set)
+        for pid, ys, ye, _ in recs:
+            for y in range(ys, ye + 1):
+                per_year[y].add(pid)
+        out[k] = {y: len(p) for y, p in per_year.items()}
+    return out
+
+
+def cap(index: dict, keep=lambda k: True) -> dict:
+    """Drop foci with more than TAU_WORK people at the same time (unless keep(k))."""
+    conc = concurrent_sizes(index)
+    return {k: v for k, v in index.items()
+            if keep(k) or max(conc[k].values()) <= TAU_WORK}
+
+
+class EdgeSet:
+    """Undirected edges keyed by (a, b, type, focus); keeps the earliest coincidence."""
+
+    def __init__(self):
+        self.e: dict = {}
+
+    def add(self, p, q, etype, focus, size, role_p, role_q, ys, ye, stated_by=None,
+            confirmed_by="rule"):
+        if p == q:
+            return
+        if p > q:
+            p, q, role_p, role_q = q, p, role_q, role_p
+        k = (p, q, etype, focus)
+        cur = self.e.get(k)
+        if cur is None:
+            self.e[k] = dict(person_a=p, person_b=q, edge_type=etype, focus=focus,
+                             focus_size=size, role_a=role_p, role_b=role_q,
+                             year_start=ys, year_end=ye, stated_by=stated_by,
+                             confirmed_by=confirmed_by)
+        elif ys is not None and (cur["year_start"] is None or ys < cur["year_start"]):
+            cur.update(role_a=role_p, role_b=role_q, year_start=ys,
+                       year_end=max(ye, cur["year_end"] or ye))
+
+    def frame(self) -> pd.DataFrame:
+        return pd.DataFrame(list(self.e.values()))
+
+
+def colocation_edges(edges: EdgeSet, index: dict, etype: str, linked):
+    """Add an edge for every pair of records at the same focus satisfying `linked`."""
+    conc = concurrent_sizes(index)
+    for key, recs in index.items():
+        label = focus_label(key)
+        for r1, r2 in combinations(recs, 2):
+            if r1[0] != r2[0] and linked(key, r1, r2):
+                ys = max(r1[1], r2[1])                 # first year both were there
+                # focus_size = people at the focus in the year the tie began
+                size = conc[key].get(ys) or max(conc[key].values())
+                edges.add(r1[0], r2[0], etype, label, size, r1[3], r2[3],
+                          ys, max(ys, min(r1[2], r2[2])))
+
+
+def edu_linked(key, r1, r2) -> bool:
+    if key[5] and key[4] == "student":           # large institution: same generation
+        return abs(r1[1] - r2[1]) <= GEN_WIN
+    return _overlaps(r1[1], r1[2], r2[1], r2[2], 0)
+
+
+def overlap_linked(key, r1, r2) -> bool:
+    return _overlaps(r1[1], r1[2], r2[1], r2[2], WIN)
+
+
+def expand_foci(mil: pd.DataFrame, foci_fn, col: str) -> pd.DataFrame:
+    rows = []
+    for d in mil.to_dict("records"):
+        text = d.get("role_text") if isinstance(d.get("role_text"), str) else d.get("role_text_raw")
+        for fk in foci_fn(text):
+            rows.append({**d, col: fk})
     return pd.DataFrame(rows)
 
 
+# ── main ─────────────────────────────────────────────────────────────────────
 def main():
-    print("Loading people and corcholatas …")
-    pp = pd.read_csv(PARSED_POSITIONS_CSV)
-    people = pp[["person_id", "person_name"]].drop_duplicates()
-    pid_name = dict(zip(people["person_id"], people["person_name"]))
-    matcher = PersonMatcher(people)
+    print("Loading people …")
+    pp = pd.read_csv(PARSED_POSITIONS_CSV, usecols=["person_id", "person_name", "birth_date_clean"])
+    people = pp.dropna(subset=["person_id", "person_name"]).drop_duplicates("person_id")
+    pid_name = dict(zip(people.person_id, people.person_name))
+    byear = {pid: int(str(b)[:4]) for pid, b in zip(people.person_id, people.birth_date_clean)
+             if str(b)[:4].isdigit()}
+    print(f"  {len(pid_name):,} people")
 
-    tap = load_tapados(matcher)
-    tapado_ids = set(tap["person_id"])
-    print(f"  {len(tapado_ids)} unique tapados matched ({len(tap)} tapado-elections)")
+    edges = EdgeSet()
 
-    # ── education focus index ────────────────────────────────────────────────
-    edu = pd.read_csv(CLEAN_DIR / "education.csv")
+    # ── education ────────────────────────────────────────────────────────────
+    edu = pd.read_csv(CLEAN_POSITIONS_DIR / "education.csv")
     inst_size = (edu.dropna(subset=["organization"])
                     .groupby("organization")["person_id"].nunique().to_dict())
-    edu_key_fn = lambda d: edu_focus_key(d.get("organization"), d.get("degree_field"),
-                                         d.get("degree_level"), d.get("record_type"), inst_size)
-    edu_index, edu_size = _build_focus_index(edu, edu_key_fn)
-    print(f"  education foci (with years): {len(edu_index)}")
+    edu_index = build_focus_index(edu, lambda d: edu_focus_key(d, inst_size), edu_window,
+                                  byear)
+    # teaching staff of a school is a workplace → same size cap as co_work
+    edu_index = cap(edu_index, keep=lambda k: k[4] == "student")
+    print(f"Building co-education edges ({len(edu_index):,} foci) …")
+    colocation_edges(edges, edu_index, "co_education", edu_linked)
 
-    # ── work focus index (all work datasets combined), refined + size-capped ──
-    work = pd.concat([pd.read_csv(CLEAN_DIR / f"{name}.csv").assign(source=name)
-                      for name in WORK_DATASETS], ignore_index=True)
-    work_index, work_size = _build_focus_index(work, work_focus_key)
-    dropped_big = {k for k, n in work_size.items() if n > TAU_WORK}
-    for k in dropped_big:
-        del work_index[k]
-    print(f"  work foci (with years): {len(work_index)} kept "
-          f"(dropped {len(dropped_big)} foci larger than {TAU_WORK} people)")
+    # ── work (all work datasets combined), refined + size-capped ─────────────
+    work = pd.concat([pd.read_csv(CLEAN_POSITIONS_DIR / f"{n}.csv").assign(source=n)
+                      for n in WORK_DATASETS], ignore_index=True)
+    work_all = build_focus_index(work, work_focus_key, byear=byear)
+    work_index = cap(work_all)
+    print(f"Building co-work edges ({len(work_index):,} foci; "
+          f"{len(work_all) - len(work_index)} dropped as > {TAU_WORK} people at once) …")
+    for k in sorted(set(work_all) - set(work_index), key=str):
+        print(f"    dropped: {focus_label(k)}")
+    colocation_edges(edges, work_index, "co_work", overlap_linked)
 
-    # ── military co-service index (unit / commander extracted from role text) ─
-    mil = pd.read_csv(CLEAN_DIR / "military_positions.csv")
-    mil_rows = []
-    for row in mil.itertuples(index=False):
-        d = row._asdict()
-        text = d.get("role_text") if isinstance(d.get("role_text"), str) else d.get("role_text_raw")
-        for fk in military_foci(text):
-            d2 = dict(d); d2["mil_focus"] = fk; mil_rows.append(d2)
-    mil_exp = pd.DataFrame(mil_rows)
-    mil_key_fn = lambda d: ("mil", d["mil_focus"]) if d.get("mil_focus") else None
-    mil_index, mil_size = _build_focus_index(mil_exp, mil_key_fn)
-    for k in [k for k, n in mil_size.items() if n > TAU_WORK]:
-        del mil_index[k]
-    print(f"  military foci (with years): {len(mil_index)}")
+    # ── military unit / commander, and revolutionary state ───────────────────
+    mil = pd.read_csv(CLEAN_POSITIONS_DIR / "military_positions.csv")
+    mil_index = cap(build_focus_index(expand_foci(mil, military_foci, "f"),
+                                      lambda d: ("mil", d["f"]), byear=byear))
+    print(f"Building co-military edges ({len(mil_index):,} foci) …")
+    colocation_edges(edges, mil_index, "co_military", overlap_linked)
+    revo_index = cap(build_focus_index(expand_foci(mil, revolution_foci, "f"),
+                                       lambda d: ("revo", d["f"]), byear=byear))
+    print(f"Building co-revolution edges ({len(revo_index):,} foci) …")
+    colocation_edges(edges, revo_index, "co_revolution", overlap_linked)
 
-    # revolutionary co-service: same state in the Revolution + overlapping years
-    revo_rows = []
-    for row in mil.itertuples(index=False):
-        d = row._asdict()
-        text = d.get("role_text") if isinstance(d.get("role_text"), str) else d.get("role_text_raw")
-        for fk in revolution_foci(text):
-            d2 = dict(d); d2["revo_focus"] = fk; revo_rows.append(d2)
-    revo_exp = pd.DataFrame(revo_rows)
-    revo_key_fn = lambda d: ("revo", d["revo_focus"]) if d.get("revo_focus") else None
-    revo_index, revo_size = _build_focus_index(revo_exp, revo_key_fn)
-    for k in [k for k, n in revo_size.items() if n > TAU_WORK]:
-        del revo_index[k]
-    print(f"  revolution foci (with years): {len(revo_index)}")
-
-    # ── biographies personal_info, mapped to person_id ───────────────────────
-    bio = pd.read_csv(BIOGRAPHIES_CSV)
+    # ── explicit ties stated in every biography ──────────────────────────────
+    print("Building explicit edges (family / mentorship / personal) …")
+    matcher = StrictNameMatcher(pid_name)
     name_to_pid = {v: k for k, v in pid_name.items()}
-    bio["person_id"] = bio["name"].map(lambda n: name_to_pid.get(clean_person_name(n)))
-
-    edges = []
-
-    def add_edge(ego, alter, etype, key, size, ego_role, alter_role, ys, ye, conf="rule"):
-        if alter == ego:
-            return
-        edges.append({
-            "ego_id": ego, "alter_id": alter,
-            "edge_type": etype,
-            "focus": focus_label(key) if isinstance(key, tuple) else key,
-            "focus_size": size,
-            "ego_role": ego_role, "alter_role": alter_role,
-            "year_start": ys, "year_end": ye,
-            "confirmed_by": conf,
-        })
-
-    # ── co-location edges (education + work) ─────────────────────────────────
-    def colocation(df, index, size_map, key_fn, etype):
-        tdf = df[df["person_id"].isin(tapado_ids)]
-        for row in tdf.itertuples(index=False):
-            d = row._asdict()
-            key = key_fn(d)
-            if key is None or key not in index or pd.isna(d.get("year_start")):
-                continue
-            tys = int(d["year_start"])
-            tye = int(d["year_end"]) if pd.notna(d.get("year_end")) else tys
-            ego_role = _role_of(d)
-            for (pid, oys, oye, orole) in index.get(key, ()):
-                if pid == d["person_id"]:
-                    continue
-                if _overlaps(tys, tye, oys, oye):
-                    add_edge(d["person_id"], pid, etype, key, size_map.get(key),
-                             ego_role, orole,
-                             max(tys, oys), min(tye, oye))
-
-    print("Building co-education edges …")
-    colocation(edu, edu_index, edu_size, edu_key_fn, "co_education")
-    print("Building co-work edges …")
-    colocation(work, work_index, work_size, work_focus_key, "co_work")
-    print("Building co-military edges …")
-    colocation(mil_exp, mil_index, mil_size, mil_key_fn, "co_military")
-    print("Building co-revolution edges …")
-    colocation(revo_exp, revo_index, revo_size, revo_key_fn, "co_revolution")
-
-    # ── explicit edges (family / mentorship / personal) ──────────────────────
-    print("Building explicit edges …")
-    for row in bio[bio["person_id"].isin(tapado_ids)].itertuples(index=False):
-        d = row._asdict()
-        ego = d["person_id"]
+    bio = pd.read_csv(BIOGRAPHIES_CSV, usecols=["name", "personal_info"])
+    n_mentions = n_matched = 0
+    for d in bio.to_dict("records"):
+        ego = name_to_pid.get(clean_person_name(d["name"]))
         info = d.get("personal_info")
-        if not isinstance(info, str) or not info.strip():
+        if ego is None or not isinstance(info, str) or not info.strip():
             continue
         info = clean_text(info)
-        for pat, etype in EXPLICIT_PATTERNS:
+        ego_paternal = name_tokens(pid_name[ego].split(",")[0])[0]
+        for pat, etype, blood in EXPLICIT_PATTERNS:
             for m in re.finditer(pat, info, re.IGNORECASE):
-                mention = _MENTION_TAIL.sub("", m.group(1).strip()).strip()
-                if len(mention) < 4:
-                    continue
-                alter = matcher.match(mention, require_cover=False)
-                if alter is not None and alter != ego:
-                    add_edge(ego, alter, etype, etype, None,
-                             etype, mention[:80], None, None)
+                for part in _AND.split(m.group(1)):   # "X and Y" → two mentions
+                    mention = _MENTION_TAIL.sub("", part.strip()).strip()
+                    if len(mention) < 4:
+                        continue
+                    n_mentions += 1
+                    alter, _ = matcher.match(mention)
+                    how = "rule"
+                    if alter is None and blood and len(name_tokens(mention)) <= 2:
+                        # bare given name of a blood relative → add own paternal surname
+                        # (lower precision: tagged so analyses can drop it)
+                        alter, _ = matcher.match(f"{mention} {ego_paternal}")
+                        how = "rule_given_name"
+                    if alter is not None and alter != ego:
+                        n_matched += 1
+                        phrase = info[m.start():m.start(1)].strip().lower()  # "son of"
+                        edges.add(ego, alter, etype, phrase, None, "stated in own bio",
+                                  mention[:80], None, None, stated_by=ego, confirmed_by=how)
+    print(f"  {n_matched:,} of {n_mentions:,} name mentions resolved to a person")
 
-    # ── assemble, dedupe, attach metadata ────────────────────────────────────
-    edf = pd.DataFrame(edges).drop_duplicates(
-        subset=["ego_id", "alter_id", "edge_type", "focus"])
-    # winner / election info per ego (joined across elections)
-    ego_elec = (tap.groupby("person_id")
-                   .agg(election_year=("election_year",
-                                       lambda s: ";".join(map(str, sorted(set(s))))),
-                        is_winner=("is_winner", "max")).to_dict("index"))
-    edf["ego_name"]      = edf["ego_id"].map(pid_name)
-    edf["alter_name"]    = edf["alter_id"].map(pid_name)
-    edf["election_year"] = edf["ego_id"].map(lambda p: ego_elec[p]["election_year"])
-    edf["is_winner"]     = edf["ego_id"].map(lambda p: ego_elec[p]["is_winner"])
-    edf = edf[["ego_id", "ego_name", "election_year", "is_winner",
-               "alter_id", "alter_name", "edge_type", "focus", "focus_size",
-               "ego_role", "alter_role", "year_start", "year_end", "confirmed_by"]]
-
+    # ── assemble ─────────────────────────────────────────────────────────────
+    edf = edges.frame()
+    # one row per (pair, explicit type): the focus holds the kin/relation phrase
+    explicit = edf["edge_type"].isin(["family", "mentorship", "personal"])
+    edf = pd.concat([edf[~explicit],
+                     edf[explicit].drop_duplicates(["person_a", "person_b", "edge_type"])],
+                    ignore_index=True)
+    # where each tie's date comes from: co-location → years both were there;
+    # stated ties are undated here (07 dates them: stated year or relatives' birth)
+    edf["date_basis"] = edf["year_start"].map(lambda y: "overlap" if pd.notna(y) else None)
+    edf["name_a"] = edf["person_a"].map(pid_name)
+    edf["name_b"] = edf["person_b"].map(pid_name)
+    edf = edf[["person_a", "name_a", "person_b", "name_b", "edge_type", "focus",
+               "focus_size", "role_a", "role_b", "year_start", "year_end",
+               "date_basis", "stated_by", "confirmed_by"]]
+    for c in ("year_start", "year_end", "focus_size", "stated_by"):
+        edf[c] = edf[c].astype("Int64")
     NETWORK_DIR.mkdir(parents=True, exist_ok=True)
-    edf.to_csv(EDGES_CSV, index=False)
+    edf.to_csv(NETWORK_EDGES_CSV, index=False)
 
-    # ── nodes file ───────────────────────────────────────────────────────────
-    node_ids = set(edf["ego_id"]) | set(edf["alter_id"])
-    nodes = []
-    for pid in sorted(node_ids):
-        meta = ego_elec.get(pid)
-        nodes.append({
-            "person_id": pid, "name": pid_name.get(pid),
-            "is_tapado": int(pid in tapado_ids),
-            "election_year": meta["election_year"] if meta else "",
-            "is_winner": meta["is_winner"] if meta else "",
-        })
-    pd.DataFrame(nodes).to_csv(NODES_CSV, index=False)
+    # ── nodes: everyone, with tapado info from the per-election crosswalk ────
+    corch = load_corcholatas()
+    tap_years = corch.groupby("person_id")["election_year"].apply(
+        lambda s: ";".join(map(str, sorted(set(s))))).to_dict()
+    win_years = corch[corch.is_winner == 1].groupby("person_id")["election_year"].apply(
+        lambda s: ";".join(map(str, sorted(set(s))))).to_dict()
+    bp = (pd.read_csv(BIRTHPLACE_CSV)[["person_id", "state"]].dropna()
+            .drop_duplicates("person_id").set_index("person_id")["state"].to_dict())
+    deg = pd.concat([edf.person_a, edf.person_b]).value_counts().to_dict()
+    # how much the biography says about each person: network size mechanically
+    # grows with it, so analyses must control for / normalise by these
+    recs = pd.read_csv(PARSED_POSITIONS_CSV, usecols=["person_id", "field_type", "year_start"])
+    recs = recs[recs.field_type != "birthplace"]
+    n_rec = recs.groupby("person_id").size().to_dict()
+    n_dated = recs.dropna(subset=["year_start"]).groupby("person_id").size().to_dict()
+    pinfo_len = {name_to_pid.get(clean_person_name(n)): len(str(t)) for n, t in
+                 zip(bio["name"], bio["personal_info"]) if isinstance(t, str)}
+    nodes = pd.DataFrame([{
+        "person_id": pid, "name": name, "birth_year": byear.get(pid),
+        "birth_state": bp.get(pid), "degree": deg.get(pid, 0),
+        "n_records": n_rec.get(pid, 0), "n_dated_records": n_dated.get(pid, 0),
+        "personal_info_chars": pinfo_len.get(pid, 0),
+        "is_tapado": int(pid in tap_years),
+        "tapado_elections": tap_years.get(pid, ""),
+        "winner_elections": win_years.get(pid, ""),
+    } for pid, name in sorted(pid_name.items())])
+    nodes["birth_year"] = nodes["birth_year"].astype("Int64")
+    nodes.to_csv(NETWORK_NODES_CSV, index=False)
 
     # ── report ───────────────────────────────────────────────────────────────
-    print(f"\nSaved {len(edf):,} edges → {EDGES_CSV}")
-    print(f"Saved {len(nodes):,} nodes → {NODES_CSV}")
+    print(f"\nSaved {len(edf):,} edges → {NETWORK_EDGES_CSV}")
+    print(f"Saved {len(nodes):,} nodes → {NETWORK_NODES_CSV}")
     print("\nEdge types:")
     print(edf["edge_type"].value_counts().to_string())
-    deg = edf.groupby("ego_id").size()
-    no_edges = tapado_ids - set(edf["ego_id"])
-    print(f"\nTapados with 0 edges: {len(no_edges)}")
-    for pid in no_edges:
-        print(f"   {pid_name.get(pid)}")
-    print("\nEdges per tapado (top / bottom):")
-    deg_named = deg.rename(index=pid_name).sort_values(ascending=False)
-    print(deg_named.head(8).to_string())
-    print("   …")
-    print(deg_named.tail(5).to_string())
+    pairs = edf[["person_a", "person_b"]].drop_duplicates()
+    print(f"\nDistinct connected pairs: {len(pairs):,}")
+    print(f"People with ≥1 tie: {(nodes.degree > 0).sum():,} / {len(nodes):,}")
+    print("\nLargest co_education foci (edges):")
+    ce = edf[edf.edge_type == "co_education"].focus.value_counts().head(5)
+    print(ce.to_string())
 
 
 if __name__ == "__main__":

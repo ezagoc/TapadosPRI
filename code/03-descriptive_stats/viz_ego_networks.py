@@ -5,10 +5,11 @@ For a set of elections, draw — in a single figure per election — the ego-net
 the designated winner next to the ego-network of the closest runner-up ("almost
 president"), so the two can be compared side by side.
 
-Reads the curated network from data/networks/tapado_edges.csv (built by
-06_build_networks.py + 07_family_surname_edges.py). Each ego-network shows the
-tapado at the centre and every person they are tied to, with edges coloured by
-tie type (co-education, co-work, family, mentorship, personal).
+Reads the full network (data/networks/network_edges.csv, built by
+06_build_networks.py + 07_bio_ties_gpt.py) and draws each candidate's
+ego-network as of the destape year (e−1): only ties formed by then are shown.
+Edges are coloured by tie type (co-education, co-work, family, mentorship, personal);
+line width/opacity scale with the calibrated tie_weight (08_tie_weights.py).
 
 Output: one PNG per election in OUTPUT_DIR, ego_network_<year>.png
 """
@@ -27,26 +28,8 @@ CODE_DIR = Path(__file__).resolve().parents[1]
 if str(CODE_DIR) not in sys.path:
     sys.path.append(str(CODE_DIR))
 
-from config import DATA_DIR, OUTPUT_DIR
-
-EDGES_CSV = DATA_DIR / "networks" / "tapado_edges.csv"
-
-# Election → (winner person_name, closest runner-up person_name) as they appear in
-# tapado_edges.csv. Runner-up is the strongest documented contender; swap freely.
-# (1970 Martínez Manatou is absent from the dataset, so Corona del Rosal is used.)
-PAIRS = {
-    1940: ("Avila Camacho, Manuel",         "Mugica Velazquez, Francisco Jose"),
-    1946: ("Aleman Valdes, Miguel",         "Rojo Gomez, Javier"),
-    1952: ("Ruiz Cortines, Adolfo",         "Casas Aleman, Fernando"),
-    1958: ("Lopez Mateos, Adolfo",          "Flores Munoz, Gilberto"),
-    1964: ("Diaz Ordaz, Gustavo",           "Ortiz Mena, Antonio"),
-    1970: ("Echeverria Alvarez, Luis",      "Corona del Rosal, Alfonso"),
-    1976: ("Lopez Portillo Pacheco, Jose",  "Moya Palencia, Mario"),
-    1982: ("de la Madrid Hurtado, Miguel",  "Diaz Serrano, Jorge"),
-    1988: ("Salinas de Gortari, Carlos",    "Bartlett Diaz, Manuel"),
-    1994: ("Colosio Murrieta, Luis Donaldo", "Camacho Solis, Victor Manuel"),
-    2000: ("Labastida Ochoa, Francisco",    "Madrazo Pintado, Roberto"),
-}
+from config import OUTPUT_DIR
+from network_utils import ego_view, load_corcholatas, load_network
 
 # Tie type → colour
 EDGE_COLORS = {
@@ -75,14 +58,19 @@ _PRIORITY = {"family": 0, "family_surname": 0, "mentorship": 1, "personal": 2,
              "co_work": 3, "co_military": 4, "co_revolution": 5, "co_education": 6}
 
 
-def hub_ties(edges: pd.DataFrame, ego_name: str) -> dict:
-    """alter_id -> (alter_name, primary_edge_type) for one ego."""
-    sub = edges[edges["ego_name"] == ego_name]
+def hub_ties(edges: pd.DataFrame, ego_name: str, as_of: int) -> dict:
+    """alter_id -> (alter_name, primary_edge_type, strongest tie_weight), ties by `as_of`."""
+    ego_id = edges.loc[edges["name_a"] == ego_name, "person_a"]
+    if ego_id.empty:
+        ego_id = edges.loc[edges["name_b"] == ego_name, "person_b"]
+    sub = ego_view(edges, set(ego_id), as_of=as_of)
     best: dict = {}
     for _, e in sub.iterrows():
-        a, t = int(e["alter_id"]), e["edge_type"]
+        a, t, w = int(e["alter_id"]), e["edge_type"], float(e["tie_weight"])
         if a not in best or _PRIORITY[t] < _PRIORITY[best[a][1]]:
-            best[a] = (e["alter_name"], t)
+            best[a] = (e["alter_name"], t, max(w, best[a][2]) if a in best else w)
+        else:
+            best[a] = (*best[a][:2], max(w, best[a][2]))
     return best
 
 
@@ -97,7 +85,7 @@ def _stack(ids, x, height=11.0):
 
 def draw_comparison(ax, edges, winner, loser, year, pop):
     """Two hubs (winner=star, runner-up=circle) with shared ties (squares) in the middle."""
-    W, L = hub_ties(edges, winner), hub_ties(edges, loser)
+    W, L = hub_ties(edges, winner, year - 1), hub_ties(edges, loser, year - 1)
     shared = set(W) & set(L)
     wonly = set(W) - shared
     lonly = set(L) - shared
@@ -111,8 +99,9 @@ def draw_comparison(ax, edges, winner, loser, year, pop):
 
     def edge(a, hub, src):
         x, y = pos[a]
+        w = src[a][2]                           # calibrated tie weight (0.25–1)
         ax.plot([hub[0], x], [hub[1], y], color=EDGE_COLORS[src[a][1]],
-                lw=0.5, alpha=0.4, zorder=1)
+                lw=0.2 + 1.3 * w, alpha=0.1 + 0.6 * w, zorder=1)
     for a in wonly: edge(a, posW, W)
     for a in lonly: edge(a, posL, L)
     for a in shared: edge(a, posW, W); edge(a, posL, L)
@@ -160,11 +149,12 @@ def draw_comparison(ax, edges, winner, loser, year, pop):
 
 
 def main():
-    edges = pd.read_csv(EDGES_CSV)
+    edges, _ = load_network()
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     # "popularity" = number of distinct tapados a person is tied to (used to pick
     # which exclusive alters are worth labelling)
-    pop = edges.groupby("alter_id")["ego_id"].nunique().to_dict()
+    tapados = set(load_corcholatas()["person_id"])
+    pop = ego_view(edges, tapados).groupby("alter_id")["ego_id"].nunique().to_dict()
 
     handles = [Line2D([0], [0], color=EDGE_COLORS[k], lw=2, label=v)
                for k, v in EDGE_LABELS.items()]
@@ -177,7 +167,13 @@ def main():
                markeredgecolor="black", markersize=9, label="shared tie (both)"),
     ]
 
-    for year, (winner, loser) in PAIRS.items():
+    # the chosen candidate (1994: Zedillo, who took office; 2000: nominee Labastida)
+    # vs the documented runner-up, both from the crosswalk (05_match_corcholatas.py)
+    corch = load_corcholatas()
+    pairs = {y: (g.loc[g.role.isin(["winner", "nominee_lost"]), "person_name"].iloc[0],
+                 g.loc[g.role == "runner_up", "person_name"].iloc[0])
+             for y, g in corch.groupby("election_year")}
+    for year, (winner, loser) in pairs.items():
         fig, ax = plt.subplots(figsize=(20, 11))
         draw_comparison(ax, edges, winner, loser, year, pop)
         ax.legend(handles=handles, loc="lower center", ncol=3, fontsize=8,
