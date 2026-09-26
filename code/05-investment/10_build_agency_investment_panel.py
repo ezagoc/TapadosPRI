@@ -23,7 +23,8 @@ Blocks (column `block`): 'dependencias' (secretarías' own investment, 1925–19
 'ramo_sector' (1984–1998: investment by coordinating secretaría INCLUDING its sectorised
 parastatals — a different lens; never add it to 'paraestatal').
 
-Measures: nominal millions of NEW pesos; real millions of 1960 pesos (1959+ only —
+`measure`: 'realized' everywhere except the 1970 parastatal column (SPP II.9, note a:
+authorized). Measures: nominal millions of NEW pesos; real millions of 1960 pesos (1959+ only —
 the CPI deflator starts in 1959); share of that year's block total — the scale-free
 measure to use across the whole period.
 
@@ -193,6 +194,9 @@ def main():
     # includes parastatal investment, so blocks must not be summed together
     panel["share_of_year_total"] = panel.value_mn_new_pesos / \
         panel.groupby(["year", "block"]).value_mn_new_pesos.transform("sum")
+    # SPP Cuadro II.9 footnote a: its 1970 parastatal column is AUTHORIZED investment
+    panel["measure"] = "realized"
+    panel.loc[(panel.source == "spp_II9y") & (panel.year == 1970), "measure"] = "authorized"
     panel = panel.sort_values(["year", "block", "value_mn_new_pesos"], ascending=[True, True, False])
     panel.to_csv(OUT, index=False)
 

@@ -4,11 +4,13 @@
 Build the annual STATE × YEAR panel of realized federal public investment,
 1959–2003 — the distributive outcome of the project.
 
-Sources (all "inversión pública federal realizada", state totals):
+Sources (state totals; realized investment except 1964 — see `measure`):
   1959–1963  Inversión Pública Federal 1925–1963, institution × state grand totals
              (federal_investment_long.csv, 01_extract_investment_tables.py)
   1964       Inversión Pública Federal 1964, purpose × state totals
-             (federal_investment_purpose_state_1964_long.csv)
+             (federal_investment_purpose_state_1964_long.csv). AUTHORIZED, not realized:
+             its Cuadro 5 ("Destino de la inversión pública federal") totals 17 436.1 =
+             the book's authorized total (Cuadro 1); the book has no realized figures
   1965–1969  Inversión Pública Federal 1965–1970, purpose × state totals
              (federal_investment_purpose_state_long.csv, 04_*)
   1970–2003  SPP / INEGI "El ingreso y el gasto público en México" editions
@@ -24,6 +26,7 @@ Measures per state-year:
   real_mn_1960_pesos     millions of 1960 pesos (CPI deflator, 1960 = 100)
   share_of_states        state / sum over the 32 states (robust to the
                          "no distribuible geográficamente" row, 20–24% in 1983–84)
+  measure                'realized' or 'authorized' (1964 only)
 
 Outputs: INVESTMENT_DIR/state_investment_panel.csv, state_investment_sources.csv
 """
@@ -33,6 +36,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 CODE_DIR = Path(__file__).resolve().parents[1]
@@ -117,6 +121,7 @@ def main():
                                    panel.year.map(defl)).round(3)
     panel["share_of_states"] = (panel.nominal_mn_new_pesos /
                                 panel.groupby("year").nominal_mn_new_pesos.transform("sum")).round(5)
+    panel["measure"] = np.where(panel.source == "ipf_1964", "authorized", "realized")
     panel = panel.sort_values(["year", "state"])
     panel.to_csv(OUT_PANEL, index=False)
 

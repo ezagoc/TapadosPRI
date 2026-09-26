@@ -27,8 +27,13 @@ measuring promotions and demotions over careers.
                    with this project's data (his own method, extended past 1971):
                    "major state" = top-10 states by federal public investment in the
                    six years before the inauguration (state_investment_panel.csv,
-                   1959+); before 1965 Smith's lists are kept. Big parastatals: Smith's
-                   ten (agency panel extension pending — see TODO below).
+                   1959+); before 1965 Smith's lists are kept. "Big parastatal" =
+                   the 4 industrial / infrastructure companies (Smith has 4: PEMEX,
+                   CFE, Ferrocarriles, Altos Hornos) with the largest mean share of
+                   parastatal investment in the six prior years with data
+                   (agency_investment_panel.csv, 1965+); IMSS, ISSSTE and Smith's four
+                   banks are always big (their size is services/lending, which physical
+                   investment does not measure).
   brandenburg_rung Frank Brandenburg, The Making of Modern Mexico (1964), pp. 158–159,
                    reproduced in Smith's Table A-1: 12 rungs, 1 = top. Covers state,
                    municipal and party offices below Smith's elite. Rungs are also
@@ -53,12 +58,10 @@ rules; each record keeps the `rule` that ranked it, for audit.
 
 Validation (printed): distribution by rule; people's highest Smith tier vs Smith's
 Table A-3 shares; the ladder vs the 1999 official monthly pay ranges (exposición de
-motivos PEF 2000, Table VI.4). Salary checkpoints from the 1927/1940 budget books
-are to be added as they are transcribed.
+motivos PEF 2000, Table VI.4); the 1927 federal budget's daily pay (see validate()).
+The 1940 budget (Google Books UYCkb6Nn1F0C) is full view but not downloadable.
 
 Output: RANK_DIR/position_tiers.csv
-TODO: time-varying big parastatals from the agency investment panel (08/09 in
-05-investment) once it covers the full period.
 """
 
 from __future__ import annotations
@@ -92,12 +95,32 @@ SMITH_BIG_STATES = {
 MAJOR_EMBASSIES = r"argentina|brazil|chile|china|france|germany|great britain|england|" \
                   r"united kingdom|guatemala|italy|japan|league of nations|russia|soviet|" \
                   r"spain|united nations|\bun\b"
-# Smith's big decentralized agencies / state companies
-BIG_PARASTATALS = (r"federal electric(ity)? commission|comision federal de electricidad|\bcfe\b|"
-                   r"national railroads|ferrocarriles nacionales|\bimss\b|mexican (institute of )?"
-                   r"social security|\bissste\b|\bpemex\b|petroleos mexicanos|mexican petroleum|"
-                   r"altos hornos|bank of mexico|banco de mexico|ejido credit|ejidal|banobras|"
-                   r"urban mortgage|nacional financiera|\bnafin")
+# Parastatals whose heads can be "big" (Smith tier 7), keyed as in the agency investment
+# panel (05-investment/10_*). Smith's own ten = the six non-financial companies + the four
+# development banks. The non-financial set is made time-varying in smith_tier_ext.
+PARASTATAL_RE = {
+    "cfe": r"federal electric(ity)? commission|comision federal de electricidad|\bcfe\b",
+    "fnm": r"national railroads|ferrocarriles nacionales|\bferronales\b",
+    "imss": r"\bimss\b|mexican (institute of )?social security|instituto mexicano del seguro social",
+    "issste": r"\bissste\b|institute of (security and )?social services (for|of) (federal |state )?"
+              r"(government )?(workers|employees)",
+    "pemex": r"\bpemex\b|petroleos mexicanos|mexican petroleum",
+    "ahmsa": r"altos hornos",
+    "lyfc": r"light and power( company)? of the cent(er|re)|luz y fuerza",
+    "capufe": r"\bcapufe\b|federal highways and bridges|caminos y puentes federales",
+    "sicartsa": r"\bsicartsa\b|las truchas",
+}
+SMITH_NONFINANCIAL = {"cfe", "fnm", "imss", "issste", "pemex", "ahmsa"}
+# Always big: Smith's four development banks and the two social-security institutes —
+# their budgets are lending, services and pensions, not physical investment, so the
+# investment panel cannot rank them. Only the industrial / infrastructure companies
+# (Smith: PEMEX, CFE, Ferrocarriles, Altos Hornos) are ranked by investment.
+SMITH_BANKS = r"bank of mexico|banco de mexico|ejido credit|ejidal|banobras|urban mortgage|" \
+              r"nacional financiera|\bnafin"
+ALWAYS_BIG = {"imss", "issste"}
+BIG_PARASTATALS = "|".join(PARASTATAL_RE[k] for k in sorted(SMITH_NONFINANCIAL)) + "|" + SMITH_BANKS
+ANY_PARASTATAL = "|".join(PARASTATAL_RE.values()) + "|" + SMITH_BANKS
+N_BIG = 4          # Smith's list has four industrial / infrastructure companies
 # large cities (Brandenburg rung 8: municipal presidents of large cities)
 BIG_CITIES = r"guadalajara|monterrey|puebla|merida|leon|ciudad juarez|juarez|tijuana|" \
              r"san luis potosi|chihuahua|toluca|aguascalientes|torreon|mexicali|acapulco|" \
@@ -166,8 +189,13 @@ def govt_rule(t: str, rank: str):
             rank in ("assistant_secretary", "oficial_mayor"):
         return ("state_subcabinet", (10, None, None)) if state else ("subcabinet", (6, 4, 8))
     if re.match(r"(director general|general director|general manager|director|manager|"
-                r"administrator|president)(,| of)? (the )?(" + BIG_PARASTATALS + r")", t):
+                r"administrator|president)(,| of)? (the )?(" + BIG_PARASTATALS + r")", t) and \
+            not re.search(r"hospital|clinic|delegat|regional|zone|plant|refinery|division", t):
         return "big_parastatal_head", (4, 7, 7)
+    if re.match(r"(director general|general director|general manager|director|manager|"
+                r"administrator|president)(,| of)? (the )?(" + ANY_PARASTATAL + r")", t) and \
+            not re.search(r"hospital|clinic|delegat|regional|zone|plant|refinery|division", t):
+        return "parastatal_head", (7, None, 6)
     if re.search(r"(district|circuit)[^,]*(court )?judge|judge[^,]*(district|circuit)", t) and not state:
         return "federal_judge", (9, None, None)
     if re.search(r"superior tribunal|state supreme court|tribunal superior", t) or \
@@ -328,6 +356,34 @@ def investment_big_states() -> dict:
     return out
 
 
+def parastatal_key(t: str) -> str | None:
+    for k, pat in PARASTATAL_RE.items():
+        if re.search(pat, t):
+            return k
+    return None
+
+
+def investment_big_parastatals() -> dict:
+    """year → the N_BIG non-financial parastatals with the largest mean share of
+    parastatal investment over the six most recent years with data before `year`
+    (1965+; the agency panel has no 1964–69, so 1966–70 look back to 1958–63).
+    Smith's list is kept before 1965, as for the states."""
+    p = INVESTMENT_DIR / "agency_investment_panel.csv"
+    if not p.exists():
+        return {}
+    a = pd.read_csv(p)
+    a = a[(a.block == "paraestatal") & a.agency_key.isin(set(PARASTATAL_RE) - ALWAYS_BIG)]
+    years = sorted(a.year.unique())
+    out = {}
+    for y in range(1965, 2011):
+        win = [t for t in years if t < y][-6:]
+        if len(win) < 3:
+            continue
+        s = a[a.year.isin(win)].groupby("agency_key").share_of_year_total.sum() / len(win)
+        out[y] = set(s.nlargest(N_BIG).index)
+    return out
+
+
 def main():
     frames = []
     for name in ("govt_positions", "public_positions", "party_positions",
@@ -338,6 +394,7 @@ def main():
     pos = pd.concat(frames, ignore_index=True)
     pos["t"] = pos.role_text.fillna(pos.role_text_raw).map(norm)
     inv_big = investment_big_states()
+    para_big = investment_big_parastatals()
 
     rows = []
     for r in pos.to_dict("records"):
@@ -354,6 +411,7 @@ def main():
         else:
             rule, out = military_rule(t)
         rung = smith = smith_ext = mando = None
+        ext_done = False
         y = r.get("year_start")
         if out == "GOV":
             st = governor_state(r)
@@ -373,7 +431,16 @@ def main():
                 rung, rule = 7, "ambassador_other"
         elif out:
             rung, smith, mando = out
-        if smith_ext is None:
+            if rule in ("big_parastatal_head", "parastatal_head") and not re.search(SMITH_BANKS, t):
+                k = parastatal_key(t)
+                yi = int(y) if pd.notna(y) else None
+                big_ext = k in ALWAYS_BIG or ((k in para_big[yi]) if yi in para_big
+                                              else (k in SMITH_NONFINANCIAL))
+                # Brandenburg's rung 4 ("major decentralized agencies") follows the same
+                # time-varying definition; smith_tier keeps Smith's fixed list
+                smith_ext, ext_done = (7 if big_ext else None), True
+                rung, mando = (4, 7) if big_ext else (7, 6)
+        if smith_ext is None and not ext_done:
             smith_ext = smith
         rows.append({"record_id": r.get("record_id"), "person_id": r["person_id"],
                      "person_name": r.get("person_name"), "dataset": ds,
@@ -420,6 +487,31 @@ def validate(out: pd.DataFrame):
     print("\nCommand ladder vs 1999 official pay (must be monotone):")
     print(chk.to_string())
     print("monotone:", bool(chk.hybrid_rank.is_monotonic_increasing))
+
+    # 1927 checkpoint: daily pay ("cuota diaria", pesos) in the Presupuesto de Egresos de
+    # la Federación para 1927 (SHCP; Google Books aNtCZxaBDvUC, a volume binding the
+    # 1927–1930 budgets; PDF pages of the 1927 part in brackets). Executive ladder:
+    # president [37] > secretary [45, 67] = attorney general [331] > subsecretary [45] >
+    # director general [172] > oficial mayor [45] > jefe de sección [46]. Other posts:
+    # Supreme Court justice 21,900/yr [25], senator and deputy 12,154.50/yr [13],
+    # circuit magistrate 12,154.50/yr [28].
+    pay_1927 = {"president": 200.0, "cabinet_secretary": 54.0, "attorney_general_federal": 54.0,
+                "subcabinet": 45.0, "director_general": 43.25, "jefe_de_departamento": 13.5}
+    other_1927 = {"supreme_court_justice": 60.0, "senator": 33.3, "federal_deputy": 33.3,
+                  "federal_judge": 33.3}
+    med = out.groupby("rule").hybrid_rank.median()
+    c27 = pd.DataFrame({"pay_1927_daily": pd.Series({**pay_1927, **other_1927}),
+                        "hybrid_rank": med}).dropna().sort_values("pay_1927_daily")
+    c27["ladder"] = c27.index.isin(list(pay_1927))
+    print("\n1927 budget pay checkpoint (daily pesos; jefe_de_departamento ≈ 1927 jefe de sección):")
+    print(c27.to_string())
+    lad27 = c27[c27.ladder]
+    print("executive ladder monotone vs 1927 pay:",
+          bool(lad27.groupby("pay_1927_daily").hybrid_rank.min().is_monotonic_increasing))
+    print("rank correlation, all checkpoints (Spearman):",
+          round(c27.pay_1927_daily.rank().corr(c27.hybrid_rank.rank()), 2),
+          "— the scales rank by power, not pay: justices and senators earn like or above "
+          "cabinet / deputies but sit lower / higher")
 
 
 if __name__ == "__main__":
