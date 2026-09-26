@@ -32,6 +32,7 @@ if str(CODE_DIR) not in sys.path:
     sys.path.append(str(CODE_DIR))
 
 from config import PARSED_POSITIONS_CSV, LABOR_POSITIONS_CSV, LABOR_POSITIONS_WIDE_CSV
+from gpt_cache import fill_with_cache
 
 # ---------------------------------------------------------------------------
 # Organization extraction — fills gaps left by 04_parse_positions.py
@@ -297,9 +298,8 @@ labor["org_gpt"]            = None
 labor["position_title_gpt"] = None
 
 if missing_mask.any():
-    api_key = os.getenv("OPENAI_API_KEY") or getpass.getpass("Enter your OpenAI API key: ")
-    print(f"Running GPT (gpt-4o-mini) on {missing_mask.sum()} records...")
-    gpt_results = gpt_fill_missing(labor.loc[missing_mask, "role_text_raw"], api_key)
+    print(f"GPT fallback (gpt-4o-mini, cached by role text) on {missing_mask.sum()} records...")
+    gpt_results = fill_with_cache(labor.loc[missing_mask, "role_text_raw"], LABOR_POSITIONS_CSV, gpt_fill_missing)
 
     labor.loc[missing_mask, "org_gpt"]            = gpt_results["organization"]
     labor.loc[missing_mask, "position_title_gpt"] = gpt_results["position_title"]

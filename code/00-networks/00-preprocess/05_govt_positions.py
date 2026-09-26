@@ -30,6 +30,7 @@ if str(CODE_DIR) not in sys.path:
     sys.path.append(str(CODE_DIR))
 
 from config import PARSED_POSITIONS_CSV, GOVT_POSITIONS_CSV, GOVT_POSITIONS_WIDE_CSV
+from gpt_cache import fill_with_cache
 
 # ---------------------------------------------------------------------------
 # Rank classification — matched against role_text_raw
@@ -392,9 +393,8 @@ govt["org_gpt"]            = None
 govt["position_title_gpt"] = None
 
 if missing_mask.any():
-    api_key = os.getenv("OPENAI_API_KEY") or getpass.getpass("Enter your OpenAI API key: ")
-    print(f"Running GPT (gpt-4o-mini) on {missing_mask.sum()} records...")
-    gpt_results = gpt_fill_missing(govt.loc[missing_mask, "role_text_raw"], api_key)
+    print(f"GPT fallback (gpt-4o-mini, cached by role text) on {missing_mask.sum()} records...")
+    gpt_results = fill_with_cache(govt.loc[missing_mask, "role_text_raw"], GOVT_POSITIONS_CSV, gpt_fill_missing)
 
     govt.loc[missing_mask, "org_gpt"]            = gpt_results["organization"]
     govt.loc[missing_mask, "position_title_gpt"] = gpt_results["position_title"]

@@ -45,6 +45,7 @@ Never hardcode absolute paths — always use constants from `config.py`:
 | `00-preprocess/01_extract_pdf.py` | Extracts text from biography PDF (pdfplumber, two-column layout) | PDF → `biographies_full.txt` |
 | `00-preprocess/02_parse_biographies.py` | Parses raw text into structured CSV using field markers a–l | txt → `biographies.csv` |
 | `00-preprocess/03_fix_person_names.py` | Repairs corrupted person names (death-date fragments / name bleed) in place, recovering them from `biographies_full.txt` | `biographies_corrected.csv` → `biographies_corrected.csv` |
+| `00-preprocess/03b_split_merged_biographies.py` | Recovers biographies that 02 merged into the previous entry (02 starts an entry only at "a—"; entries with unknown birth date start at "b—"/"c—", and OCR sometimes reads "a—" as "A-"), and repairs the host fields they overwrote. Splits at field restarts after "l—", validates names against the raw text, repairs a host column only if it still holds the overwrite (manual edits kept), APPENDS recovered entries at the end (no person_id shifts). Idempotent. 67 entries recovered, 35 hosts had personal_info overwritten (e.g. General Henríquez Guzmán carried Jorge Heredia Ferráez's 1968 posts) | `biographies_corrected.csv` → same (in place) + `biography_repairs.csv` |
 | `00-preprocess/04_parse_positions.py` | Extracts state/org/dates/title; assigns `person_id`; cleans names (no accents, no parens) | `biographies_corrected.csv` → `parsed_positions.csv` (15K+ rows) |
 | `00-preprocess/05_*.py` | One script per position type (education, govt, party, labor, public, birthplace) | `parsed_positions.csv` → specialized CSVs |
 | `01-clean/05?_*_clean.py` | Post-processing cleaners, one per position type. `05e_govt_positions_clean.py` Fix 9 recovers `organization` from `role_text` when it was never structured out (~15%→12% of dated govt records left without an institution) | specialized CSVs → `clean_positions/*.csv` |
@@ -295,14 +296,21 @@ preserving all manual corrections in the other columns.
 
 ```
 03_fix_person_names.py      # repair names in biographies_corrected.csv
+03b_split_merged_biographies.py  # recover entries merged into the previous one (appended at the end)
 04_parse_positions.py       # re-assign person_id, clean names (no accents, no parens)
 05_*.py                     # education, govt, party, labor, public, military, other, birthplace, connections
 01-clean/05?_*_clean.py     # post-processing cleaners
 05_match_corcholatas.py     # candidate crosswalk (person_id per corcholata × election)
 06_build_networks.py        # full network (rule-based ties)
-07_bio_ties_gpt.py          # + GPT-read biography ties (cached) + curated family_surname
+07_bio_ties_gpt.py          # + GPT-read biography ties (cached; --offline = cache only) + curated family_surname
 08_tie_weights.py           # calibrated tie weights
 ```
+
+GPT caches: the org/title fallback of `05_govt/party/labor_positions.py` reuses the previous
+run's answers keyed by `role_text_raw` (`00-preprocess/gpt_cache.py`), so re-runs only query
+new texts (left blank, with a warning, if there is no API credit). `07` stores a hash of
+the text sent to GPT and drops answers whose `personal_info` changed; `--offline` skips
+querying (63 biographies await an online run as of 2026-09-26).
 
 Re-running `04` can re-assign person_ids: `07` drops cached GPT answers whose
 person_id no longer carries the same name (re-queried), and asserts that

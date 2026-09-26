@@ -40,6 +40,7 @@ Outputs: networks/bio_mentions_gpt.csv (cache + audit),
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -56,6 +57,7 @@ if str(CODE_DIR) not in sys.path:
 from config import (
     openai_api_key,
     BIOGRAPHIES_CSV,
+    DATA_DIR,
     NETWORK_DIR,
     NETWORK_EDGES_CSV,
     NETWORK_NODES_CSV,
@@ -162,7 +164,12 @@ def ask_gpt(client, name: str, birth_year, text: str) -> list[dict]:
     return json.loads(resp.choices[0].message.content).get("mentions", [])
 
 
-def query_missing(bios: pd.DataFrame, cache: pd.DataFrame, limit: int | None) -> pd.DataFrame:
+def text_hash(text: str) -> str:
+    return hashlib.sha1(str(text).encode("utf-8")).hexdigest()[:12]
+
+
+def query_missing(bios: pd.DataFrame, cache: pd.DataFrame, limit: int | None,
+                  offline: bool = False) -> pd.DataFrame:
     """Query GPT for every biography not yet in the cache (at this PROMPT_VERSION)."""
     done = set(cache["person_id"]) if len(cache) else set()
     todo = bios[~bios["person_id"].isin(done)]
@@ -170,6 +177,10 @@ def query_missing(bios: pd.DataFrame, cache: pd.DataFrame, limit: int | None) ->
         todo = todo.head(limit)
     if todo.empty:
         print(f"  all {len(bios):,} biographies already in cache")
+        return cache
+    if offline:
+        print(f"  --offline: {len(todo):,} biographies not in cache are skipped "
+              f"(no GPT ties for them until a later online run)")
         return cache
     import openai
     client = openai.OpenAI(api_key=openai_api_key())
@@ -187,7 +198,8 @@ def query_missing(bios: pd.DataFrame, cache: pd.DataFrame, limit: int | None) ->
                 failed.append((r.person_name, str(e)[:120]))
                 continue
             base = {"person_id": r.person_id, "person_name": r.person_name,
-                    "model": MODEL, "prompt_version": PROMPT_VERSION}
+                    "model": MODEL, "prompt_version": PROMPT_VERSION,
+                    "text_hash": text_hash(r.text)}
             if not mentions:                             # remember "no mentions" too
                 rows.append(base)
             for m in mentions:
@@ -238,6 +250,8 @@ def date_mention(r, text: str, birth_year=None):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, help="query at most N new biographies (testing)")
+    ap.add_argument("--offline", action="store_true",
+                    help="use cached answers only; do not call the API")
     args = ap.parse_args()
 
     pp = pd.read_csv(PARSED_POSITIONS_CSV,
@@ -276,7 +290,24 @@ def main():
         print(f"  dropping {cache.loc[old, 'person_id'].nunique():,} biographies cached "
               f"with an older prompt (v{PROMPT_VERSION} re-query)")
         cache = cache[~old]
-    cache = query_missing(bio, cache, args.limit)
+    # answers for a text that has since changed are stale: rows carry the hash of the
+    # text sent to GPT; legacy rows (no hash) are dropped for the biographies whose
+    # personal_info 03b_split_merged_biographies.py repaired
+    if "text_hash" not in cache.columns:
+        cache["text_hash"] = None
+    has = cache["text_hash"].notna()
+    changed = has & (cache["text_hash"] != cache["person_id"].map(lambda p: text_hash(text_of.get(p, ""))))
+    repairs = DATA_DIR / "biography_repairs.csv"
+    if repairs.exists():
+        rep = pd.read_csv(repairs)
+        hosts = rep.loc[rep.personal_info_changed.fillna(0) == 1, "host_name"].dropna()
+        repaired_ids = {name_to_pid.get(clean_person_name(n)) for n in hosts} - {None}
+        changed |= ~has & cache["person_id"].isin(repaired_ids)
+    if changed.any():
+        print(f"  dropping {cache.loc[changed, 'person_id'].nunique():,} biographies whose "
+              f"personal_info changed since they were queried")
+        cache = cache[~changed]
+    cache = query_missing(bio, cache, args.limit, offline=args.offline)
 
     # ── validate against the source text and resolve names ──────────────────
     matcher = StrictNameMatcher(pid_name)
