@@ -47,19 +47,18 @@ import pymupdf
 from PIL import Image
 
 CODE_DIR = Path(__file__).resolve().parents[1]
-if str(CODE_DIR) not in sys.path:
-    sys.path.append(str(CODE_DIR))
+for p in (CODE_DIR, Path(__file__).resolve().parent):
+    if str(p) not in sys.path:
+        sys.path.append(str(p))
 
-from config import INVESTMENT_DIR, LITERATURE_DIR, STATE_LOOKUP_NORM, strip_accents
+from config import openai_api_key, INVESTMENT_DIR, LITERATURE_DIR, STATE_LOOKUP_NORM, strip_accents
+from llm_tables import READERS, TIEBREAK, page_image, parse_value, read_crop
 
 SRC_DIR = LITERATURE_DIR / "inegi_investment"
 RAW_DIR = INVESTMENT_DIR / "inegi_raw"
 OUT_LONG = INVESTMENT_DIR / "inegi_state_investment_long.csv"
 OUT_VAL = INVESTMENT_DIR / "inegi_state_investment_validation.csv"
 
-READERS = ["gpt-5.5-2026-04-23", "gpt-5.4-2026-03-05"]   # pinned snapshots
-TIEBREAK = "gpt-5.2-2025-12-11"
-DPI = 300
 
 # to millions of new pesos
 TO_MILLIONS_NEW = {"millions_old_pesos": 1e-3, "thousands_new_pesos": 1e-3,
@@ -126,13 +125,6 @@ UNITS_TEXT = {"millions_old_pesos": "millions of pesos", "thousands_new_pesos":
               "thousands_pesos": "thousands of pesos"}
 
 
-# ── images ───────────────────────────────────────────────────────────────────
-def page_image(file: str, page: int) -> Image.Image:
-    pg = pymupdf.open(SRC_DIR / file)[page - 1]
-    pix = pg.get_pixmap(dpi=DPI)
-    return Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
-
-
 def crops_for(mode, spec, im):
     W, H = im.size
     box = lambda b: tuple(int(v * s) for v, s in zip(b, (W, H, W, H)))
@@ -153,43 +145,7 @@ def crops_for(mode, spec, im):
     return out
 
 
-# ── model reads (cached) ─────────────────────────────────────────────────────
-def read_crop(client, model, img, prompt, cache: Path) -> list[dict]:
-    if cache.exists():
-        return json.loads(cache.read_text())
-    buf = io.BytesIO(); img.save(buf, "PNG")
-    url = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
-    r = client.chat.completions.create(
-        model=model, response_format={"type": "json_object"},
-        messages=[{"role": "user", "content": [
-            {"type": "text", "text": prompt},
-            {"type": "image_url", "image_url": {"url": url, "detail": "high"}}]}])
-    recs = json.loads(r.choices[0].message.content).get("records", [])
-    cache.write_text(json.dumps(recs, ensure_ascii=False))
-    return recs
-
-
-# ── parsing ──────────────────────────────────────────────────────────────────
-def parse_value(s):
-    s = str(s).strip()
-    if not s or re.fullmatch(r"[-–—.]+", s):
-        return None
-    neg = s.startswith("(") or s.startswith("-")
-    s = re.sub(r"[^0-9.,]", "", s)
-    if s.count(",") and s.count("."):          # 1,234.5 → thousands commas
-        s = s.replace(",", "")
-    elif s.count(",") == 1 and len(s.split(",")[1]) == 1:   # 12,3 decimal comma
-        s = s.replace(",", ".")
-    else:
-        s = s.replace(",", "")
-    s = s.strip(".")
-    if s.count(".") > 1:                        # stray dots: keep the last as decimal
-        head, _, tail = s.rpartition(".")
-        s = head.replace(".", "") + "." + tail
-    if not s:
-        return None
-    v = float(s)
-    return -v if neg else v
+# (page_image, read_crop and parse_value live in llm_tables.py)
 
 
 _SPECIAL = [(r"total", "TOTAL"), (r"no\s*dist", "NOT_DISTRIBUTABLE"),
@@ -230,13 +186,13 @@ def to_cells(recs, expected_years):
 
 def main():
     import openai
-    client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    client = openai.OpenAI(api_key=openai_api_key())
     RAW_DIR.mkdir(parents=True, exist_ok=True)
     rows, val = [], []
     crops_of, prompt_of, years_of = {}, {}, {}
 
     for sid, file, page, mode, spec, years, units, title in TABLES:
-        im = page_image(file, page)
+        im = page_image(SRC_DIR / file, page)
         crops = crops_for(mode, spec, im)
         prompt = PROMPT.format(title=title, units_text=UNITS_TEXT[units],
                                mode_text=MODE_TEXT[mode].format(years=years))

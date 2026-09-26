@@ -422,3 +422,18 @@ MONTH_ABBREV_MAP = {
 # The old person_id → name override map lived here, but it was made obsolete by
 # that fix (and unsafe, since re-running 04 re-assigns person_ids). Removed.
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# OpenAI API key: the first of these environment variables that is set (in .env).
+# OPENAI_ZAGO holds the project key with funds; OPENAI_API_KEY is the fallback.
+# ---------------------------------------------------------------------------
+OPENAI_KEY_VARS = ("OPENAI_ZAGO", "OPENAI_API_KEY")
+
+
+def openai_api_key() -> str | None:
+    for var in OPENAI_KEY_VARS:
+        if os.getenv(var):
+            return os.getenv(var)
+    return None
+

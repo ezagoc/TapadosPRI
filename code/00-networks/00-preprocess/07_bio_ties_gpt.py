@@ -54,6 +54,7 @@ if str(CODE_DIR) not in sys.path:
     sys.path.append(str(CODE_DIR))
 
 from config import (
+    openai_api_key,
     BIOGRAPHIES_CSV,
     NETWORK_DIR,
     NETWORK_EDGES_CSV,
@@ -171,7 +172,7 @@ def query_missing(bios: pd.DataFrame, cache: pd.DataFrame, limit: int | None) ->
         print(f"  all {len(bios):,} biographies already in cache")
         return cache
     import openai
-    client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    client = openai.OpenAI(api_key=openai_api_key())
     print(f"  querying {MODEL} for {len(todo):,} biographies ({WORKERS} workers) …")
 
     rows, failed = [], []
