@@ -1,15 +1,15 @@
 """
 10_build_agency_investment_panel.py
 
-Build the AGENCY × YEAR panel of realized federal public investment, 1925–2000:
+Build the AGENCY × YEAR panel of realized federal public investment, 1925–2003:
 
   1925–1963  Inversión Pública Federal 1925–1963, Cuadros 2 and 11 (08_*)
-  1970–2000  SPP 1970–80 Cuadros II.7 / II.9, INEGI "El ingreso y el gasto público en
-             México" 1987, 1993, 1999, 2001 editions (09_*): secretarías/dependencias and
-             organismos y empresas controlados presupuestalmente
-  Gaps: 1964–1969 (only authorized/programmed investment by agency exists), 1981 (the
-  1986 edition's 1980–85 agency tables are not extracted yet) and dependencias 1999–2000
-  (the 2001 edition's 4-level functional table is excluded). Glued footnote letters in
+  1970–2003  SPP 1970–80 Cuadros II.7 / II.9, INEGI "El ingreso y el gasto público en
+             México" 1986, 1987, 1993, 1999, 2001, 2004 editions (09_*): secretarías/
+             dependencias and organismos y empresas controlados presupuestalmente
+  Gap: 1964–1969 — the 1964–66 and 1965–70 books give investment by agency only as
+  AUTHORIZED/PROGRAMMED (1965: authorized 16 301 vs realized 11 485), realized only by
+  purpose × state. Glued footnote letters in
   SPP labels ('Turismoi', 'PIDERj') are tolerated by substring matching in CROSSWALK.
 
 For years reported by several editions the most recent edition is kept. Every row
@@ -45,7 +45,7 @@ if str(CODE_DIR) not in sys.path:
 from config import INVESTMENT_DIR, PRICE_DEFLATOR_CSV, strip_accents
 
 OUT = INVESTMENT_DIR / "agency_investment_panel.csv"
-EDITION_ORDER = ["igp01", "igp99", "igp93", "igp87", "spp"]      # most recent first
+EDITION_ORDER = ["igp04", "igp01", "igp99", "igp93", "igp87", "igp86", "spp"]      # most recent first
 
 # (regex on the normalised label, agency_key, lineage)
 CROSSWALK = [
@@ -87,6 +87,11 @@ CROSSWALK = [
     (r"^secretaria de recursos hidraulicos", "srh", "agriculture_water"),
     (r"agricultura y recursos hidraulicos", "sarh", "agriculture_water"),
     (r"agricultura ganaderia y desarrollo rural", "sagar", "agriculture_water"),
+    (r"agricultura ganaderia desarrollo rural pesca", "sagarpa", "agriculture_water"),
+    (r"medio ambiente recursos naturales|medio ambiente y recursos naturales", "semarnap", "agriculture_water"),
+    (r"^economia$", "se", "commerce"),
+    (r"seguridad publica", "ssp", "interior"),
+    (r"provisiones salariales", "provisiones_salariales", "other"),
     (r"comunicaciones y obras publicas", "scop", "communications_works"),
     (r"^secretaria de obras publicas", "sop", "communications_works"),
     (r"comunicaciones y transportes", "sct", "communications_works"),
@@ -147,6 +152,12 @@ def late() -> pd.DataFrame:
     d = pd.read_csv(INVESTMENT_DIR / "agency_investment_inegi_long.csv")
     d = d[d.in_panel & (d.level > 0)].copy()
     # keep the agency level: the deepest rows of each block (groups are subtotals)
+    # 2004 ed. Cuadro 2.2.3.5: only the secretarías of the centralised administration are
+    # 'dependencias'; its directly controlled entities come from Cuadro 2.2.4.1 instead
+    adm = d.table == "igp04_admin"
+    ent = d[adm & (d.label_norm == "entidades de control presupuestario directo")].row_order.min()
+    cen = d[adm & (d.label_norm == "administracion publica centralizada")].row_order.min()
+    d = d[~adm | ((d.row_order > cen) & (d.row_order < ent))]
     d = d[d["level"] == d.groupby("table")["level"].transform("max")]
     d["edition"] = d.table.str.extract(r"^(spp|igp\d+)")[0]
     d["rank"] = d.edition.map({e: i for i, e in enumerate(EDITION_ORDER)})
@@ -165,8 +176,10 @@ def main():
     for d in (e, l):
         kl = d.label.map(key_lineage)
         d["agency_key"], d["lineage"] = kl.str[0], kl.str[1]
-    # one edition per (agency, year): the most recent
-    l = l.sort_values("rank").drop_duplicates(["agency_key", "year", "block"])
+    # one source table per (year, block): the most recent edition (mixing editions within
+    # a year double-counts agencies whose printed names differ between editions)
+    best = l.groupby(["year", "block"])["rank"].transform("min")
+    l = l[l["rank"] == best]
     panel = pd.concat([e.assign(agreement=None, source_note=None), l.drop(columns="rank")],
                       ignore_index=True)
     panel = panel.dropna(subset=["value_mn_new_pesos"])

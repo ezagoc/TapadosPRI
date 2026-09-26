@@ -8,13 +8,17 @@ scans downloaded by 05_download_inegi_investment.py (the 1925–1963 years come 
   SPP 1970–80     Cuadro II.7 (secretarías y departamentos de Estado) and Cuadro II.9
                   (organismos y empresas controlados presupuestalmente), millions of pesos
                   (the 1970 parastatal column is AUTHORIZED investment — footnote a)
+  INEGI 1986 ed.  Cuadros II.2.7 / II.2.9, 1980–1985 (source of 1981), millions of pesos
   INEGI 1987 ed.  Cuadros II.2.7 / II.2.9, 1982–1987, millions of pesos
   INEGI 1993 ed.  Cuadro 3.1.2.4 (by dependencia, two parts; millions of new pesos —
                   its totals equal the state table's 3.1.2.6 thousands / 1,000) +
                   paraestatal controlado 1987–1992
   INEGI 1999 ed.  administrative classification 1993–1998 + paraestatal, millions of pesos
   INEGI 2001 ed.  administrative classification 1998–2000 + paraestatal 1995–2000
-  (2000–2003 by dependency: TOTAL row of the 2004 edition's state × dependency tables — TODO)
+  INEGI 2004 ed.  Cuadro 2.2.3.5 administrative classification by dependencia 1998–2003
+                  (secretarías of the centralised administration — their own investment,
+                  incl. transfers to indirectly controlled entities — listed apart from the
+                  directly controlled parastatals) + Cuadro 2.2.4.1 paraestatal 1998–2003
 
 Each table is read with the vision-LLM protocol of llm_tables.py (two independent reads,
 third read on disagreement, cached, spending ledger capped by LLM_BUDGET_USD). Rows keep
@@ -62,6 +66,12 @@ TO_MN_NEW = {"millions_old_pesos": 1e-3, "thousands_new_pesos": 1e-3, "millions_
 # id, file, page, bbox (x0,y0,x1,y1 as page fractions), vertical splits, years, units,
 # block ('dependencias' | 'paraestatal'), title printed on the table
 TABLES = [
+    ("igp86_II27", "igp_1986_2.pdf", 14, (0.0, 0.415, 1.0, 0.895), 2, range(1980, 1986),
+     "millions_old_pesos", "ramo_sector",
+     "INVERSION PUBLICA FEDERAL REALIZADA POR SECRETARIAS Y DEPARTAMENTO DE ESTADO 1980-1985 (Cuadro II.2.7)"),
+    ("igp86_II29", "igp_1986_2.pdf", 15, (0.0, 0.505, 1.0, 0.955), 2, range(1980, 1986),
+     "millions_old_pesos", "paraestatal",
+     "INVERSION PUBLICA FEDERAL REALIZADA POR ORGANISMOS Y EMPRESAS CONTROLADOS PRESUPUESTALMENTE 1980-1985 (Cuadro II.2.9)"),
     ("spp_II7y", "spp_1970_1980_2.pdf", 2, (0.325, 0.59, 0.995, 0.95),
      ("years", 0.445, [(0.445, 0.765, range(1970, 1976)), (0.70, 0.995, range(1975, 1981))]), range(1970, 1981),
      "millions_old_pesos", "dependencias",
@@ -103,7 +113,22 @@ TABLES = [
     ("igp01_para", "igp_2001_2.pdf", 72, (0.0, 0.02, 1.0, 0.55), 1, range(1995, 2001),
      "millions_new_pesos", "paraestatal",
      "INVERSION FISICA DEL SECTOR PARAESTATAL CONTROLADO PRESUPUESTALMENTE SEGUN ORGANISMOS Y EMPRESAS 1995-2000"),
+    ("igp04_admin", "igp_2004_4.pdf", 4, (0.0, 0.02, 1.0, 0.80), 1, range(1998, 2004),
+     "millions_new_pesos", "dependencias",
+     "INVERSION PUBLICA FEDERAL EJERCIDA EN CLASIFICACION ADMINISTRATIVA POR DEPENDENCIA 1998-2003 (CUADRO 2.2.3.5)"),
+    ("igp04_para", "igp_2004_4.pdf", 21, (0.0, 0.02, 1.0, 0.40), 1, range(1998, 2004),
+     "millions_new_pesos", "paraestatal",
+     "INVERSION FISICA DEL SECTOR PARAESTATAL CONTROLADO PRESUPUESTALMENTE POR ORGANISMOS O EMPRESAS 1998-2003 (CUADRO 2.2.4.1)"),
 ]
+
+# Tables transcribed by hand from the scan (the OpenAI account ran out of credit): one CSV
+# per table in agency_transcribed/ with columns level, label, <years>, values as printed
+# ('-' = blank). They go through the same identity checks as the LLM reads; every one
+# balances (after the documented MANUAL_CORRECTIONS). Uncertain digits were settled with
+# the printed % change column and the overlapping edition, e.g. igp86_II27 1982 SARH
+# '104 0?7' = 104 037 (the 1987 edition prints 104.0; the column then adds up).
+TRANSCRIBED_DIR = INVESTMENT_DIR / "agency_transcribed"
+TRANSCRIBED = {"igp86_II27", "igp86_II29", "igp04_admin", "igp04_para"}
 
 # a table continued over two pages is validated as one (page b rows follow page a)
 VALIDATE_TOGETHER = {"igp01_a": "igp01_admin", "igp01_b": "igp01_admin"}
@@ -283,6 +308,9 @@ def hierarchy_gaps(g: pd.DataFrame) -> list[float]:
 # Printed cells that contradict the table itself (verified on the scan). They are kept,
 # flagged in `source_note`, and left out of the identity checks.
 SOURCE_ISSUES = {
+    **{("igp04_admin", y, "poder ejecutivo federal"): (
+        "memo subtotal (= administración centralizada + entidades de control directo, which "
+        "are listed beside it at the same level); printed 0.0 for 1998–99") for y in range(1998, 2004)},
     ("igp87_II29", 1985, "instituto para el desarrollo de la comunidad rural"): (
         "printed 3 024 in 1985, but footnote b says the institute was liquidated in "
         "January 1983; the column total excludes it (companies sum to total + 3 024)"),
@@ -292,6 +320,14 @@ SOURCE_ISSUES = {
 # Misprinted cells corrected with internal evidence from the same table (verified on
 # the scan): the printed % change column and the printed column total.
 MANUAL_CORRECTIONS = {
+    ("igp86_II27", 1985, "poder legislativo y judicial"): (
+        97891.0, "printed '79 891' (digits swapped): its printed change is +64.6% over 59 489 "
+                 "(1984) = 97 919, the 1987 edition prints 97.9 thousand million, and with 97 891 "
+                 "the secretarías add up to the printed total 3 030 261"),
+    ("igp86_II29", 1984, "fundidora monterrey"): (
+        3690.0, "second digit illegible on the scan ('3 ?90'); the 1987 edition prints 3 690, "
+                "the printed change is +29.9% over 2 841 (1983) = 3 690, and with it the "
+                "companies add up to the printed total 953 531"),
     ("spp_II9y", 1976, "compania de luz y fuerza del centro"): (
         2528.5, "printed '1 528.5' but its printed change is +39.4% over 1 813.2 (1975) = 2 527.6; "
                 "with 2 528.5 the companies add up to the printed total 49 627.0"),
@@ -334,6 +370,18 @@ def main():
         if only and tid not in only:
             continue
         years = list(years)
+        if tid in TRANSCRIBED:
+            t = pd.read_csv(TRANSCRIBED_DIR / f"{tid}.csv", dtype=str)
+            for pos, r in t.iterrows():
+                for y in years:
+                    v = r[str(y)]
+                    long.append({"table": tid, "file": file, "page": page, "block": block,
+                                 "units": units, "row_order": pos, "level": int(r.level),
+                                 "label": r.label, "label_norm": norm_label(r.label), "year": y,
+                                 "read_1": v, "read_2": None, "read_3": None,
+                                 "agreement": "transcribed", "value_printed": parse_value(v)})
+            print(f"  {tid:12s} p{page:<3d} rows={len(t):3d} (hand transcription)")
+            continue
         cr = crops(file, page, bbox, splits)
         prompt = PROMPT.format(title=title, years=", ".join(map(str, years)))
         prompts = [PROMPT.format(title=title, years=", ".join(map(str, g[2]))) +
@@ -392,7 +440,7 @@ def main():
     # one year only); kept only if the majority then balances
     spec = {t[0]: t for t in TABLES}
     for (vt, y), g in long.groupby(["vtable", "year"]):
-        if vt in EXCLUDED or balanced(g):
+        if vt in EXCLUDED or vt in TRANSCRIBED or balanced(g):
             continue
         for tid in g.table.unique():
             if tid in spec:
