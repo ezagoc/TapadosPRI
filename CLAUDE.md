@@ -310,7 +310,7 @@ GPT caches: the org/title fallback of `05_govt/party/labor_positions.py` reuses 
 run's answers keyed by `role_text_raw` (`00-preprocess/gpt_cache.py`), so re-runs only query
 new texts (left blank, with a warning, if there is no API credit). `07` stores a hash of
 the text sent to GPT and drops answers whose `personal_info` changed; `--offline` skips
-querying (63 biographies await an online run as of 2026-09-26).
+querying (all 2,483 biographies with personal_info read online as of 2026-09-27).
 
 Re-running `04` can re-assign person_ids: `07` drops cached GPT answers whose
 person_id no longer carries the same name (re-queried), and asserts that
