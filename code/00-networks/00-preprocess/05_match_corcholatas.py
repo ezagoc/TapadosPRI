@@ -40,7 +40,7 @@ CODE_DIR = Path(__file__).resolve().parents[2]
 if str(CODE_DIR) not in sys.path:
     sys.path.append(str(CODE_DIR))
 
-from config import CORCHOLATAS_XLSX, CORCHOLATAS_MATCHED_CSV, PARSED_POSITIONS_CSV
+from config import CORCHOLATAS_XLSX, CORCHOLATAS_MATCHED_CSV, PARSED_POSITIONS_CSV, SLATE_VERDICTS_CSV
 from network_utils import StrictNameMatcher
 
 MIN_AGE, MAX_AGE = 30, 80   # plausible age of a pre-candidate in the election year
@@ -86,10 +86,12 @@ RUNNER_UP = {
 # substitute candidate; 2000: nobody from the PRI).
 DESIGNATED_REMOVED = {1994: "Luis Donaldo Colosio"}
 
-# Rows kept in the xlsx for documentation but OUT of the main slate (`in_main_slate` = 0).
-# The slate fixes k_e and the benchmark assignment probabilities, so it defines the
-# estimand; use in_main_slate = 1 for the main design and the full list for robustness.
-# Sources: research/identification_note/historical_checks.md.
+# The slate fixes k_e and the benchmark assignment probabilities, so it defines the estimand.
+# `in_main_slate` = 1 for the main design; the full list is for robustness only.
+#   1946-1982: from candidates/slate_verdicts.csv (05_slate_verdicts.py; verdict MAIN, matched on
+#              person_id). Every other audited row gets 0.
+#   other years: 1 unless listed in NOT_IN_MAIN_SLATE (research/identification_note/historical_checks.md).
+AUDITED_YEARS = range(1946, 1983)
 NOT_IN_MAIN_SLATE = {
     (1940, "Manuel Pérez Treviño"): "not a PRM pre-candidate in 1939: led the opposition PRAC (Loyo 2002)",
     (1988, "Cuauhtémoc Cárdenas Solórzano"): "not in the official list of six (13 Aug 1987); left the PRI",
@@ -160,6 +162,20 @@ def main():
         })
     out = pd.DataFrame(rows)
     out["person_id"] = out["person_id"].astype("Int64")
+    verdicts = pd.read_csv(SLATE_VERDICTS_CSV)
+    main_set = set(zip(verdicts.loc[verdicts.verdict == "MAIN", "election_year"],
+                       verdicts.loc[verdicts.verdict == "MAIN", "person_id"].astype(int)))
+    note = {(e, int(p)): f"{v}: {r}" if isinstance(r, str) else v
+            for e, p, v, r in zip(verdicts.election_year, verdicts.person_id, verdicts.verdict, verdicts.reason)
+            if pd.notna(p)}
+    audited = out.election_year.isin(AUDITED_YEARS)
+    key = list(zip(out.election_year, out.person_id.fillna(-1).astype(int)))
+    out.loc[audited, "in_main_slate"] = [int(k in main_set) for k, a in zip(key, audited) if a]
+    out.loc[audited, "slate_note"] = [note.get(k, "EXCLUDE: no qualifying source names this person for e")
+                                      for k, a in zip(key, audited) if a]
+    missing_main = main_set - set(key)
+    assert not missing_main, f"MAIN verdicts with no row in the xlsx: {missing_main}"
+    assert (out.loc[audited & (out.role == "winner"), "in_main_slate"] == 1).all(), "a designee is off the slate"
     CORCHOLATAS_MATCHED_CSV.parent.mkdir(parents=True, exist_ok=True)
     out.to_csv(CORCHOLATAS_MATCHED_CSV, index=False)
 

@@ -49,7 +49,8 @@ Never hardcode absolute paths — always use constants from `config.py`:
 | `00-preprocess/04_parse_positions.py` | Extracts state/org/dates/title; assigns `person_id`; cleans names (no accents, no parens) | `biographies_corrected.csv` → `parsed_positions.csv` (15K+ rows) |
 | `00-preprocess/05_*.py` | One script per position type (education, govt, party, labor, public, birthplace) | `parsed_positions.csv` → specialized CSVs |
 | `01-clean/05?_*_clean.py` | Post-processing cleaners, one per position type. `05e_govt_positions_clean.py` Fix 9 recovers `organization` from `role_text` when it was never structured out (~15%→12% of dated govt records left without an institution) | specialized CSVs → `clean_positions/*.csv` |
-| `00-preprocess/05_match_corcholatas.py` | Crosswalk each corcholata × election to a `person_id` (strict matcher), per-election winner, documented runner-up | `corcholatas_historicas.xlsx` → `candidates/corcholatas_matched.csv` |
+| `00-preprocess/05_slate_verdicts.py` | Apply the slate rule (≥2 independent qualifying sources counted by source family; in the party at e−2; Arts. 82–83; alive at the destape) to the 1946–1982 source audits. Run before `05_match_corcholatas.py` | `candidates/slate_audit/audit_*_sources.csv` → `candidates/slate_verdicts.csv` |
+| `00-preprocess/05_match_corcholatas.py` | Crosswalk each corcholata × election to a `person_id` (strict matcher), per-election winner, documented runner-up, `in_main_slate` (1946–1982 from `slate_verdicts.csv`) | `corcholatas_historicas.xlsx` → `candidates/corcholatas_matched.csv` |
 | `00-preprocess/06_build_networks.py` | Build the FULL politician network: co-education (generation), co-work (sub-unit), co-military, co-revolution, regex-stated family/mentorship/personal | `clean_positions/*` → `networks/network_edges.csv`, `network_nodes.csv` |
 | `00-preprocess/08_tie_weights.py` | Estimate how P(stated tie) decays with focus size; add `tie_weight` = (n−1)^b and `weight_newman`. Run after 07 | → `networks/network_edges.csv`, `tie_weight_params.csv` |
 | `03-descriptive_stats/animate_network.py` | Animated history: the whole network grows in grey (nodes at birth, dated ties the year they formed; x ≈ birth year); the circle of the president in office is highlighted (direct ties coloured by kind) and jumps each sexenio; bottom strip = new ties per year with sexenio markers. All labels in English | → `output/network_history.gif`, `network_history_final.png` |
@@ -81,9 +82,10 @@ Never hardcode absolute paths — always use constants from `config.py`:
 
 ## Elections analyzed
 
-- All 11 PRI/PRM successions 1940–2000 (85 corcholata-elections, 73 people matched). Main design uses
-  `in_main_slate = 1` (official slates: 1940 PRM hopefuls incl. Sánchez Tapia and Magaña, Pérez Treviño out;
-  1988 = the official six); the full list is a robustness slate.
+- All 11 PRI/PRM successions 1940–2000 (90 corcholata-elections, 75 people matched). Main design uses
+  `in_main_slate = 1`: 1940 PRM hopefuls incl. Sánchez Tapia and Magaña (Pérez Treviño out); 1946–1982 audited
+  slates (`candidates/slate_verdicts.csv`, sources in `candidates/slate_audit/`); 1988 = the official six. The
+  full list is a robustness slate.
 - Candidates, winners (per election) and the documented runner-up live in
   `data/candidates/corcholatas_matched.csv` (built by `05_match_corcholatas.py`).
 - 1994 has two ✓: Colosio (`designated_removed`) and Zedillo (`winner`, took office).
@@ -302,6 +304,7 @@ preserving all manual corrections in the other columns.
 04_parse_positions.py       # re-assign person_id, clean names (no accents, no parens)
 05_*.py                     # education, govt, party, labor, public, military, other, birthplace, connections
 01-clean/05?_*_clean.py     # post-processing cleaners
+05_slate_verdicts.py        # slate rule applied to the 1946–1982 source audits
 05_match_corcholatas.py     # candidate crosswalk (person_id per corcholata × election)
 06_build_networks.py        # full network (rule-based ties)
 07_bio_ties_gpt.py          # + GPT-read biography ties (cached; --offline = cache only) + curated family_surname
