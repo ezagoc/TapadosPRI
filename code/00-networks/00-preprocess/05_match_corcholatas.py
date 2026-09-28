@@ -25,7 +25,7 @@ Output: candidates/corcholatas_matched.csv
         (election_year, corcholata_name, is_winner (✓ in the xlsx), is_runner_up,
          role, took_office, runner_up_source,
          person_id, person_name, match_status, position_at_time, status_source,
-         broke_with_pri_year)
+         broke_with_pri_year, in_main_slate, slate_note)
 """
 
 from __future__ import annotations
@@ -85,6 +85,18 @@ RUNNER_UP = {
 # `took_office` = 1 only for the person who became president (1994: Zedillo, the
 # substitute candidate; 2000: nobody from the PRI).
 DESIGNATED_REMOVED = {1994: "Luis Donaldo Colosio"}
+
+# Rows kept in the xlsx for documentation but OUT of the main slate (`in_main_slate` = 0).
+# The slate fixes k_e and the benchmark assignment probabilities, so it defines the
+# estimand; use in_main_slate = 1 for the main design and the full list for robustness.
+# Sources: research/identification_note/historical_checks.md.
+NOT_IN_MAIN_SLATE = {
+    (1940, "Manuel Pérez Treviño"): "not a PRM pre-candidate in 1939: led the opposition PRAC (Loyo 2002)",
+    (1988, "Cuauhtémoc Cárdenas Solórzano"): "not in the official list of six (13 Aug 1987); left the PRI",
+    (1988, "Ricardo García Sainz"): "not in the official list of six (13 Aug 1987)",
+    (1988, "Guillermo Soberón Acevedo"): "not in the official list of six (13 Aug 1987)",
+    (1988, "Jesús Silva-Herzog Flores"): "not in the official list of six (13 Aug 1987)",
+}
 NOMINEE_LOST = {2000: "Francisco Labastida Ochoa"}
 
 
@@ -143,6 +155,8 @@ def main():
             "position_at_time": r.get("Cargo al momento"),
             "status_source": r.get("Estatus"),
             "broke_with_pri_year": r.get("Rompimiento PRI"),
+            "in_main_slate": int((year, name) not in NOT_IN_MAIN_SLATE),
+            "slate_note": NOT_IN_MAIN_SLATE.get((year, name)),
         })
     out = pd.DataFrame(rows)
     out["person_id"] = out["person_id"].astype("Int64")
@@ -157,6 +171,8 @@ def main():
         for y, nm in special.items():
             assert ((out.election_year == y) & (out.corcholata_name == nm)).any(), nm
     assert (out.groupby("election_year").took_office.sum() <= 1).all()
+    missing_ex = set(NOT_IN_MAIN_SLATE) - set(zip(out.election_year, out.corcholata_name))
+    assert not missing_ex, f"NOT_IN_MAIN_SLATE names not found in the xlsx: {missing_ex}"
     print(out.groupby("role").size().to_string())
     bad = out[out.person_id.isna()]
     if len(bad):

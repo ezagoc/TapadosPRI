@@ -81,7 +81,9 @@ Never hardcode absolute paths — always use constants from `config.py`:
 
 ## Elections analyzed
 
-- All 11 PRI/PRM successions 1940–2000 (83 corcholata-elections, 71 people matched).
+- All 11 PRI/PRM successions 1940–2000 (85 corcholata-elections, 73 people matched). Main design uses
+  `in_main_slate = 1` (official slates: 1940 PRM hopefuls incl. Sánchez Tapia and Magaña, Pérez Treviño out;
+  1988 = the official six); the full list is a robustness slate.
 - Candidates, winners (per election) and the documented runner-up live in
   `data/candidates/corcholatas_matched.csv` (built by `05_match_corcholatas.py`).
 - 1994 has two ✓: Colosio (`designated_removed`) and Zedillo (`winner`, took office).
@@ -190,7 +192,7 @@ matcher had linked Manuel Pérez Treviño → Avila Pérez, Manuel and Ezequiel 
 
 | File | Description |
 |---|---|
-| `candidates/corcholatas_matched.csv` | Crosswalk corcholata × election → `person_id`, `is_winner` (per election), `is_runner_up` + `runner_up_source`, `match_status`. Single source of truth for candidates. Pérez Treviño (1940) has no own entry in the 1935–2009 volume. |
+| `candidates/corcholatas_matched.csv` | Crosswalk corcholata × election → `person_id`, `is_winner` (per election), `is_runner_up` + `runner_up_source`, `match_status`, `in_main_slate` + `slate_note` (rows kept for documentation but out of the main slate). Single source of truth for candidates. Pérez Treviño (1940) has no own entry in the 1935–2009 volume and was not a PRM pre-candidate. |
 | `networks/network_edges.csv` | Undirected edges (`person_a < person_b`): `name_a/b, edge_type, focus, focus_size, role_a/b, year_start, year_end, date_basis, stated_by, confirmed_by, tie_weight, weight_newman` |
 | `networks/tie_weight_params.csv` | Estimated decay slope per tie type (08) |
 | `networks/network_nodes.csv` | Everyone: `birth_year, birth_state, degree, n_records, n_dated_records, personal_info_chars` (network size grows with biography length — control for these), `is_tapado, tapado_elections, winner_elections` |
