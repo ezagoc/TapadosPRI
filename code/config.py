@@ -439,3 +439,12 @@ def openai_api_key() -> str | None:
             return os.getenv(var)
     return None
 
+
+# ---------------------------------------------------------------------------
+# Land reform / ejido geodata (06-land stage)
+# Raw RAN/PROCEDE shapefiles ("Distribución de la propiedad social en México",
+# cut 31 Dec 2006; shared by Horacio Larreguy) live OUTSIDE the project Dropbox.
+# ---------------------------------------------------------------------------
+RAN_SHAPEFILES_DIR = Path(os.environ.get("RAN_SHAPEFILES_DIR", str(Path.home() / "Dropbox" / "Ejido shapefiles"))).expanduser()
+LAND_REFORM_DIR    = DATA_DIR / "land_reform"
+EJIDOS_GPKG        = LAND_REFORM_DIR / "ejidos_procede_2006.gpkg"
