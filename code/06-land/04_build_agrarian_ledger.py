@@ -12,7 +12,7 @@ Inputs
 Outputs (config.LAND_REFORM_DIR)
   agrarian_actions_1916_1992.csv  the ledger: Sanderson rows 1916 - 3 Nov 1976 (one per Sanderson row; the DOF
                                   title, poblado and codNota attached when the title links to the Sanderson
-                                  event, plus the signing date / signer for 1975-76) + DOF rows from the day after
+                                  event, plus the signing date / signer and file history for 1973-76) + DOF rows from the day after
                                   Sanderson's last date to 31 Dec 1992 (one per resolution / decree / acuerdo in
                                   scope). `president_signing` from the text when available, else the president in
                                   office on the DOF date (flagged, with the handover-window risk quantified from
@@ -21,11 +21,12 @@ Outputs (config.LAND_REFORM_DIR)
   ejido_action_crosswalk.csv      action_id -> nucleo_key (PROCEDE) / ran_claveunica, score, method, accepted;
                                   best candidate kept even when rejected (never forced).
   land_reform_validation.csv      Sanderson events vs DOF index titles by year x group; link rates and link
-                                  plausibility; Sanderson vs DOF full text 1975-76 (aggregate by year x state and
+                                  plausibility; Sanderson vs DOF full text 1973-76 (aggregate by year x state and
                                   row level); ledger vs INEGI EHM 2014 by state x presidential term (hectares,
                                   beneficiaries, resolutions, land classes); president inferred from the DOF
                                   date vs the signer in the text; parse yields; crosswalk match rates by period
-                                  and state; matched nucleos' granted hectares vs their PROCEDE surface.
+                                  and state; matched nucleos' granted hectares vs their PROCEDE surface; file-history
+                                  (stage) yields, lags, files inherited by the signer, and the stage hand checks.
   ehm2014_land_by_state_term.csv  EHM 2014 tables 9.49 (national), 9.50 (hectares) and 9.51 (beneficiaries), long.
 
 Linking DOF titles to Sanderson (1917-1976). Sanderson has no village names. A Sanderson *event* is the set of
@@ -140,6 +141,12 @@ GROUP_PRIORITY = ["ncpe", "restitucion", "dotacion", "ampliacion", "bienes_comun
                   "derechos", "division", "fusion", "permuta", "incorporacion", "zona_urbana"]
 LAND_GRANT_ACTIONS = {"dotacion", "ampliacion", "restitucion", "ncpe", "bienes_comunales"}   # = INEGI "dotacion de tierras"
 LINK_DOC_TYPES = {"resolucion", "decreto", "acuerdo", "sentencia"}
+# file-history ("stage") fields parsed by 03 from the resultandos, carried into the ledger
+STAGE_FIELDS = ["petition_date", "petition_type", "petition_published_date", "cam_dictamen_date", "mandamiento_date",
+                "mandamiento_outcome", "cca_approval_date", "governor_name", "lag_petition_to_mandamiento_days",
+                "lag_mandamiento_to_signing_days", "lag_petition_to_signing_days", "lag_signing_to_publication_days",
+                "stage_order_flag", "petition_predates_signer_term", "petition_predates_signer_term_basis"]
+STAGE_HANDCHECK_CSV = LAND_REFORM_DIR / "dof_stage_dates_handcheck.csv"
 
 PRESIDENTS = [
     ("Venustiano Carranza", "1915-01-06", "1920-05-21"), ("Adolfo de la Huerta", "1920-06-01", "1920-11-30"),
@@ -753,7 +760,7 @@ def main():
     notes["signing_date"] = pd.to_datetime(notes["signing_date"], errors="coerce")
     nix = NucleoIndex()
     lags = lag_distribution(notes)
-    print(f"signing->DOF lag (land grants 1975-92, n={len(lags)}): median {np.median(lags):.0f} d, "
+    print(f"signing->DOF lag (land grants 1973-92, n={len(lags)}): median {np.median(lags):.0f} d, "
           f"p90 {np.quantile(lags, .9):.0f} d, p95 {np.quantile(lags, .95):.0f} d")
 
     # ---- link DOF titles to Sanderson events (1916-1976)
@@ -770,7 +777,7 @@ def main():
                         ("municipality_dof", "municipality"), ("dof_title", "title"), ("dof_issuing_body", "issuing_body")):
         san[c_out] = san["codNota"].map(ix[c_in]) if c_in in ix else None
     for c in ("signing_date", "president_signing", "president_source", "signer_body", "hectares_total", "beneficiaries",
-              "has_fulltext"):
+              "has_fulltext", *STAGE_FIELDS):
         san[("dof_" + c) if c in ("hectares_total", "beneficiaries") else c] = san["codNota"].map(nt[c]) if c in nt else None
     san["dof_codNota"] = san.pop("codNota").astype("Int64")
 
@@ -799,7 +806,7 @@ def main():
                    "ha_riego", "ha_temporal", "ha_agostadero", "ha_monte", "ha_desertico", "ha_indefinido",
                    "water_volume_m3", "expropriation_beneficiary", "indemnity_pesos", "dof_codNota", "dof_title",
                    "dof_issuing_body", "dof_link_method", "dof_link_score", "has_fulltext", "title_body_mismatch",
-                   "dof_hectares_total", "dof_beneficiaries", "mun_match_score"]
+                   "dof_hectares_total", "dof_beneficiaries", "mun_match_score", *STAGE_FIELDS]
     for c in cols_common:
         for df_ in (san, dof):
             if c not in df_:
@@ -851,7 +858,7 @@ def main():
              "ha_agostadero", "ha_monte", "ha_desertico", "ha_indefinido", "water_volume_m3",
              "expropriation_beneficiary", "indemnity_pesos", "dof_codNota", "dof_title", "dof_issuing_body",
              "dof_link_method", "dof_link_score", "has_fulltext", "title_body_mismatch", "dof_hectares_total",
-             "dof_beneficiaries", "nucleo_key", "ran_claveunica", "nucleo_name", "nucleo_match_score",
+             "dof_beneficiaries", *STAGE_FIELDS, "nucleo_key", "ran_claveunica", "nucleo_name", "nucleo_match_score",
              "nucleo_match_method"]
     ledger = ledger[order].sort_values(["dof_date", "action_id"], na_position="last")
     ledger["dof_date"] = ledger["dof_date"].dt.date
@@ -903,11 +910,12 @@ def build_validation(ledger, idx, notes, san, links, ehm, cw) -> pd.DataFrame:
             continue
         rows.append(vrow("link_name_found_in_sanderson_municipality", dec, "00", mth, "share_score_ge_85",
                          float((g.dof_link_score >= 85).sum()), "links_with_name_in_municipality", float(len(g)), "links"))
-    # 2. Sanderson vs DOF full text, 1975-76 land grants by year x state
-    s7576 = L[(L.source == "sanderson") & L.dof_year.isin([1975, 1976]) & (L.is_land_grant == 1)]
-    n7576 = notes[notes.dof_year.isin([1975, 1976]) & (notes.in_ledger_scope == 1) & notes.action_type.isin(LAND_GRANT_ACTIONS)]
+    # 2. Sanderson vs DOF full text, 1973-76 land grants by year x state (full texts exist from 1973)
+    OVER = [1973, 1974, 1975, 1976]
+    s7576 = L[(L.source == "sanderson") & L.dof_year.isin(OVER) & (L.is_land_grant == 1)]
+    n7576 = notes[notes.dof_year.isin(OVER) & (notes.in_ledger_scope == 1) & notes.action_type.isin(LAND_GRANT_ACTIONS)]
     n7576g = n7576[n7576.grant == 1]
-    for y in (1975, 1976):
+    for y in OVER:
         for st in sorted(set(s7576.state_code.dropna()) | set(n7576.state_code.dropna())) + ["00"]:
             a = s7576[(s7576.dof_year == y) & ((s7576.state_code == st) | (st == "00"))]
             b = n7576g[(n7576g.dof_year == y) & ((n7576g.state_code == st) | (st == "00"))]
@@ -919,20 +927,20 @@ def build_validation(ledger, idx, notes, san, links, ehm, cw) -> pd.DataFrame:
             rows.append(vrow("sanderson_vs_dof_fulltext_land_grants", str(y), st, "land_grant", "beneficiaries", float(a.beneficiaries.sum()),
                              "sanderson", float(b.beneficiaries.sum()), "dof_fulltext_parsed"))
     # row level: linked Sanderson grant events vs the DOF note's parsed hectares
-    pair = L[(L.source == "sanderson") & L.dof_codNota.notna() & L.dof_year.isin([1975, 1976]) & (L.is_land_grant == 1)]
+    pair = L[(L.source == "sanderson") & L.dof_codNota.notna() & L.dof_year.isin(OVER) & (L.is_land_grant == 1)]
     pair = pair.groupby("sanderson_event").agg(ha_s=("hectares_total", "sum"), ha_d=("dof_hectares_total", "first"),
                                                b_s=("beneficiaries", "max"), b_d=("dof_beneficiaries", "first"),
                                                method=("dof_link_method", "first")).dropna(subset=["ha_d"])
     if len(pair):
         agree = (abs(pair.ha_s - pair.ha_d) <= 0.01 * pair[["ha_s", "ha_d"]].max(axis=1) + 0.5)
-        rows.append(vrow("row_level_sanderson_vs_dof_fulltext_1975_76", "1975-1976", "00", "land_grant", "share_hectares_within_1pct",
+        rows.append(vrow("row_level_sanderson_vs_dof_fulltext_1973_76", "1973-1976", "00", "land_grant", "share_hectares_within_1pct",
                          float(agree.mean()), "linked_pairs", float(len(pair)), "pairs"))
         bagree = (pair.b_s == pair.b_d)
-        rows.append(vrow("row_level_sanderson_vs_dof_fulltext_1975_76", "1975-1976", "00", "land_grant", "share_beneficiaries_equal",
+        rows.append(vrow("row_level_sanderson_vs_dof_fulltext_1973_76", "1973-1976", "00", "land_grant", "share_beneficiaries_equal",
                          float(bagree.mean()), "linked_pairs", float(pair.b_d.notna().sum()), "pairs"))
         for mth, g in pair.groupby("method"):
             ag = (abs(g.ha_s - g.ha_d) <= 0.01 * g[["ha_s", "ha_d"]].max(axis=1) + 0.5)
-            rows.append(vrow("row_level_sanderson_vs_dof_fulltext_1975_76", "1975-1976", "00", mth, "share_hectares_within_1pct",
+            rows.append(vrow("row_level_sanderson_vs_dof_fulltext_1973_76", "1973-1976", "00", mth, "share_hectares_within_1pct",
                              float(ag.mean()), "linked_pairs", float(len(g)), "pairs"))
     # 3./4. ledger vs INEGI EHM 2014 by state x presidential period (land grants)
     G = L[(L.is_land_grant == 1)].copy()
@@ -1023,8 +1031,62 @@ def build_validation(ledger, idx, notes, san, links, ehm, cw) -> pd.DataFrame:
                              float(r_.median()), "granted_ha/registered_ha", float(len(r_)), "nucleos_with_original_grant"))
             rows.append(vrow("matched_nucleo_granted_vs_registered_surface", "all", "00", src, "share_ratio_0.5_to_1.5",
                              float(((r_ >= 0.5) & (r_ <= 1.5)).mean()), "share", float(len(r_)), "nucleos_with_original_grant"))
+    rows += stage_validation()
     out = pd.DataFrame(rows)
     return out
+
+
+def _q(x: pd.Series) -> dict:
+    x = pd.to_numeric(x, errors="coerce").dropna()
+    if not len(x):
+        return {}
+    return {"n": len(x), "mean": x.mean(), "p10": x.quantile(.1), "p25": x.quantile(.25), "median": x.median(),
+            "p75": x.quantile(.75), "p90": x.quantile(.9)}
+
+
+def stage_validation() -> list[dict]:
+    """File-history (stage) checks on the DOF land-grant resolutions with text, 1973-92: yield per field and
+    year, lag distributions by signer, the share of files filed before the signer's term, and the hand checks."""
+    rows = []
+    n = pd.read_csv(DOF_AGRARIAN_NOTES_CSV, dtype={"state_code": str}, low_memory=False)
+    lg = n[(n.in_ledger_scope == 1) & n.action_type.isin(LAND_GRANT_ACTIONS) & n.doc_type.isin(["resolucion", "sentencia"])
+           & (n.has_fulltext == 1)].copy()
+    gov = lg.action_type.isin(["dotacion", "ampliacion", "restitucion"])   # actions with a governor instance
+    for y, g in lg.groupby("dof_year"):
+        gg = g[g.action_type.isin(["dotacion", "ampliacion", "restitucion"])]
+        for f, base in (("petition_date", g), ("cca_approval_date", g), ("governor_name", g), ("cam_dictamen_date", gg),
+                        ("mandamiento_date", gg), ("mandamiento_outcome", gg)):
+            rows.append(vrow("stage_field_yield", str(int(y)), "00", "land_grant" if base is g else "governor_instance",
+                             f"share_{f}", float(base[f].notna().sum()), "parsed", float(len(base)), "resolutions_with_text"))
+    for f, base in (("petition_date", lg), ("cca_approval_date", lg), ("governor_name", lg), ("cam_dictamen_date", lg[gov]),
+                    ("mandamiento_date", lg[gov]), ("mandamiento_outcome", lg[gov])):
+        rows.append(vrow("stage_field_yield", "1973-1992", "00", "all", f"share_{f}", float(base[f].notna().sum()),
+                         "parsed", float(len(base)), "resolutions_with_text"))
+    for o, k in lg[gov]["mandamiento_outcome"].value_counts().items():
+        rows.append(vrow("stage_mandamiento_outcome", "1973-1992", "00", "governor_instance", f"share_{o}", float(k),
+                         "resolutions", float(gov.sum()), "governor_instance_resolutions_with_text"))
+    ok = lg[(lg.stage_order_flag == 0) & (lg.signer_body == "president")]
+    for lag in ("lag_petition_to_mandamiento_days", "lag_mandamiento_to_signing_days", "lag_signing_to_publication_days",
+                "lag_petition_to_signing_days"):
+        groups = [("all", ok)] + [(p, g) for p, g in ok.groupby("president_signing")]
+        for who, g in groups:
+            for stat, v in _q(g[lag]).items():
+                rows.append(vrow("stage_lag_days", "1973-1992", "00", who, f"{lag}_{stat}", float(v), "days", np.nan, ""))
+    inh = lg[lg.petition_predates_signer_term.notna()]
+    for who, g in [("all", inh)] + [(p, g) for p, g in inh.groupby("president_signing")]:
+        rows.append(vrow("petition_predates_signer_term", "1973-1992", "00", who, "share_inherited",
+                         float(g.petition_predates_signer_term.astype(float).sum()), "files_filed_before_signer_took_office",
+                         float(len(g)), "resolutions_with_petition_date_or_bound"))
+    if STAGE_HANDCHECK_CSV.exists():
+        h = pd.read_csv(STAGE_HANDCHECK_CSV)
+        for (smp, f), g in h.groupby(["sample", "field"]):
+            ext = g[g.extracted.notna()]
+            pres = g[g.truth.notna()]
+            rows.append(vrow("stage_handcheck", smp, "00", f, "precision", float((ext.extracted == ext.truth).sum()),
+                             "correct", float(len(ext)), "extracted"))
+            rows.append(vrow("stage_handcheck", smp, "00", f, "recall", float((pres.extracted == pres.truth).sum()),
+                             "found", float(len(pres)), "present"))
+    return rows
 
 
 if __name__ == "__main__":

@@ -3,13 +3,13 @@ Parse the agrarian notes of the Diario Oficial (harvested by 02_harvest_dof_agra
 
 Inputs
   config.DOF_SIDOF_INDEX_DIR     daily index (titles) of every DOF note, 1916-1992 as far as harvested
-  config.DOF_SIDOF_FULLTEXT_DIR  full text (slimmed HTML) of the agrarian notes, 1975-1992
+  config.DOF_SIDOF_FULLTEXT_DIR  full text (slimmed HTML) of the agrarian notes, 1973-1992 (none exists before 1973)
 
 Outputs (config.LAND_REFORM_DIR)
   dof_agrarian_index_1916_1992.csv   one row per agrarian DOF note in the index, any year: date, issuing body,
                                      title, document type, action type, poblado, municipality, state (all
                                      parsed from the title). This is what links names to Sanderson 1916-1976.
-  dof_agrarian_notes_1975_1992.csv   one row per agrarian DOF note 1975-1992: the title fields plus, from the
+  dof_agrarian_notes_1975_1992.csv   one row per agrarian DOF note 1973-1992 (historical file name): the title fields plus, from the
                                      full text, the signing date and signing president, grant/denial,
                                      hectares (total and by land class when printed), beneficiaries,
                                      expropriation beneficiary and indemnity, and parse diagnostics.
@@ -46,6 +46,26 @@ Parsing rules (all on accent-stripped lower-case text; see the functions below)
   beneficiaries the first "<n> capacitados / campesinos / beneficiados / comuneros / ejidatarios / jefes de
            familia" in the operative section, else the census count ("arrojo un total de <n> ...").
   expropriations: beneficiary agency after "a favor de"; indemnity = first peso amount after "indemnizacion".
+  stages   (land grants, ampliaciones, NCPE, restituciones, bienes comunales, granted or denied; parse_stages) the
+           file history recited in the resultandos. Dates in words or digits, "ese mismo ano" resolved, OCR "O"/"l"
+           repaired.
+           petition_date      first date in RESULTANDO PRIMERO with a filing cue ("por/mediante escrito de fecha
+                              X ... solicitaron"; ex officio initiations "de oficio" -> petition_type ex_officio);
+                              gazette publication dates are skipped (kept as petition_published_date, an upper
+                              bound when the escrito is undated); dates of earlier presidential resolutions skipped
+           cam_dictamen_date  Comision Agraria Mixta (Comision Local Agraria) "emitio/aprobo su dictamen ... el X",
+                              or the date in "... el X y lo sometio a la consideracion del Gobernador"
+           mandamiento_*      governor's first-instance ruling: "quien el X dicto su mandamiento", "mandamiento de
+                              fecha X", "quien con fecha X, cuyos resolutivos ..."; outcome from the words that
+                              follow (dotando/ampliando/concediendo/procedente vs negando/negativo/improcedente),
+                              else from the operative part (se confirma/modifica/revoca el mandamiento); "none"
+                              when the governor did not rule (tacito negativo); "not_applicable" for NCPE and
+                              bienes comunales (federal / single-instance procedures, no governor ruling)
+           cca_approval_date  latest date in "el Cuerpo Consultivo Agrario (emitio y) aprobo (su|dicho) dictamen
+                              (en sesion celebrada) el X" (undated in most files before 1979)
+           governor_name      a governor named with a title (Lic., Ing., Gral. ...): almost never printed
+           Validated on 50 development + 50 holdout notes hand-checked (README); lags and the
+           `petition_predates_signer_term` flag are computed in add_stage_lags.
 
 Run:  python -I code/06-land/03_parse_dof_agrarian.py
 """
@@ -57,6 +77,7 @@ import re
 import sys
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 CODE_DIR = Path(__file__).resolve().parents[1]
@@ -707,6 +728,262 @@ def parse_body(text: str, action: str) -> dict:
     return out
 
 
+# ---------------------------------------------------------------------------- stage dates (file history)
+# A presidential resolution recites the history of its file in the "resultandos": the date the village filed its
+# petition, the Comision Agraria Mixta's dictamen, the governor's mandamiento (first-instance ruling: positive,
+# negative or never issued) and the Cuerpo Consultivo Agrario's approval. These functions read them.
+_MONTH_RE = "enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre"
+_NUMW = sorted(set(NUM_WORDS) | {"y"}, key=len, reverse=True)
+_YEARW = r"mil?\s+novecientos(?:\s+(?:" + "|".join(w for w in _NUMW if w not in ("mil", "mi")) + r"))*"
+DATE_ANY_RE = re.compile(
+    r"(?<![a-z0-9])(?P<d>\d{1,2}|1o|(?:[a-z]+\s+y\s+)?[a-z]+)\.?,?\s+(?:\(\d{1,2}\)\s+)?(?:dias?\s+)?(?:del?\s+)?(?:mes\s+de\s+)?"
+    r"(?P<m>" + _MONTH_RE + r")\s+(?:de|del)\s+(?:ano\s+(?:de\s+)?)?"
+    r"(?P<y>\d{4}|\d\.\d{3}|" + _YEARW + r"|(?:ese|este|dicho|el|del)?\s*(?:mismo\s+)?anos?(?:\s+mismo)?)(?![0-9])")
+
+
+DATE_MDY_RE = re.compile(r"(?<![a-z0-9])(?P<m>" + _MONTH_RE + r")\s+(?P<d>\d{1,2})\s*,?\s+(?:de|del)\s+(?P<y>\d{4})(?![0-9])")
+
+
+def repair_ocr_digits(text: str) -> str:
+    """Upper-case O read for a zero inside numbers ('3,28O-OO-OO Has.', 'el 1O de abril') -> 0; 'l983' -> 1983."""
+    text = re.sub(r"\b[lI](9\d\d)\b", r"1\1", text)
+    return re.sub(r"(?<![A-Za-z\u00c0-\u00ff])(?=[\dO,\.\-]*\d)[\dO][\dO,\.\-]*O[\dO,\.\-]*|"
+                  r"(?<![A-Za-z\u00c0-\u00ff])\d[\d,\.\-]*O(?![A-Za-z\u00c0-\u00ff])",
+                  lambda m: m.group(0).replace("O", "0"), text)
+
+
+def find_dates(t: str) -> list[tuple[int, int, dt.date]]:
+    """Every date written in t (normalised text), in order: day in digits or words ("1o" = first), month name,
+    year in digits or words; "ese mismo ano" takes the year of the previous date."""
+    out, last_year = [], None
+    t = t.replace("\u00b0", "o")                     # "1°." = "1o." (same length: offsets unchanged)
+    matches = sorted(list(DATE_ANY_RE.finditer(t)) + list(DATE_MDY_RE.finditer(t)), key=lambda x: x.start())
+    for m in matches:
+        dtxt = m.group("d")
+        day = 1 if dtxt in ("1o", "lo", "primero", "primer") else words_to_int(dtxt)   # OCR "lo." = "1o."
+        if day is None or not 1 <= day <= 31:
+            continue
+        ytxt = m.group("y").replace(".", "")
+        if "ano" in ytxt:
+            yr = last_year
+        else:
+            yr = words_to_int(ytxt) if not ytxt.isdigit() else int(ytxt)
+        if yr is None or not 1850 <= yr <= 2000:
+            continue
+        try:
+            d = dt.date(yr, MONTHS[m.group("m")], day)
+        except ValueError:
+            continue
+        last_year = yr
+        out.append((m.start(), m.end(), d))
+    return out
+
+
+PETITION_CUE_RE = re.compile(r"solicit|peticion|promovi|demand|instancia|ocurri|pidier|elevaron|presentaron|gestion|"
+                             r"inicio|instaur|de oficio|por oficio")
+EX_OFFICIO_RE = re.compile(r"de oficio|por oficio|oficio n|instauracion")
+NO_MANDAMIENTO_RE = re.compile(
+    r"tacito\s+negativo|mandamiento[^.;]{0,40}?no\s+fue\s+(?:dictado|emitido|expedido)|"
+    r"(?:se\s+)?(?:considera|tiene|tuvo|tendra)\s+(?:por\s+|como\s+)?(?:emitido|dictado|producido)?\s*en\s+sentido\s+negativo|"
+    r"no\s+(?:dicto|emitio|produjo|expidio|pronuncio|ha dictado|ha emitido|habia dictado|habiendo dictado|habiendo emitido|"
+    r"se dicto|se emitio|existe|hay|obra)\s+(?:el\s+|su\s+)?(?:correspondiente\s+|respectivo\s+)?mandamiento|"
+    r"sin\s+que\s+(?:el\s+(?:c\.?\s+)?gobernador[^.;]{0,40}?\s+)?(?:se\s+)?(?:dictara|emitiera|hubiera|haya|produjera|pronunciara)|"
+    r"no\s+habiendo\s+(?:dictado|emitido)\s+(?:este|el\s+gobernador|dicho\s+funcionario|el\s+ejecutivo\s+local)?\s*(?:su\s+)?mandamiento|"
+    r"omitio\s+(?:dictar|emitir|producir)|falta\s+de\s+mandamiento|no\s+(?:produjo|emitio|dicto)\s+su\s+fallo|"
+    r"gobernador[^.;]{0,80}?\bno\s+(?:dicto|emitio|produjo|expidio|ha\s+dictado|ha\s+emitido|emitiendo)")
+MAND_VERB_RE = re.compile(r"(?:dicto|emitio|expidio|pronuncio|produjo|formulo|dictando|emitiendo|otorgo)\s+(?:sus?\s+|el\s+|un\s+)?"
+                          r"(?:correspondiente\s+|respectivo\s+)?$")
+MAND_POS_RE = re.compile(r"\b(?:concediendo|concedio|conceder|se concede|concede|dotando|doto|se dota|ampliando|amplio|"
+                         r"restituyendo|restituyo|otorgando|otorgo|creando|confirmando|reconociendo|en sentido positivo|con una superficie|"
+                         r"positivo|favorable|procedente|accediendo|aprobando)\b")
+MAND_NEG_RE = re.compile(r"\b(?:negando|nego|se niega|niega|negativo|negativa|improcedente|desfavorable|denegando|"
+                         r"denego|desechando|no procede|no ha lugar)\b")
+CAM_RE = re.compile(r"comision agraria mixta|comision local agraria|comision mixta agraria")
+CCA_RE = re.compile(r"cuerpo consultivo agrario")
+GOV_NAME_RE = re.compile(
+    r"[Gg]obernador(?:\s+(?:Constitucional|Interino|Sustituto|Provisional))?(?:\s+del\s+Estado)?(?:\s+de\s+[A-Z\u00c1-\u00da][\w\u00e1-\u00fa]+){0,3},?"
+    r"\s+(?:C\.\s*)?(?:Lic|Ing|Gral|Dr|Profr|Prof|Sr|Mtro|Arq|Cap|Cor|Coronel|General|Licenciado|Ingeniero|Doctor)\.?\s+"
+    r"(?P<name>[A-Z\u00c1-\u00da\u00d1][a-z\u00e1-\u00fa\u00f1]+(?:\s+(?:de\s+la\s+|de\s+los\s+|de\s+|del\s+)?"
+    r"(?:[A-Z\u00c1-\u00da\u00d1][a-z\u00e1-\u00fa\u00f1]+|[A-Z]\.)){1,4})")
+
+
+def _segments(t: str) -> tuple[str, int, int]:
+    """(resultandos text, start offset in t, end offset): from the first 'resultando' to the first
+    'considerando' after it; without them, the first 60% of the text."""
+    rs = re.search(r"\bresulta(?:n)?dos?\s*:?\s*(?:primero|1o|i)\b", t) or re.search(r"\bresultandos?\b", t)
+    start = rs.start() if rs else 0
+    cs = (re.search(r"\bconsiderandos?\s*(?:primero|unico|1o|i)\b|\bconsiderandos?\s*[:\.\-]", t[start:])
+          or re.search(r"\bconsiderandos?\b", t[start:]))
+    end = start + cs.start() if cs else int(len(t) * 0.6)
+    return t[start:end], start, end
+
+
+def _between_ok(txt: str, maxlen: int) -> bool:
+    """The text between a date and the word it belongs to stays within one clause."""
+    txt = re.sub(r"\b(?:c|cc|lic|ing|gral|dr|profr|prof|sr|edo|mpio|no|num)\.\s*", " ", txt)
+    return len(txt) <= maxlen and not re.search(r"\.\s|resultando|considerando|;", txt)
+
+
+GOVERNOR_INSTANCE_ACTIONS = {"dotacion", "ampliacion", "restitucion"}   # NCPE and bienes comunales: federal, single instance
+
+
+def parse_stages(text: str, final_grant=None, action: str | None = None) -> dict:
+    """Stage dates of the file: petition (filing), Comision Agraria Mixta dictamen, governor's mandamiento
+    (date and outcome), Cuerpo Consultivo Agrario approval, and any governor named. Contexts are returned for
+    auditing (`*_context`)."""
+    orig = repair_ocr_digits(text)
+    t = norm(orig)
+    res, r0, r1 = _segments(t)
+    dates = find_dates(t)
+    rdates = [(a - r0, b - r0, d) for a, b, d in dates if r0 <= a < r1]
+    out = {k: None for k in ("petition_date", "petition_type", "petition_context", "petition_published_date",
+                             "cam_dictamen_date", "cam_context",
+                             "mandamiento_date", "mandamiento_outcome", "mandamiento_source", "mandamiento_context",
+                             "cca_approval_date", "cca_context", "governor_name")}
+    # ---- petition: first date in RESULTANDO PRIMERO next to a filing cue (not a gazette publication date)
+    r1m = re.search(r"resulta(?:n)?do\s*:?\s*(?:primero|1o)", res)
+    if not r1m:   # tribunal sentences (1992) and odd layouts: headings are just "primero.-", "segundo.-"
+        res = t[: r1]
+        r0 = 0
+        rdates = [(a, b, d) for a, b, d in dates if a < r1]
+    p0 = r1m.start() if r1m else 0
+    p2 = re.search(r"resulta(?:n)?do\s+segundo|comision agraria mixta[^.;]{0,40}(?:emitio|aprobo|formulo)", res[p0 + 10:])
+    pend = p0 + 10 + p2.start() if p2 else min(len(res), p0 + 2500)
+    for a, b, d in rdates:
+        if not (p0 <= a < pend) or d < dt.date(1915, 1, 6):   # agrarian petitions start with the 6 Jan 1915 law
+            continue
+        before = res[max(p0, a - 90):a]
+        if re.search(r"(periodico|gaceta|diario) oficial[^.;]{0,60}$|publicad[oa][^.;]{0,40}$|publicandose[^.;]{0,60}$", before):
+            if out["petition_published_date"] is None and re.search(r"solicitud|instancia|peticion", res[max(p0, a - 160):a]):
+                out["petition_published_date"] = d     # the request printed in the state gazette (upper bound)
+            continue
+        if out["petition_date"] is not None:
+            continue
+        if re.search(r"resolucion presidencial[^.;]{0,40}$|ejecutad[oa][^.;]{0,30}$|diario oficial de la federacion[^.;]{0,20}$",
+                     res[max(0, a - 80):a]):
+            continue                                            # an earlier resolution of the same village
+        win = res[max(p0, a - 150): b + 260]
+        pre = re.sub(r"\b(?:no|num|c|lic|ing)\.\s*", " ", res[max(0, a - 110):a])      # "oficio no. 520995 de fecha"
+        cue = (re.search(r"escrito[^.;]{0,50}$|con fecha\s*$|de oficio[^.;]{0,70}$", pre)   # "de oficio" = ex officio
+               or re.search(r"^[^.;]{0,160}?(?:solicit|peticion|instancia|promovi|elevaron|pidier|inici|instaur|de oficio)",
+                            res[b: b + 200]))
+        if not cue and action == "bienes_comunales" and a - p0 < 220 and re.search(r"oficio[^;]{0,60}$", pre):
+            cue = True                                  # communal files opened by an official letter ("por oficio no. X de fecha")
+        if cue and PETITION_CUE_RE.search(win):
+            out["petition_date"] = d
+            out["petition_type"] = ("ex_officio" if EX_OFFICIO_RE.search(res[max(p0, a - 150): b + 120])
+                                    or (action == "bienes_comunales" and re.search(r"oficio[^;]{0,60}$", pre)) else "petition")
+            out["petition_context"] = res[max(p0, a - 120): b + 120]
+    # ---- governor's mandamiento
+    for mm in re.finditer(r"mandamiento", res):
+        m0 = mm.start()
+        ctx_before = res[max(0, m0 - 400):m0]
+        if re.search(r"resolucion presidencial[^.;]{0,120}$", ctx_before):   # an earlier file's history
+            continue
+        if NO_MANDAMIENTO_RE.search(res[max(0, m0 - 130): m0 + 90]):        # "quien no dicto su mandamiento"
+            break
+        cand = None
+        for a, b, d in rdates:
+            if b <= m0 and m0 - b <= 60 and MAND_VERB_RE.search(re.sub(r"[,\s]+", " ", res[b:m0]).strip(" ,") + " ") \
+                    and _between_ok(res[b:m0], 60):
+                cand = (a, b, d)
+            elif a >= mm.end() and a - mm.end() <= 90 and _between_ok(res[mm.end():a], 90) and \
+                    re.search(r"(?:de\s+fecha|fechado|con fecha|en fecha|dictado|emitido|del?|el)\s*(?:dia\s+)?$", res[mm.end():a]):
+                cand = cand or (a, b, d)
+        if cand:
+            a, b, d = cand
+            out["mandamiento_date"], out["mandamiento_source"] = d, "resultando"
+            after = res[mm.end(): mm.end() + 450]
+            after = re.split(r"resultando|considerando|posesion provisional", after)[0]
+            pm, nm_ = MAND_POS_RE.search(after), MAND_NEG_RE.search(after)
+            if pm or nm_:
+                out["mandamiento_outcome"] = "negative" if (nm_ and (not pm or nm_.start() < pm.start())) else "positive"
+            out["mandamiento_context"] = res[max(0, min(a, m0) - 80): mm.end() + 220]
+            break
+    if out["mandamiento_date"] is None:   # "... al C. Gobernador del Estado, quien con fecha X, cuyos resolutivos ..."
+        for gq in re.finditer(r"gobernador[^.;]{0,70}?quien\s+(?:con\s+fecha\s+|en\s+fecha\s+|el\s+(?:dia\s+)?)?", res):
+            sd = [(a, b, d) for a, b, d in rdates if 0 <= a - gq.end() <= 3]
+            if not sd:
+                continue
+            a, b, d = sd[0]
+            if re.search(r"dict|emiti|expidi|pronunci|siguientes terminos|resolutivos|resolvio|mandamiento|concedi|dot|amplio|nego",
+                         res[b: b + 90]):
+                out["mandamiento_date"], out["mandamiento_source"] = d, "resultando_governor_clause"
+                after = re.split(r"resultando|considerando|posesion provisional", res[b: b + 450])[0]
+                pm, nm_ = MAND_POS_RE.search(after), MAND_NEG_RE.search(after)
+                if pm or nm_:
+                    out["mandamiento_outcome"] = "negative" if (nm_ and (not pm or nm_.start() < pm.start())) else "positive"
+                out["mandamiento_context"] = res[max(0, gq.start() - 40): b + 200]
+                break
+    if out["mandamiento_date"] is None and NO_MANDAMIENTO_RE.search(res):
+        nm = NO_MANDAMIENTO_RE.search(res)
+        out["mandamiento_outcome"], out["mandamiento_source"] = "none", "resultando"
+        out["mandamiento_context"] = res[max(0, nm.start() - 120): nm.end() + 120]
+    # fallback / complement from the operative part: "se confirma/modifica/revoca el mandamiento ... de fecha X"
+    ops = list(OPER_RE.finditer(t))
+    op_start = ops[-1].end() if ops else r1
+    om = re.search(r"(confirma|modifica|revoca)\s+(?:en todas sus partes\s+|en sus terminos\s+)?el\s+mandamiento[^.;]{0,160}", t[op_start:])
+    if om:
+        verb = om.group(1)
+        seg = t[op_start + om.start(): op_start + om.end() + 80]
+        if out["mandamiento_date"] is None:
+            sd = find_dates(seg)
+            if sd and sd[0][0] < 200:
+                out["mandamiento_date"], out["mandamiento_source"] = sd[0][2], "resolutivo"
+                out["mandamiento_context"] = seg
+        if out["mandamiento_outcome"] in (None,) and out["mandamiento_date"] is not None:
+            if re.search(r"negativ", seg):
+                out["mandamiento_outcome"] = "negative"
+            elif re.search(r"positiv", seg):
+                out["mandamiento_outcome"] = "positive"
+            elif final_grant == 1:
+                out["mandamiento_outcome"] = {"confirma": "positive", "modifica": "positive", "revoca": "negative"}[verb]
+            elif final_grant == 0:
+                out["mandamiento_outcome"] = {"confirma": "negative", "revoca": "positive", "modifica": None}[verb]
+            if out["mandamiento_outcome"]:
+                out["mandamiento_source"] = (out["mandamiento_source"] or "") + "+resolutivo_" + verb
+    if action is not None and action not in GOVERNOR_INSTANCE_ACTIONS:
+        out.update(mandamiento_date=None, mandamiento_outcome="not_applicable", mandamiento_source=None,
+                   mandamiento_context=None)
+    # ---- Comision Agraria Mixta dictamen: first CAM mention followed by a dictamen and a date
+    for cm in CAM_RE.finditer(res):
+        win = re.split(r"gobernador|mandamiento|resultando", res[cm.end(): cm.end() + 260])[0]
+        if not re.search(r"dictamen|sesion", win):    # an NCPE "opinion" of the CAM is not a dictamen
+            continue
+        sd = [(a, b, d) for a, b, d in rdates if cm.end() <= a < cm.end() + len(win)]
+        if sd:
+            out["cam_dictamen_date"] = sd[0][2]
+            out["cam_context"] = res[max(0, cm.start() - 60): cm.end() + len(win) + 20]
+            break
+    if out["cam_dictamen_date"] is None:   # the body that submits to the governor is the Comision Agraria Mixta
+        for a, b, d in rdates:
+            if re.match(r"\s*,?\s*y\s+lo\s+(?:sometio|turno|remitio|envio)\s+a\s+(?:la\s+consideracion\s+del?\s+)?(?:c\.?\s+)?gobernador",
+                        res[b: b + 80]):
+                out["cam_dictamen_date"] = d
+                out["cam_context"] = res[max(0, a - 150): b + 80]
+                break
+    # ---- Cuerpo Consultivo Agrario approval: latest dated approval/session after a CCA mention
+    for cm in CCA_RE.finditer(t):
+        win = re.split(r"considerando|resultando|;\s*y\b|\.\s", t[cm.end(): cm.end() + 220])[0]
+        if not re.search(r"dictamen", win):          # other CCA sessions (e.g. on inafectabilidad) are not the approval
+            continue
+        sd = [(a, b, d) for a, b, d in dates if cm.end() <= a < cm.end() + len(win)]
+        if sd:
+            if out["cca_approval_date"] is None or sd[-1][2] > out["cca_approval_date"]:
+                out["cca_approval_date"] = sd[-1][2]
+                out["cca_context"] = t[max(0, cm.start() - 40): cm.end() + len(win) + 10]
+    # ---- governor named (original casing, resultandos region)
+    gm = GOV_NAME_RE.search(orig[: int(len(orig) * 0.75)])
+    if gm:
+        out["governor_name"] = gm.group("name").strip()
+    return out
+
+
+STAGE_COLS = ["petition_date", "petition_type", "petition_published_date", "cam_dictamen_date", "mandamiento_date", "mandamiento_outcome",
+              "mandamiento_source", "cca_approval_date", "governor_name"]
+STAGE_ACTIONS = {"dotacion", "ampliacion", "ncpe", "restitucion", "bienes_comunales"}
+
+
 # ------------------------------------------------------------------------------------------- driver
 def build_index_table() -> pd.DataFrame:
     rows = []
@@ -730,13 +1007,60 @@ def build_index_table() -> pd.DataFrame:
     return df
 
 
+# Full texts exist from 1973 (none before). The notes file keeps its historical name (..._1975_1992.csv) but covers
+# 1973-1992, so that the 1973-76 Sanderson rows linked to a DOF note get signing dates and file-history dates.
+NOTES_FIRST_YEAR = 1973
+
+
+def term_start(president: str | None) -> dt.date | None:
+    for _, name, a, _b in PRESIDENTS:
+        if name == president:
+            return dt.date.fromisoformat(a)
+    return None
+
+
+def add_stage_lags(notes: pd.DataFrame) -> pd.DataFrame:
+    """Lags between stages (days) and whether the file was filed before the signing president took office."""
+    for c in ("petition_date", "petition_published_date", "cam_dictamen_date", "mandamiento_date", "cca_approval_date"):
+        if c not in notes:
+            notes[c] = None
+        notes[c] = pd.to_datetime(notes[c], errors="coerce")
+    sig = pd.to_datetime(notes["signing_date"], errors="coerce")
+    dof = pd.to_datetime(notes["dof_date"], errors="coerce")
+    notes["lag_petition_to_mandamiento_days"] = (notes["mandamiento_date"] - notes["petition_date"]).dt.days
+    notes["lag_mandamiento_to_signing_days"] = (sig - notes["mandamiento_date"]).dt.days
+    notes["lag_petition_to_signing_days"] = (sig - notes["petition_date"]).dt.days
+    notes["lag_signing_to_publication_days"] = (dof - sig).dt.days
+    # stages should run petition <= CAM <= mandamiento <= CCA <= signing <= publication
+    order = [notes["petition_date"], notes["cam_dictamen_date"], notes["mandamiento_date"], notes["cca_approval_date"], sig, dof]
+    bad = pd.Series(False, index=notes.index)
+    for i in range(len(order)):
+        for j in range(i + 1, len(order)):
+            bad |= (order[i] > order[j]).fillna(False)
+    notes["stage_order_flag"] = bad.astype(int)
+    notes["petition_president"] = [president_on(d.date()) if pd.notna(d) else None for d in notes["petition_date"]]
+    ts = pd.to_datetime(pd.Series([term_start(p) for p in notes["president_signing"]], index=notes.index), errors="coerce")
+    inh = pd.Series(pd.NA, index=notes.index, dtype="Int64")
+    has_p = notes["petition_date"].notna() & ts.notna()
+    inh[has_p] = (notes.loc[has_p, "petition_date"] < ts[has_p]).astype(int)
+    # undated petitions: the gazette publication of the request bounds the filing date from above
+    bound = notes["petition_date"].isna() & notes["petition_published_date"].notna() & ts.notna() & \
+        (notes["petition_published_date"] < ts)
+    inh[bound] = 1
+    notes["petition_predates_signer_term"] = inh
+    notes["petition_predates_signer_term_basis"] = np.where(has_p, "petition_date", np.where(bound, "published_bound", None))
+    for c in ("petition_date", "petition_published_date", "cam_dictamen_date", "mandamiento_date", "cca_approval_date"):
+        notes[c] = notes[c].dt.date
+    return notes
+
+
 def build_notes_table(idx: pd.DataFrame) -> pd.DataFrame:
     full = {}
     for fn in fulltext_files(DOF_SIDOF_FULLTEXT_DIR):
         for rec in iter_jsonl(fn):
             if rec.get("codNota") is not None:
                 full[int(rec["codNota"])] = rec.get("html") or ""
-    sub = idx[(idx.dof_year >= 1975) & (idx.dof_year <= 1992)].copy()
+    sub = idx[(idx.dof_year >= NOTES_FIRST_YEAR) & (idx.dof_year <= 1992)].copy()
     recs = []
     for r in sub.itertuples(index=False):
         h = full.get(r.codNota)
@@ -759,6 +1083,9 @@ def build_notes_table(idx: pd.DataFrame) -> pd.DataFrame:
                              "ncpe_name": hp["ncpe_name"], "municipality": hp["municipality"],
                              "state_code": hp["state_code"] or r.state_code})
             base.update(parse_body(txt, action))
+            if action in STAGE_ACTIONS and base.get("doc_type", r.doc_type) in ("resolucion", "sentencia"):
+                st = parse_stages(txt, base.get("grant"), action)
+                base.update({c: st[c] for c in STAGE_COLS})
         recs.append(base)
     body = pd.DataFrame(recs)
     over = [c for c in ["action_type", "doc_type", "poblado", "poblado_alias", "ncpe_name", "municipality", "state_code"]
@@ -797,6 +1124,7 @@ def build_notes_table(idx: pd.DataFrame) -> pd.DataFrame:
         notes["president_signing_text"].notna() & notes["president_in_office_at_signing"].notna()
         & (notes["president_signing_text"] != notes["president_in_office_at_signing"])).astype(int)
     notes["is_land_grant_action"] = notes["action_type"].isin(LAND_GRANT_ACTIONS).astype(int)
+    notes = add_stage_lags(notes)
     notes = notes.drop(columns=["text_excerpt_operative"], errors="ignore")
     return notes
 
@@ -809,7 +1137,7 @@ def main():
     print(idx.groupby("dof_year").size().to_string())
     notes = build_notes_table(idx)
     notes.to_csv(DOF_AGRARIAN_NOTES_CSV, index=False)
-    print(f"notes 1975-1992: {len(notes):,} rows, {int(notes.has_fulltext.sum()):,} with full text -> {DOF_AGRARIAN_NOTES_CSV.name}")
+    print(f"notes {NOTES_FIRST_YEAR}-1992: {len(notes):,} rows, {int(notes.has_fulltext.sum()):,} with full text -> {DOF_AGRARIAN_NOTES_CSV.name}")
     scope = notes[(notes.in_ledger_scope == 1) & (notes.has_fulltext == 1)]
     print("parse yield among in-scope notes with full text (share non-missing):")
     print(scope[["signing_date", "president_signing", "hectares_total", "beneficiaries", "grant"]].notna().mean().round(3).to_string())
