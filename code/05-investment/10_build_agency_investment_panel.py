@@ -7,10 +7,15 @@ Build the AGENCY × YEAR panel of realized federal public investment, 1925–200
   1970–2003  SPP 1970–80 Cuadros II.7 / II.9, INEGI "El ingreso y el gasto público en
              México" 1986, 1987, 1993, 1999, 2001, 2004 editions (09_*): secretarías/
              dependencias and organismos y empresas controlados presupuestalmente
-  Gap: 1964–1969 — the 1964–66 and 1965–70 books give investment by agency only as
-  AUTHORIZED/PROGRAMMED (1965: authorized 16 301 vs realized 11 485), realized only by
-  purpose × state. Glued footnote letters in
-  SPP labels ('Turismoi', 'PIDERj') are tolerated by substring matching in CROSSWALK.
+  1964–1969  IMPUTED: the 1964–66 and 1965–70 Secretaría de la Presidencia books give
+             investment by agency only as AUTHORIZED/PROGRAMMED (11_*); realized is imputed
+             as authorized × the execution rate (realized / programmed) of the agency's
+             purpose in that year, calibrated to the printed realized total (12_*; 1964:
+             no realized figure exists, level = authorized as in INEGI's official series).
+             Rows carry measure = 'imputed_from_authorized', the authorized amount and the
+             rate applied; `share_of_year_total_authorized` is the robustness measure.
+  Glued footnote letters in SPP labels ('Turismoi', 'PIDERj') are tolerated by substring
+  matching in CROSSWALK.
 
 For years reported by several editions the most recent edition is kept. Every row
 carries the printed label, a stable `agency_key` and an institutional `lineage` that
@@ -23,10 +28,12 @@ Blocks (column `block`): 'dependencias' (secretarías' own investment, 1925–19
 'ramo_sector' (1984–1998: investment by coordinating secretaría INCLUDING its sectorised
 parastatals — a different lens; never add it to 'paraestatal').
 
-`measure`: 'realized' everywhere except the 1970 parastatal column (SPP II.9, note a:
-authorized). Measures: nominal millions of NEW pesos; real millions of 1960 pesos (1959+ only —
-the CPI deflator starts in 1959); share of that year's block total — the scale-free
-measure to use across the whole period.
+`measure`: 'realized' everywhere except 1964–1969 ('imputed_from_authorized', see above)
+and the 1970 parastatal column (SPP II.9, note a: authorized). Measures: nominal millions
+of NEW pesos; real millions of 1960 pesos (1959+ only — the CPI deflator starts in 1959);
+share of that year's block total — the scale-free measure to use across the whole period;
+for 1964–69 also `authorized_mn_new_pesos`, `execution_rate` and
+`share_of_year_total_authorized` (NaN in other years).
 
 Outputs (INVESTMENT_DIR): agency_investment_panel.csv
 """
@@ -61,9 +68,14 @@ CROSSWALK = [
     (r"^fertimex\b", "fertimex", "fertilizers"),
     (r"^conasupo\b", "conasupo", "food_distribution"),
     (r"^sidermex\b", "sidermex", "steel"),
-    (r"^banobras\b|hipotecario urbano y de obras publicas", "banobras", "development_banks"),
+    (r"^banobras\b|hipotecario urbano y de obras publicas|banco nacional de obras y servicios publicos", "banobras", "development_banks"),
     (r"nacional financiera|^nafin", "nafin", "development_banks"),
     (r"juntas federales de mejoras materiales", "juntas_mejoras", "regional_programs"),
+    (r"programa federal de construc\s?cion de escuelas", "capfce", "education"),          # 1965–70 books
+    (r"patronato (de obras e instalaciones|para las obras) del instituto politecni", "patronato_obras_ipn", "education"),
+    (r"servicio de transportes electricos", "ste_df", "federal_district"),
+    (r"sistema de transporte colectivo", "stc_metro", "federal_district"),
+    (r"estudios del territorio nacional", "cetenal", "planning"),
     (r"compania electrica chapala", "chapala_electric", "electricity"),
     (r"almacenes nacionales de deposito", "andsa", "food_distribution"),
     (r"ciudad universitaria", "ciudad_universitaria", "education"),
@@ -149,6 +161,16 @@ def early() -> pd.DataFrame:
     return d[["source", "year", "block", "sector", "label", "value_mn_new_pesos"]]
 
 
+def gap() -> pd.DataFrame:
+    """1964–1969: realized imputed from the authorized tables (12_*)."""
+    d = pd.read_csv(INVESTMENT_DIR / "agency_investment_imputed_1964_1969_long.csv")
+    d["source"] = d.source.map({"b70_cI": "ipf_1964_1966_annex1970", "b70_c10": "ipf_1965_1970", "b70_c11": "ipf_1965_1970",
+                                "b70_c12": "ipf_1965_1970", "b70_c13": "ipf_1965_1970", "b70_c14": "ipf_1965_1970"}).fillna(d.source)
+    d["source_note"] = "imputed: authorized × " + d.rate_basis + d.calibration_factor.map(lambda f: f" × calibration {f:.3f}")
+    return d[["source", "year", "block", "sector", "label", "value_mn_new_pesos", "authorized_mn_new_pesos",
+              "execution_rate_applied", "source_note", "agreement"]].rename(columns={"execution_rate_applied": "execution_rate"})
+
+
 def late() -> pd.DataFrame:
     d = pd.read_csv(INVESTMENT_DIR / "agency_investment_inegi_long.csv")
     d = d[d.in_panel & (d.level > 0)].copy()
@@ -173,30 +195,40 @@ def late() -> pd.DataFrame:
 
 
 def main():
-    e, l = early(), late()
-    for d in (e, l):
+    e, l, g = early(), late(), gap()
+    for d in (e, l, g):
         kl = d.label.map(key_lineage)
         d["agency_key"], d["lineage"] = kl.str[0], kl.str[1]
     # one source table per (year, block): the most recent edition (mixing editions within
     # a year double-counts agencies whose printed names differ between editions)
     best = l.groupby(["year", "block"])["rank"].transform("min")
     l = l[l["rank"] == best]
-    panel = pd.concat([e.assign(agreement=None, source_note=None), l.drop(columns="rank")],
+    panel = pd.concat([e.assign(agreement=None, source_note=None), l.drop(columns="rank"), g],
                       ignore_index=True)
     panel = panel.dropna(subset=["value_mn_new_pesos"])
     panel = panel.groupby(["agency_key", "year", "block"], as_index=False).agg(
         label=("label", "first"), lineage=("lineage", "first"), sector=("sector", "first"),
         source=("source", "first"), value_mn_new_pesos=("value_mn_new_pesos", "sum"),
-        source_note=("source_note", "first"))
+        source_note=("source_note", "first"),
+        authorized_mn_new_pesos=("authorized_mn_new_pesos", lambda x: x.sum(min_count=1)))
+    # execution rate at the agency level = imputed / authorized (NaN outside 1964–69)
+    panel["execution_rate"] = panel.value_mn_new_pesos / panel.authorized_mn_new_pesos
     defl = pd.read_csv(PRICE_DEFLATOR_CSV).set_index("year")["deflator"]
     panel["real_mn_1960_pesos"] = panel.value_mn_new_pesos * 1000 * 100 / panel.year.map(defl)
     # shares within each block: 'ramo_sector' (1982+) is a sector view that already
     # includes parastatal investment, so blocks must not be summed together
     panel["share_of_year_total"] = panel.value_mn_new_pesos / \
         panel.groupby(["year", "block"]).value_mn_new_pesos.transform("sum")
+    # robustness for the imputed years: shares of the AUTHORIZED amounts (rate-free)
+    panel["share_of_year_total_authorized"] = panel.authorized_mn_new_pesos / \
+        panel.groupby(["year", "block"]).authorized_mn_new_pesos.transform("sum")
     # SPP Cuadro II.9 footnote a: its 1970 parastatal column is AUTHORIZED investment
     panel["measure"] = "realized"
     panel.loc[(panel.source == "spp_II9y") & (panel.year == 1970), "measure"] = "authorized"
+    panel.loc[panel.year.between(1964, 1969), "measure"] = "imputed_from_authorized"
+    panel = panel[["agency_key", "year", "block", "label", "lineage", "sector", "source", "value_mn_new_pesos",
+                   "source_note", "real_mn_1960_pesos", "share_of_year_total", "measure",
+                   "authorized_mn_new_pesos", "execution_rate", "share_of_year_total_authorized"]]
     panel = panel.sort_values(["year", "block", "value_mn_new_pesos"], ascending=[True, True, False])
     panel.to_csv(OUT, index=False)
 
