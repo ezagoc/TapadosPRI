@@ -1,7 +1,7 @@
-"""Official salaries of the ladder's offices in 1927 and 1999, in 1999 pesos a month.
+"""Official salaries of the ladder's offices in 1927 and 1999, in 2025 pesos a month.
 
 The appendix table "The ladder" shows, next to each rung, the official salary of its first office
-in 1927 and 1999. To compare them, the 1927 salaries are converted to 1999 pesos.
+in 1927 and 1999, both converted to 2025 pesos (the price year of every peso amount on the slides).
 
 Salaries (the same checkpoints as 02_position_tiers.validate()):
   1927  "cuota diaria" (pesos a day) in the Presupuesto de Egresos de la Federación para 1927
@@ -14,9 +14,10 @@ Prices, chained (old pesos; 1 new peso = 1,000 old pesos since 1993):
   1927-1939  general wholesale price index, Mexico City (INEGI, Estadísticas históricas de
              México 2014, cuadro 18.4, base 1929=100) -- the only general index covering 1927
   1939-1960  workers' cost-of-living index, Mexico City (cuadro 18.20, base 1978=100)
-  1960-1999  consumer price index (World Bank WDI FP.CPI.TOTL; price_deflator_mexico.csv, 02_build_deflator.py)
+  1960-2025  consumer price index (World Bank WDI FP.CPI.TOTL; price_deflator_mexico.csv, 02_build_deflator.py)
 The chain is approximate: other splices give a 1927-1999 price ratio 22% lower (wholesale index to
-1960) to 11% higher (cost of living to 1978); the table rounds to thousands of pesos.
+1960) to 11% higher (cost of living to 1978); the table rounds to thousands of pesos. The 1999-2025 step uses
+the CPI alone (one index, no splice).
 
 Output: RANK_DIR/official_pay_real.csv
 """
@@ -68,15 +69,20 @@ def main():
                      "pay_1999_monthly_high": rng[1] if rng else None,
                      "pay_1999_monthly_mid": sum(rng) / 2 if rng else None})
     out = pd.DataFrame(rows)
+    to_2025 = cpi[2025] / cpi[1999]                       # 1999 new pesos -> 2025 pesos
+    out["pay_1927_monthly_2025_pesos"] = out.pay_1927_monthly_1999_pesos * to_2025
+    out["pay_1999_monthly_mid_2025_pesos"] = out.pay_1999_monthly_mid * to_2025
     out["price_ratio_1999_1927_old_pesos"] = ratio
+    out["price_ratio_2025_1999"] = to_2025
     RANK_DIR.mkdir(parents=True, exist_ok=True)
     out.to_csv(OUT, index=False)
     print(f"1999/1927 price ratio (old pesos): {ratio:,.0f}  [wholesale to 1960: {alt_wpi:,.0f} "
           f"({alt_wpi / ratio - 1:+.0%}); cost of living to 1978: {alt_col:,.0f} ({alt_col / ratio - 1:+.0%})]")
-    show = out[["office", "rung", "pay_1927_monthly_1999_pesos", "pay_1999_monthly_mid"]].copy()
+    print(f"2025/1999 price ratio: {to_2025:.3f}")
+    show = out[["office", "rung", "pay_1927_monthly_2025_pesos", "pay_1999_monthly_mid_2025_pesos"]].copy()
     show.iloc[:, 2:] = (show.iloc[:, 2:] / 1000).round(1)
-    print("Thousands of 1999 pesos a month:\n" + show.to_string(index=False))
-    for col in ("pay_1927_monthly_1999_pesos", "pay_1999_monthly_mid"):
+    print("Thousands of 2025 pesos a month:\n" + show.to_string(index=False))
+    for col in ("pay_1927_monthly_2025_pesos", "pay_1999_monthly_mid_2025_pesos"):
         s = out.dropna(subset=[col]).groupby("rung")[col].min()
         assert s.is_monotonic_decreasing, col          # higher rung (smaller number) = higher pay
     print(f"-> {OUT}")

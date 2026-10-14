@@ -10,6 +10,9 @@ Sources (data/investment/):
 The WDI series start in 1960. The investment volume includes fiscal year 1959,
 so per the project rule 1959 is assigned the 1960 values (both CPI and inflation).
 
+The deflator runs to 2025, the price year of every peso amount shown on the slides (the data panels stay in
+1960 pesos; a change of base year rescales all years by one constant and moves no estimate).
+
 The deflator is rebased so the base year (config.DEFLATOR_BASE_YEAR = 1960) = 100.
 Real pesos = nominal * 100 / deflator.
 
@@ -51,7 +54,7 @@ def main() -> None:
     wpi = _mexico_series(WPI_XLS, "wpi")
 
     df = pd.concat([cpi, inf, wpi], axis=1).reset_index(names="year")
-    df = df[df["year"] <= 2010].copy()   # covers the 1959–2003 state investment panel
+    df = df[df["year"] <= 2025].copy()   # 1959–2003 panels + 2025, the year of the pesos shown on the slides
 
     # 1959 := 1960 (series begins in 1960; investment data starts in 1959)
     first = df.loc[df["year"] == 1960].iloc[0].copy()

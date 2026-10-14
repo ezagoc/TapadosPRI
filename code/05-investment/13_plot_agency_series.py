@@ -9,7 +9,7 @@ Two figures from the agency panel (10_*), for the appendix slide on the 1964–6
                            1964–69 stretch shaded. Share of the year's total: dependencias +
                            paraestatal; 1984–97 the sector view (ramo_sector), where the
                            secretarías are not comparable and their lines stop in 1983.
-  investment_series_total  total federal public investment in real 1960 pesos, 1959–2003
+  investment_series_total  total federal public investment in 2025 pesos, 1959–2003
                            (the CPI deflator starts in 1959), imputed stretch in dark red,
                            sexenio boundaries as faint lines — a sanity figure.
 
@@ -34,7 +34,7 @@ CODE_DIR = Path(__file__).resolve().parents[1]
 if str(CODE_DIR) not in sys.path:
     sys.path.append(str(CODE_DIR))
 
-from config import INVESTMENT_DIR, OUTPUT_DIR, ROOT  # noqa: E402
+from config import INVESTMENT_DIR, OUTPUT_DIR, PRICE_DEFLATOR_CSV, ROOT  # noqa: E402
 
 PANEL = INVESTMENT_DIR / "agency_investment_panel.csv"
 RATES = INVESTMENT_DIR / "execution_rates.csv"
@@ -119,7 +119,7 @@ def fig_shares(panel: pd.DataFrame, rates: pd.DataFrame):
     ax.set_xlabel("")
     ax.set_xticks(range(1930, 2010, 10))
     ax.set_yticks(range(0, 51, 10))
-    fig.text(0.01, 0.01, "Source: Secretaría de la Presidencia (1925–70), SPP (1970–80), INEGI (1980–2003); real 1960 pesos; 1964–69 imputed from authorized budgets.",
+    fig.text(0.01, 0.01, "Source: Secretaría de la Presidencia (1925–70), SPP (1970–80), INEGI (1980–2003); 1964–69 imputed from authorized budgets.",
              fontsize=8, color=GREY, ha="left", va="bottom")
     fig.tight_layout(rect=(0, 0.04, 1, 1))
     for a, b in _overlaps(fig, texts):
@@ -128,8 +128,10 @@ def fig_shares(panel: pd.DataFrame, rates: pd.DataFrame):
 
 
 def fig_total(panel: pd.DataFrame, rates: pd.DataFrame):
-    tot = totals(panel, "real_mn_1960_pesos").dropna()
-    tot = tot[tot.index >= 1959] / 1000      # thousand million 1960 pesos
+    defl = pd.read_csv(PRICE_DEFLATOR_CSV).set_index("year").deflator
+    to_2025 = defl[2025] / 100 / 1000        # million 1960 (old) pesos -> million 2025 pesos
+    tot = totals(panel, "real_mn_1960_pesos").dropna() * to_2025
+    tot = tot[tot.index >= 1959] / 1000      # thousand million 2025 pesos
     fig, ax = plt.subplots(figsize=(10, 5.2))
     sexenio_lines(ax, tot.max())
     ax.plot(tot.index, tot.values, color=GREY, lw=1.4, zorder=2)
@@ -146,10 +148,10 @@ def fig_total(panel: pd.DataFrame, rates: pd.DataFrame):
                         color="#777777", ha="center")
     ax.set_xlim(1958, 2004)
     ax.set_ylim(0, tot.max() * 1.15)
-    ax.set_ylabel("thousand million pesos of 1960")
+    ax.set_ylabel("thousand million 2025 pesos")
     ax.set_xticks(range(1960, 2005, 5))
-    fig.text(0.01, 0.01, "Source: agency panel (dependencias + paraestatal; 1984–97 sector view), CPI deflator "
-                         "1960 = 100. Election years labelled; faint lines mark the start of each sexenio.",
+    fig.text(0.01, 0.01, "Source: agency panel (dependencias + paraestatal; 1984–97 sector view), in 2025 "
+                         "pesos (consumer price index). Election years labelled; faint lines mark the start of each sexenio.",
              fontsize=7.5, color="#777777")
     fig.tight_layout(rect=(0, 0.03, 1, 1))
     return fig
