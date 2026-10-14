@@ -41,18 +41,22 @@ RATES = INVESTMENT_DIR / "execution_rates.csv"
 OUT_DIR = OUTPUT_DIR / "slides"
 DECK_FIG = ROOT / "research" / "slides" / "pri_succession_slides" / "figures" / "investment_series.pdf"
 
-RED, GREY, DARK, LIGHT = "#8b1a1a", "#9a9a9a", "#333333", "#e6e6e6"
+RED, GREY, DARK, LIGHT = "#940034", "#9a9a9a", "#333333", "#e6e6e6"
 SEXENIO_STARTS = [1934, 1940, 1946, 1952, 1958, 1964, 1970, 1976, 1982, 1988, 1994, 2000]
 GAP = (1964, 1969)
-AGENCIES = {   # label → (keys, colour)
-    "PEMEX": (["pemex"], RED),
-    "CFE": (["cfe"], "#c0504d"),
-    "Ferrocarriles Nacionales": (["fnm"], GREY),
-    "Public works (SCOP / SOP / SAHOP)": (["scop", "sop", "sahop"], GREY),
-    "Water resources (SRH / SARH)": (["srh", "sarh"], GREY),
-    "IMSS": (["imss"], GREY),
+# label → (keys, colour, last year shown, end label, peak label)
+AGENCIES = {
+    "Ferrocarriles Nacionales": (["fnm"], "#4a4a4a", None, "Ferrocarriles", "Ferrocarriles Nacionales"),
+    # SCOP 1925–58 → SOP 1959–76 → SAHOP 1977–82 (INEGI's 1986 edition prints 1980–82 under the later name SEDUE)
+    "Public works ministry (SCOP / SOP)": (["scop", "sop", "sahop", "sedue"], "#8c8c8c", 1982, "Public works ministry",
+                                           "Public works ministry (SCOP / SOP)"),
+    "PEMEX": (["pemex"], RED, None, "PEMEX", None),
+    "CFE": (["cfe"], "#d9707f", None, "CFE", None),
+    "IMSS": (["imss"], "#c4c4c4", None, "IMSS", None),
 }
-SECRETARIAS = {"Public works (SCOP / SOP / SAHOP)", "Water resources (SRH / SARH)"}
+PEAK_LABEL_AT = {"Ferrocarriles Nacionales": (1927.0, 48.0),            # above its 1925–27 segment (55→44%)
+                 "Public works ministry (SCOP / SOP)": (1938.5, 44.3)}   # above its 1936 peak (43%)
+KEY_LINE = "Federal investment moved from the railways and the\npublic-works ministry to PEMEX and CFE."
 
 plt.rcParams.update({"font.family": "sans-serif", "font.size": 10, "axes.spines.top": False,
                      "axes.spines.right": False, "axes.edgecolor": "#777777", "axes.linewidth": 0.6,
@@ -72,43 +76,56 @@ def sexenio_lines(ax, ymax):
         ax.axvline(s, color=LIGHT, lw=0.6, zorder=0)
 
 
+def _overlaps(fig, texts) -> list[tuple[str, str]]:
+    fig.canvas.draw()
+    r = fig.canvas.get_renderer()
+    boxes = [(t.get_text().replace("\n", " ")[:30], t.get_window_extent(r)) for t in texts]
+    return [(a, b) for i, (a, ba) in enumerate(boxes) for b, bb in boxes[i + 1:] if ba.overlaps(bb)]
+
+
 def fig_shares(panel: pd.DataFrame, rates: pd.DataFrame):
     tot = totals(panel, "value_mn_new_pesos")
     fig, ax = plt.subplots(figsize=(10, 5.2))
-    ax.axvspan(GAP[0] - 0.5, GAP[1] + 0.5, color="#f4e3e3", zorder=0)
+    ax.axvspan(GAP[0] - 0.5, GAP[1] + 0.5, color="#f3e4e7", zorder=0)
     sexenio_lines(ax, 50)
-    for name, (keys, colour) in AGENCIES.items():
+    texts = []
+    end_pos = []                                          # (y, text, colour, bold)
+    for name, (keys, colour, last, end_label, peak_label) in AGENCIES.items():
         s = panel[panel.agency_key.isin(keys)].groupby("year").value_mn_new_pesos.sum()
-        s = (100 * s / tot.reindex(s.index)).dropna()
-        if name in SECRETARIAS:
-            s = s[s.index <= 1983]
-        s = s.sort_index()
-        lw = 1.6 if colour != GREY else 1.0
-        ax.plot(s.index, s.values, color=colour, lw=lw, zorder=3 if colour != GREY else 2)
-        x, y = s.index[-1], s.values[-1]
-        if name in SECRETARIAS:                 # label both ends of the long grey lines
-            short = "Public works" if name.startswith("Public") else "Water resources"
-            ax.annotate(short, (s.index[0], s.iloc[0]), xytext=(3, 4 if short == "Public works" else -9),
-                        textcoords="offset points", fontsize=8, color="#666666")
-            ax.annotate(name, (x, y), xytext=(4, 0), textcoords="offset points", fontsize=8.5, color=DARK, va="center")
-        elif name == "Ferrocarriles Nacionales":
-            ax.annotate(name, (1933, s.loc[1933] + 1.5), fontsize=8.5, color=DARK)
-        elif name == "IMSS":
-            ax.annotate(name, (x, y), xytext=(4, 0), textcoords="offset points", fontsize=8.5, color=DARK, va="center")
+        s = (100 * s / tot.reindex(s.index)).dropna().sort_index()
+        if last:
+            s = s[s.index <= last]
+        ax.plot(s.index, s.values, color=colour, lw=1.6, zorder=3 if colour == RED else 2)
+        if last:                                          # series that stops: label at its end
+            texts.append(ax.annotate(end_label, (s.index[-1], s.values[-1]), xytext=(4, 0),
+                                     textcoords="offset points", fontsize=8.5, color=colour, va="center"))
         else:
-            ax.annotate(name, (x, y), xytext=(4, 0), textcoords="offset points", fontsize=9, color=colour, va="center",
-                        fontweight="bold")
-    nat = rates[(rates.level == 0) & (rates.year.between(1965, 1969))].set_index("year").rate
-    ax.text(GAP[0] + 0.4, 45.5, "1964–69 imputed from\nauthorized budgets", fontsize=8, color=RED, va="top")
-    ax.text(GAP[0] + 0.4, 39.5, f"execution {nat.min():.2f}–{nat.max():.2f}", fontsize=8, color=RED, va="top")
+            end_pos.append([s.values[-1], end_label, colour, colour == RED, s.index[-1]])
+        if peak_label:                                    # also near the 1930s–40s peak
+            xp, yp = PEAK_LABEL_AT[name]
+            texts.append(ax.text(xp, yp, peak_label, fontsize=8.5, color=colour, va="bottom"))
+    # right-end labels, pushed apart so they never overlap (min gap 2.2 pp)
+    end_pos.sort(key=lambda t: t[0])
+    y_prev = -10
+    for item in end_pos:
+        item[0] = max(item[0], y_prev + 2.2)
+        y_prev = item[0]
+    for y, lab, colour, bold, x in end_pos:
+        texts.append(ax.annotate(lab, (x, y), xytext=(5, 0), textcoords="offset points", fontsize=9,
+                                 color=colour, va="center", fontweight="bold" if bold else "normal"))
+    texts.append(ax.text(2009, 47, KEY_LINE, fontsize=9.5, color=DARK, ha="right", va="top", linespacing=1.3))
+    texts.append(ax.text(GAP[0] + 0.3, 40.5, "1964–69 imputed from authorized budgets", fontsize=8, color=RED, va="top"))
     ax.set_xlim(1925, 2010)
-    ax.set_ylim(0, 48)
+    ax.set_ylim(0, 58)                                    # railways: 55% in 1925
     ax.set_ylabel("share of federal public investment, percent")
     ax.set_xlabel("")
     ax.set_xticks(range(1930, 2010, 10))
-    fig.text(0.01, 0.01, "Source: Secretaría de la Presidencia (1925–63, 1964–66, 1965–70), SPP (1970–80), INEGI "
-                         "(1980–2003). Secretarías shown to 1983 (sector view afterwards).", fontsize=7.5, color="#777777")
+    ax.set_yticks(range(0, 51, 10))
+    fig.text(0.01, 0.01, "Source: Secretaría de la Presidencia (1925–70), SPP (1970–80), INEGI (1980–2003); the "
+                         "public-works ministry (SAHOP, printed as SEDUE in 1980–82) is shown to 1982.", fontsize=7.5, color="#777777")
     fig.tight_layout(rect=(0, 0.03, 1, 1))
+    for a, b in _overlaps(fig, texts):
+        print(f"  WARNING: labels overlap: '{a}' / '{b}'")
     return fig
 
 

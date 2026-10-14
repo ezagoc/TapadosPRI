@@ -28,7 +28,8 @@ Blocks (column `block`): 'dependencias' (secretarías' own investment, 1925–19
 'ramo_sector' (1984–1998: investment by coordinating secretaría INCLUDING its sectorised
 parastatals — a different lens; never add it to 'paraestatal').
 
-`measure`: 'realized' everywhere except 1964–1969 ('imputed_from_authorized', see above)
+`measure`: 'realized' everywhere except 1964–1969 ('imputed_from_authorized'; 'imputed_outlier' for the
+rows replaced by the outlier rule of 12_*, printed figure in `value_printed_mn_new_pesos`)
 and the 1970 parastatal column (SPP II.9, note a: authorized). Measures: nominal millions
 of NEW pesos; real millions of 1960 pesos (1959+ only — the CPI deflator starts in 1959);
 share of that year's block total — the scale-free measure to use across the whole period;
@@ -173,7 +174,8 @@ def gap() -> pd.DataFrame:
                                 "b70_c12": "ipf_1965_1970", "b70_c13": "ipf_1965_1970", "b70_c14": "ipf_1965_1970"}).fillna(d.source)
     d["source_note"] = "imputed: authorized × " + d.rate_basis + d.calibration_factor.map(lambda f: f" × calibration {f:.3f}")
     return d[["source", "year", "block", "sector", "label", "value_mn_new_pesos", "authorized_mn_new_pesos",
-              "execution_rate_applied", "source_note", "agreement"]].rename(columns={"execution_rate_applied": "execution_rate"})
+              "execution_rate_applied", "source_note", "agreement", "measure", "value_printed_mn_new_pesos"]].rename(
+        columns={"execution_rate_applied": "execution_rate", "measure": "measure_row"})
 
 
 def late() -> pd.DataFrame:
@@ -215,7 +217,9 @@ def main():
         label=("label", "first"), lineage=("lineage", "first"), sector=("sector", "first"),
         source=("source", "first"), value_mn_new_pesos=("value_mn_new_pesos", "sum"),
         source_note=("source_note", "first"),
-        authorized_mn_new_pesos=("authorized_mn_new_pesos", lambda x: x.sum(min_count=1)))
+        authorized_mn_new_pesos=("authorized_mn_new_pesos", lambda x: x.sum(min_count=1)),
+        value_printed_mn_new_pesos=("value_printed_mn_new_pesos", lambda x: x.sum(min_count=1)),
+        measure_row=("measure_row", "first"))
     # execution rate at the agency level = imputed / authorized (NaN outside 1964–69)
     panel["execution_rate"] = panel.value_mn_new_pesos / panel.authorized_mn_new_pesos
     defl = pd.read_csv(PRICE_DEFLATOR_CSV).set_index("year")["deflator"]
@@ -231,9 +235,11 @@ def main():
     panel["measure"] = "realized"
     panel.loc[(panel.source == "spp_II9y") & (panel.year == 1970), "measure"] = "authorized"
     panel.loc[panel.year.between(1964, 1969), "measure"] = "imputed_from_authorized"
+    # rows replaced by the outlier rule of 12_* (printed figure kept in value_printed_mn_new_pesos)
+    panel.loc[panel.measure_row == "imputed_outlier", "measure"] = "imputed_outlier"
     panel = panel[["agency_key", "year", "block", "label", "lineage", "sector", "source", "value_mn_new_pesos",
                    "source_note", "real_mn_1960_pesos", "share_of_year_total", "measure",
-                   "authorized_mn_new_pesos", "execution_rate", "share_of_year_total_authorized"]]
+                   "authorized_mn_new_pesos", "execution_rate", "share_of_year_total_authorized", "value_printed_mn_new_pesos"]]
     panel = panel.sort_values(["year", "block", "value_mn_new_pesos"], ascending=[True, True, False])
     panel.to_csv(OUT, index=False)
 

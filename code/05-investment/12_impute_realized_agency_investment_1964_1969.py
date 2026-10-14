@@ -118,6 +118,32 @@ PURPOSE_MAP = [
 ]
 
 
+# ── outlier rule ─────────────────────────────────────────────────────────────
+# An agency-year is flagged when its share of the year's total lies outside [1/3, 3] times
+# the geometric mean of its shares in the nearest years before and after (scan over
+# 1963–1970, execution_rates_checks.csv 'discontinuity'); it is CORRECTED only when the
+# printed pages show that the figure differs in definition or scope from its neighbours.
+# Correction: the agency's mean share over its nearest comparable years × the year's
+# printed total; measure = 'imputed_outlier'; the printed figure is kept in
+# value_printed_mn_new_pesos. (year, label prefix) → (reference years, why)
+OUTLIER_CORRECTIONS = {
+    (1964, "instituto mexicano del seguro social"): ([1963, 1966], (
+        "Book A Cuadro 1 note 4: the 1964 IMSS figure (2 157.9, 12.4% of the year) is the investment REALIZED as "
+        "reported by the institute (oficio 36/77, 18 May 1965) for 'hospitales, centros asistenciales y unidades "
+        "de habitación' (Cuadro 3), not an authorization like every other row; it is 2.4× IMSS's 1963 realized "
+        "(891.6 = hospitals 712.1 + housing 179.5, 1925–63 book Cuadro 11) and 7.6× its 1965 programme (285.7, "
+        "medical units only). The hospitals purpose it dominates reads 2 528 in 1964 against 209–1 014 realized "
+        "in 1965–69. Replaced by IMSS's mean share in 1963 (6.45%, realized) and 1966 (2.97%)")),
+}
+# Printed labels that name another entity than the one the amount belongs to (evidence in 11_*).
+# Documented only — NOT applied, so that the printed labels (and the panel keys) stay as printed:
+LABEL_FIXES = {
+    ("b70_c10", "nacional financiera"): ("Ingenios en Fideicomiso de Nacional Financiera",
+                                         "Book B Cuadro 10 prints 'Nacional Financiera 108.8' where Cuadros 9/12–15 list the "
+                                         "sugar mills in trust separately; Cuadro 9's 1965–70 sum (422.0) closes only with it"),
+}
+
+
 def norm(s) -> str:
     s = strip_accents(str(s).lower())
     s = re.sub(r"(?<=[a-z])-\s+(?=[a-z])", "", s)
@@ -261,7 +287,8 @@ def impute(auth: pd.DataFrame, rates: pd.DataFrame, use_1964_pattern: bool) -> p
     for y in GAP_YEARS:
         g = auth[(auth.table == SOURCE_TABLE[y]) & (auth.row_type == "agency") & auth.value_printed.notna()]
         for _, r in g.iterrows():
-            ln = norm(r.label)
+            label = r.label
+            ln = norm(label)
             grp, item = purpose_of(ln)
             if y == 1964 and ln.startswith("instituto mexicano del seguro social"):
                 # Book A Cuadro 1 footnote 4: the IMSS figure is the investment REALIZED as reported
@@ -288,7 +315,7 @@ def impute(auth: pd.DataFrame, rates: pd.DataFrame, use_1964_pattern: bool) -> p
                 if pd.isna(rate):
                     rate, basis = nat_rate[y], f"national ({y})"
             out.append({"source": r.table, "book": r.book, "year": y, "block": r.block, "sector": r.sector,
-                        "label": re.sub(r"(?<=\w)-\s+(?=\w)", "", str(r.label)).strip(" ."), "label_printed": r.label,
+                        "label": re.sub(r"(?<=\w)-\s+(?=\w)", "", str(label)).strip(" ."), "label_printed": r.label,
                         "label_norm": ln, "purpose_group": grp, "purpose_item": item,
                         "authorized_mn_old_pesos": r.value_printed, "execution_rate": rate, "rate_basis": basis,
                         "concept_printed": r.concept, "agreement": r.agreement, "measure": "imputed_from_authorized"})
@@ -304,9 +331,85 @@ def impute(auth: pd.DataFrame, rates: pd.DataFrame, use_1964_pattern: bool) -> p
             d.loc[m, "calibration_factor"] = real_tot[y] / (d.loc[m, "authorized_mn_old_pesos"] * d.loc[m, "execution_rate"]).sum()
     d["execution_rate_applied"] = d.execution_rate * d.calibration_factor
     d["realized_imputed_mn_old_pesos"] = d.authorized_mn_old_pesos * d.execution_rate_applied
+    d["value_printed_mn_new_pesos"] = np.nan
+    d = apply_outlier_rule(d, rates)
     d["authorized_mn_new_pesos"] = d.authorized_mn_old_pesos / 1000
     d["value_mn_new_pesos"] = d.realized_imputed_mn_old_pesos / 1000
     return d
+
+
+def year_total(d: pd.DataFrame, rates: pd.DataFrame, y: int) -> float:
+    """The year's printed total: realized (Cuadro 16) for 1965–69, authorized for 1964."""
+    real_tot = rates[rates.level == 0].set_index("year").realized_mn_old_pesos
+    return float(real_tot[y]) if y in real_tot.index and pd.notna(real_tot[y]) else float(d[d.year == y].authorized_mn_old_pesos.sum())
+
+
+def share_in(d: pd.DataFrame, rates: pd.DataFrame, label_prefix: str, y: int) -> float:
+    """Share of the year's total held by the entity (label prefix) in year y: 1963 from the
+    1925–63 book (realized), 1964–69 from the imputed rows, 1970 from SPP (09_*)."""
+    if y == 1963:
+        e = pd.read_csv(INVESTMENT_DIR / "agency_investment_1925_1963_long.csv")
+        e = e[e.year == 1963]
+        tot = e[e.row_type == "total"].value_printed.iloc[0]
+        v = e[(e.row_type == "agency") & e.label_norm.str.startswith(label_prefix)].value_printed.sum()
+        return v / tot
+    if 1964 <= y <= 1969:
+        g = d[d.year == y]
+        return g[g.label_norm.str.startswith(label_prefix)].realized_imputed_mn_old_pesos.sum() / year_total(d, rates, y)
+    if y == 1970:
+        s = pd.read_csv(INEGI)
+        s = s[s.table.isin(["spp_II7y", "spp_II9y"]) & (s.year == 1970) & (s.level == 2)]
+        return s[s.label_norm.str.startswith(label_prefix)].value_printed.sum() / s.value_printed.sum()
+    raise ValueError(y)
+
+
+def apply_outlier_rule(d: pd.DataFrame, rates: pd.DataFrame) -> pd.DataFrame:
+    d = d.copy()
+    for (y, pref), (ref_years, why) in OUTLIER_CORRECTIONS.items():
+        m = (d.year == y) & d.label_norm.str.startswith(pref)
+        assert m.sum() == 1, (y, pref, int(m.sum()))
+        shares = {r: share_in(d, rates, pref, r) for r in ref_years}
+        new = float(np.mean(list(shares.values()))) * year_total(d, rates, y)
+        i = d.index[m][0]
+        d.loc[i, "value_printed_mn_new_pesos"] = d.at[i, "authorized_mn_old_pesos"] / 1000
+        d.loc[i, "realized_imputed_mn_old_pesos"] = new
+        d.loc[i, "execution_rate_applied"] = new / d.at[i, "authorized_mn_old_pesos"]
+        d.loc[i, "measure"] = "imputed_outlier"
+        d.loc[i, "rate_basis"] = ("outlier rule: mean share in " + ", ".join(f"{r} ({v * 100:.2f}%)" for r, v in shares.items())
+                                  + f" × printed total {year_total(d, rates, y):,.1f}; printed {d.at[i, 'authorized_mn_old_pesos']:,.1f}. " + why)
+    return d
+
+
+def discontinuities(d: pd.DataFrame, rates: pd.DataFrame) -> pd.DataFrame:
+    """Share of the year's total per entity (label prefix = first four words) 1963–1970,
+    ratio to the geometric mean of the nearest years before and after; flag outside [1/3, 3]."""
+    rows = []
+    e = pd.read_csv(INVESTMENT_DIR / "agency_investment_1925_1963_long.csv"); e = e[(e.year == 1963) & (e.row_type == "agency")]
+    tot63 = pd.read_csv(INVESTMENT_DIR / "agency_investment_1925_1963_long.csv").query("year == 1963 and row_type == 'total'").value_printed.iloc[0]
+    for _, r in e.iterrows():
+        rows.append({"year": 1963, "key": " ".join(r.label_norm.split()[:4]), "share": 100 * r.value_printed / tot63})
+    for y in GAP_YEARS:
+        g = d[d.year == y]; t = year_total(d, rates, y)
+        for _, r in g.iterrows():
+            rows.append({"year": y, "key": " ".join(r.label_norm.split()[:4]), "share": 100 * r.realized_imputed_mn_old_pesos / t})
+    s = pd.read_csv(INEGI); s = s[s.table.isin(["spp_II7y", "spp_II9y"]) & (s.year == 1970) & (s.level == 2)]
+    for _, r in s.iterrows():
+        rows.append({"year": 1970, "key": " ".join(norm(r.label).split()[:4]), "share": 100 * r.value_printed / s.value_printed.sum()})
+    w = pd.DataFrame(rows).groupby(["key", "year"]).share.sum().unstack()
+    out = []
+    for k, r in w.iterrows():
+        yrs = [y for y in r.index if pd.notna(r[y]) and r[y] > 0]
+        for t in range(1964, 1970):
+            if t not in yrs:
+                continue
+            b = [y for y in yrs if y < t]; a = [y for y in yrs if y > t]
+            if not b or not a:
+                continue
+            gm = np.sqrt(r[max(b)] * r[min(a)]); ratio = r[t] / gm
+            out.append({"key": k, "year": t, "share_pct": round(r[t], 3), "ref_before": max(b), "share_before": round(r[max(b)], 3),
+                        "ref_after": min(a), "share_after": round(r[min(a)], 3), "ratio_to_geomean": round(ratio, 2),
+                        "flag": ratio < 1 / 3 or ratio > 3})
+    return pd.DataFrame(out).sort_values(["flag", "share_pct"], ascending=[False, False])
 
 
 def mapping_coverage(imp: pd.DataFrame, rates: pd.DataFrame) -> pd.DataFrame:
@@ -343,11 +446,12 @@ def main():
     use_pattern = summ.loc["C_relative_pattern_other_years", "mix_error_pp"] < summ.loc["A_authorized_mix", "mix_error_pp"]
     imp = impute(auth, rates, use_1964_pattern=bool(use_pattern))
     cov = mapping_coverage(imp, rates)
+    disc = discontinuities(imp, rates)
 
     rates.to_csv(OUT_RATES, index=False)
     checks = pd.concat([stab.assign(check="stability"), lo.assign(check="leave_one_year_out"),
-                        c70.assign(check="agency_level_1970"), cov.assign(check="mapping_coverage")],
-                       ignore_index=True, sort=False)
+                        c70.assign(check="agency_level_1970"), cov.assign(check="mapping_coverage"),
+                        disc.assign(check="discontinuity")], ignore_index=True, sort=False)
     checks.to_csv(OUT_CHECKS, index=False)
     imp.to_csv(OUT_IMPUTED, index=False)
 
@@ -377,6 +481,12 @@ def main():
         "share_national": g[g.rate_basis.str.startswith("national")].authorized_mn_old_pesos.sum() / g.authorized_mn_old_pesos.sum()}))
     print("\nimputed rows by year:")
     print(cov.round(3).to_string())
+    print("\noutlier corrections applied:")
+    print(imp[imp.measure == "imputed_outlier"][["year", "label", "authorized_mn_old_pesos", "realized_imputed_mn_old_pesos", "execution_rate_applied"]].round(1).to_string(index=False))
+    fl = disc[disc.flag & (disc[["share_pct", "share_before", "share_after"]].max(axis=1) >= 0.5)]
+    print(f"\ndiscontinuities (ratio outside [1/3, 3]) among entities with a share >= 0.5%: {len(fl)} "
+          f"(all sizes: {int(disc.flag.sum())}; see execution_rates_checks.csv)")
+    print(fl.to_string(index=False))
     unm = imp[imp.purpose_group.isna()].groupby("label_norm").authorized_mn_old_pesos.sum().sort_values(ascending=False)
     print(f"\nagencies on the national rate ({len(unm)}), largest:")
     print(unm.head(15).round(1).to_string())
