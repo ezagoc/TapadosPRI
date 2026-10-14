@@ -81,3 +81,71 @@ panel(es[es.outcome == "extensive"], "main", "main_lo", "main_hi", "main_lo90", 
 panel(es[es.outcome == "intensive"], "main", "main_lo", "main_hi", "main_lo90", "main_hi90", "Rank gap among those in office, rungs\n(designee's vs. losers' followers)", "intensive")
 panel(ag[ag.version == "pre_nearest"], "est", "lo", "hi", "lo90", "hi90", "Change in log investment share\n(designee-linked vs. loser-linked agencies)", "agencies")
 posts_pesos()
+
+def story():
+    """R2: the story figure. Left: the rank gap over two sexenios (expiry.R, full sample). Right: the nine ATT_e."""
+    import re
+    ex = pd.read_csv(MAIN / "expiry" / "expiry_event_study.csv")
+    d = ex[(ex["sample"] == "full") & (ex.outcome == "combined") & (ex.t >= -6) & (ex.t <= 12)].sort_values("t")
+    txt = (MAIN / "main_result.txt").read_text()
+    comp = [(int(y), float(a)) for y, a in re.findall(r"(19\d\d): n_D =\s*\d+\s+ATT_e ([+-]\d\.\d+)", txt)]
+    att = float(re.search(r"ATT, doubly robust DiD, person-weighted\s+([+-]\d\.\d+)", txt).group(1))
+    fig, (ax, bx) = plt.subplots(1, 2, figsize=(11.5, 4.6), dpi=200, gridspec_kw={"width_ratios": [2.1, 1]})
+    fig.patch.set_facecolor("white")
+    # left
+    ax.set_facecolor("white")
+    for sp in ["top", "right"]: ax.spines[sp].set_visible(False)
+    for sp in ["left", "bottom"]: ax.spines[sp].set_color(Z4)
+    ax.tick_params(colors=Z6, labelsize=10)
+    ax.axhline(0, color=Z5, lw=0.8)
+    ax.axvspan(6.5, 12.5, color="#f4f4f5", zorder=0)
+    for x, lab, y in [(-1.5, "destape", 0.98), (0.5, "new president", 0.98), (4.5, "next destape", 0.92), (6.5, "next president", 0.98)]:
+        ax.axvline(x, color=Z5, lw=0.8, ls=(0, (3, 3)))
+        ax.text(x + 0.1, y, lab, transform=ax.get_xaxis_transform(), va="top", ha="left", fontsize=8.5, color=Z6)
+    ax.fill_between(d.t, d.lo, d.hi, color=ACC, alpha=0.10, lw=0)
+    ax.plot(d.t, d.est, "-o", color=ACC, ms=5, lw=2.0, zorder=3)
+    ax.set_xticks(range(-6, 13, 2)); ax.set_xticklabels([f"{t:+d}" if t else "0" for t in range(-6, 13, 2)])
+    ax.set_xlabel("Years relative to the election", fontsize=11, color=INK)
+    ax.set_ylabel("Rank gap, rungs\n(designee's vs. losers' followers)", fontsize=11, color=INK)
+    ax.text(2.5, 1.22, "+1.0 rung for the whole sexenio", color=ACC, fontsize=9.5, ha="center")
+    ax.text(9.5, -0.42, "+0.4 under the next president", color=Z6, fontsize=9.5, ha="center")
+    ax.text(-3.6, 0.55, "nothing before", color=Z6, fontsize=9.5, ha="center")
+    # right
+    bx.set_facecolor("white")
+    for sp in ["top", "right"]: bx.spines[sp].set_visible(False)
+    for sp in ["left", "bottom"]: bx.spines[sp].set_color(Z4)
+    bx.tick_params(colors=Z6, labelsize=9)
+    bx.axhline(0, color=Z5, lw=0.8)
+    ys = [y for y, _ in comp]; vs = [a for _, a in comp]
+    bx.scatter(ys, vs, color=Z5, s=36, zorder=3)
+    bx.axhline(att, color=ACC, lw=1.6)
+    bx.text(1939, att + 0.012, f"pooled +{att*100:.0f} pp (+48%)", color=ACC, fontsize=9.5, va="bottom")
+    bx.text(1939, 0.40, "nine of nine positive", color=Z6, fontsize=9.5)
+    bx.set_xticks(ys); bx.set_xticklabels([str(y)[2:] for y in ys], fontsize=8.5)
+    bx.set_xlabel("Succession", fontsize=11, color=INK)
+    bx.set_ylabel("Promotion gap by succession\n(share promoted within four years)", fontsize=10, color=INK)
+    bx.set_ylim(-0.05, 0.45)
+    fig.text(0.0, -0.04, "Left: doubly robust DiD of the rank gap relative to year e-2 (0 if no post), 95% Conley-Taber band with the Ferman-Pinto correction. "
+             "Right: the effect of the patron's designation on promotion, by succession; line = pooled estimate (exact p = 0.008).",
+             fontsize=8.5, color=Z5, va="top")
+    fig.tight_layout(w_pad=2.0)
+    save(fig, "story")
+
+
+def margins():
+    """R3: extensive and intensive margins side by side."""
+    fig, axes = plt.subplots(1, 2, figsize=(11.5, 4.6), dpi=200); fig.patch.set_facecolor("white")
+    for ax, (key, ylabel, note) in zip(axes, [
+        ("extensive", "Gap in the share holding a post\n(designee's vs. losers' followers)", "post-destape average +0.06 [−0.07, +0.17]"),
+        ("intensive", "Rank gap among those in office, rungs\n(designee's vs. losers' followers)", "post-destape average +0.54 [+0.24, +0.88]"),
+    ]):
+        style(ax); draw(ax, es[es.outcome == key], "main", "main_lo", "main_hi", "main_lo90", "main_hi90")
+        ax.set_ylabel(ylabel, fontsize=10.5, color=INK)
+        ax.text(0.02, 0.04, note, transform=ax.transAxes, fontsize=9.5, color=ACC, ha="left", va="bottom")
+    fig.text(0.0, -0.04, NOTE, fontsize=8.5, color=Z5, va="top")
+    fig.tight_layout(w_pad=2.5)
+    save(fig, "margins")
+
+
+story()
+margins()
