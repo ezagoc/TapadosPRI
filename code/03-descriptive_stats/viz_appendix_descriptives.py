@@ -1,0 +1,273 @@
+"""Two appendix descriptives for the slide deck: the PRI's presidential vote 1929-2000 and land granted by president 1916-1992.
+
+pri_vote
+    The PRI's (PNR / PRM / PRI) national share of the valid vote in every presidential election 1929-2000, the range of
+    that share across states, and the dissident candidates' shares. Data: the elections block's state panel 1934-1994
+    (research/main_R/output_v2/elections/elections_votes_by_state.csv, built by elections.R from electoralData/),
+    extended here with 1929 (Ramirez Rancano 1977, Colegio Electoral count) and 2000 (IFE via Magar 2012) from the
+    same raw folder, with the panel's conventions: share of the valid vote = votes for the candidate / sum of the
+    party lines; the PRI candidate includes the PPS and PARM lines where those parties ran him (1970-82).
+land_by_president
+    Hectares and beneficiaries of land grants (dotacion, ampliacion, restitucion, NCPE, bienes comunales) by signing
+    president from the agrarian-actions ledger (land_reform/agrarian_actions_1916_1992.csv: Sanderson 1916 - 3 Nov
+    1976, Diario Oficial 4 Nov 1976 - 1992), checked against INEGI EHM 2014 tables 9.50-9.51 by presidential term.
+
+Writes OUTPUT_DIR/slides/<name>.{pdf,png} and the plotted numbers as <name>_data.csv, and copies the pdf/png to
+research/slides/pri_succession_slides/figures/. Data are read only.
+"""
+import shutil
+import sys
+from pathlib import Path
+
+import matplotlib
+import pandas as pd
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt  # noqa: E402
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "code"))
+from config import DATA_DIR, OUTPUT_DIR  # noqa: E402
+
+ACC, INK, Z4, Z5, Z6, Z7 = "#940034", "#111111", "#a1a1aa", "#71717a", "#52525b", "#f4f4f5"
+OUT = OUTPUT_DIR / "slides"
+FIG = ROOT / "research" / "slides" / "pri_succession_slides" / "figures"
+ELEC = DATA_DIR / "electoralData" / "raw"
+PANEL = ROOT / "research" / "main_R" / "output_v2" / "elections" / "elections_votes_by_state.csv"
+LAND = DATA_DIR / "land_reform"
+SIZE = (10, 5.2)
+
+
+def style(ax):
+    ax.set_facecolor("white")
+    for s in ["top", "right"]:
+        ax.spines[s].set_visible(False)
+    for s in ["left", "bottom"]:
+        ax.spines[s].set_color(Z4)
+    ax.tick_params(colors=Z6, labelsize=9)
+    ax.grid(False)
+
+
+def save(fig, name):
+    OUT.mkdir(parents=True, exist_ok=True)
+    FIG.mkdir(parents=True, exist_ok=True)
+    for ext in ["pdf", "png"]:
+        p = OUT / f"{name}.{ext}"
+        fig.savefig(p, facecolor="white", dpi=200)
+        shutil.copy2(p, FIG / p.name)
+    plt.close(fig)
+    print("saved", OUT / f"{name}.pdf", "and", FIG / f"{name}.pdf")
+
+
+def note(fig, lines, size=7.5, dy=0.028):
+    """Source note at the bottom-left, one text per line; the font shrinks (to 6.5 pt) until each line fits the figure width."""
+    r = fig.canvas.get_renderer()
+    for i, line in enumerate(reversed(lines)):
+        t = fig.text(0.0, 0.008 + i * dy, line, fontsize=size, color=Z5, va="bottom", ha="left")
+        while t.get_window_extent(renderer=r).width > 0.995 * fig.bbox.width and t.get_fontsize() > 6.5:
+            t.set_fontsize(t.get_fontsize() - 0.25)
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# Figure 1: the PRI's presidential vote, 1929-2000
+# ----------------------------------------------------------------------------------------------------------------------
+DISSIDENTS = {  # election -> (label, column of the state panel that holds his votes)
+    1929: ("Vasconcelos", "rebel"), 1940: ("Almazán", "rebel"), 1946: ("Padilla", "rebel"), 1952: ("Henríquez", "rebel"),
+    1988: ("Cárdenas", "rebel"), 2000: ("Fox (PAN)", "pan"),
+}
+
+
+def votes_by_state():
+    """State panel 1929-2000: election, edon, state, pri, rebel, pan, other, valid (the panel's columns)."""
+    W = pd.read_csv(PANEL)
+    assert sorted(W.election.unique()) == [1934, 1940, 1946, 1952, 1958, 1964, 1970, 1976, 1982, 1988, 1994]
+    states = W.drop_duplicates("edon").set_index("edon")["state"]
+    # 1929: Ramirez Rancano's table 29 (Colegio Electoral count). The state cells add up to the printed national row.
+    rr = pd.read_csv(ELEC / "ramirez_rancano" / "ramirez_rancano_presidential_by_state_1917_1970.csv")
+    r = rr[(rr.election_year == 1929) & (rr.edon > 0) & (rr.candidate != "TOTAL (printed row total)")]
+    r = r.pivot_table(index="edon", columns="candidate", values="votes", aggfunc="sum")
+    nat = rr[(rr.election_year == 1929) & (rr.edon == 0)].set_index("candidate")["votes"]
+    for c in ["Pascual Ortiz Rubio", "Jose Vasconcelos", "Triana"]:
+        assert r[c].sum() == nat[c], (c, r[c].sum(), nat[c])
+    d29 = pd.DataFrame({"election": 1929, "edon": r.index, "state": states.reindex(r.index).values,
+                        "source": "Ramirez Rancano 1977 (Colegio Electoral count)", "pri": r["Pascual Ortiz Rubio"].values,
+                        "rebel": r["Jose Vasconcelos"].values, "pan": 0, "other": r["Triana"].values})
+    # 2000: IFE computo by state via Magar. Fox = Alianza por el Cambio (PAN + PVEM lines); Cardenas = Alianza por Mexico
+    # (PRD + PT-Convergencia-PSN-PAS lines) goes to `other`; `efec` = valid votes = the sum of the party lines.
+    mg = pd.read_csv(ELEC / "magar_elecRetrns" / "data" / "pred1964-on.csv")
+    m = mg[mg.yr == 2000].set_index("edon")
+    long = pd.concat([pd.DataFrame({"edon": m.index.values, "label": m[f"l{i:02d}"].values, "votes": m[f"v{i:02d}"].values}) for i in range(1, 13)]).dropna()
+    grp = long.label.map(lambda l: "pri" if l == "pri" else "pan" if l in {"pan", "pvem", "pan-pvem"} else "other")
+    v = long.assign(grp=grp).pivot_table(index="edon", columns="grp", values="votes", aggfunc="sum")
+    assert (v.sum(axis=1) == m.efec).all()
+    assert v.pan.sum() == 15_989_636 and v.pri.sum() == 13_579_718, (v.pan.sum(), v.pri.sum())  # IFE's official totals
+    d00 = pd.DataFrame({"election": 2000, "edon": v.index, "state": states.reindex(v.index).values, "source": "IFE via Magar",
+                        "pri": v.pri.values, "rebel": 0, "pan": v.pan.values, "other": v.other.values})
+    W = pd.concat([d29, W[d29.columns], d00], ignore_index=True)
+    W["valid"] = W[["pri", "rebel", "pan", "other"]].sum(axis=1)
+    for c in ["pri", "rebel", "pan"]:
+        W[f"{c}_share"] = W[c] / W.valid
+    return W
+
+
+def pri_vote():
+    W = votes_by_state()
+    nat = W.groupby("election")[["pri", "rebel", "pan", "other", "valid"]].sum()
+    nat["pri_share"] = nat.pri / nat.valid
+    rng = W.groupby("election").apply(lambda d: pd.Series({
+        "n_states": len(d), "pri_share_min": d.pri_share.min(), "state_min": d.loc[d.pri_share.idxmin(), "state"],
+        "pri_share_max": d.pri_share.max(), "state_max": d.loc[d.pri_share.idxmax(), "state"],
+        "source": d.source.iloc[0]}), include_groups=False)
+    nat = nat.join(rng)
+    nat["dissident"] = [DISSIDENTS.get(e, ("", ""))[0] for e in nat.index]
+    nat["dissident_share"] = [nat.loc[e, DISSIDENTS[e][1]] / nat.loc[e, "valid"] if e in DISSIDENTS else float("nan") for e in nat.index]
+    nat.to_csv(OUT / "pri_vote_data.csv")
+    print(nat[["pri_share", "pri_share_min", "state_min", "pri_share_max", "state_max", "dissident", "dissident_share", "n_states"]].round(3).to_string())
+
+    yrs = nat.index.values
+    fig, ax = plt.subplots(figsize=SIZE, dpi=200)
+    fig.patch.set_facecolor("white")
+    style(ax)
+    # the nine destape successions, 1940-88
+    ax.axvspan(1937, 1991, color=Z7, zorder=0, lw=0)
+    ax.text(1964, 1.0, "the nine destape successions, 1940–88", transform=ax.get_xaxis_transform(), ha="center", va="bottom", fontsize=9, color=Z6)
+    # range across states (grey), the PRI's national share (dark red)
+    ax.vlines(yrs, 100 * nat.pri_share_min, 100 * nat.pri_share_max, color=Z4, lw=2.4, zorder=2)
+    ax.plot(yrs, 100 * nat.pri_share, "-o", color=ACC, lw=1.8, ms=5.5, zorder=4)
+    # dissidents (grey hollow points with the name and share)
+    for e, (lab, col) in DISSIDENTS.items():
+        sh = 100 * nat.loc[e, "dissident_share"]
+        ax.plot(e, sh, "o", mfc="white", mec=Z5, ms=5, zorder=3)
+        ax.text(e + 1.0, sh, f"{lab} {sh:.0f}%", ha="left", va="center", fontsize=8.5, color=Z6)
+    # direct labels and the key numbers
+    ax.text(1927, 101.5, "PRI (PNR, PRM) candidate", ha="left", va="bottom", fontsize=8.5, color=ACC)
+    ax.text(1952 - 1.0, 100 * nat.loc[1952, "pri_share_min"], "lowest and highest state", ha="right", va="center", fontsize=8.5, color=Z5)
+    ax.text(1976, 100 * nat.loc[1976, "pri_share"] + 2.2, "100%: no registered opponent", ha="center", va="bottom", fontsize=8.5, color=ACC)
+    ax.text(1988 + 1.0, 100 * nat.loc[1988, "pri_share"] - 0.5, f"{100 * nat.loc[1988, 'pri_share']:.0f}%", ha="left", va="top", fontsize=8.5, color=ACC)
+    ax.text(2000 + 1.0, 100 * nat.loc[2000, "pri_share"] - 0.5, f"{100 * nat.loc[2000, 'pri_share']:.0f}%\nthe PRI loses", ha="left", va="top", fontsize=8.5, color=ACC)
+    ax.set_xticks(yrs)
+    ax.set_xticklabels([str(y) for y in yrs], fontsize=9)
+    ax.set_xlim(1925.5, 2010)
+    ax.set_ylim(0, 108)
+    ax.set_yticks([0, 25, 50, 75, 100])
+    ax.set_ylabel("Share of the valid vote, %", fontsize=10.5, color=INK)
+    ax.set_xlabel("Presidential election", fontsize=10.5, color=INK)
+    note(fig, ["Source: official counts by state. Colegio Electoral 1929–70 (Ramírez Rancaño 1977); Comisión Federal Electoral 1976–88 "
+               "(Banamex via Magar 2012; CEDE 1988); IFE 1994–2000 (Magar 2012).",
+               "PRI candidate incl. the allied PPS–PARM lines, 1970–82. Grey bars: the PRI's share in the lowest and the highest state."])
+    fig.subplots_adjust(left=0.075, right=0.99, top=0.93, bottom=0.19)
+    save(fig, "pri_vote")
+    return nat
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# Figure 2: land granted by president, 1916-1992
+# ----------------------------------------------------------------------------------------------------------------------
+PRESIDENTS = [  # name in the ledger, label, term, INEGI term (None: 1915-34 is one INEGI period for seven presidents)
+    ("Venustiano Carranza", "Carranza", "1916–20", None),
+    ("Adolfo de la Huerta", "de la Huerta", "1920", None),
+    ("Alvaro Obregon", "Obregón", "1920–24", None),
+    ("Plutarco Elias Calles", "Calles", "1924–28", None),
+    ("Emilio Portes Gil", "Portes Gil", "1928–30", None),
+    ("Pascual Ortiz Rubio", "Ortiz Rubio", "1930–32", None),
+    ("Abelardo L. Rodriguez", "Rodríguez", "1932–34", None),
+    ("Lazaro Cardenas", "Cárdenas", "1934–40", "1935-1940"),
+    ("Manuel Avila Camacho", "Ávila Camacho", "1940–46", "1941-1946"),
+    ("Miguel Aleman Valdes", "Alemán", "1946–52", "1947-1952"),
+    ("Adolfo Ruiz Cortines", "Ruiz Cortines", "1952–58", "1953-1958"),
+    ("Adolfo Lopez Mateos", "López Mateos", "1958–64", "1959-1964"),
+    ("Gustavo Diaz Ordaz", "Díaz Ordaz", "1964–70", "1965-1970"),
+    ("Luis Echeverria Alvarez", "Echeverría", "1970–76", "1971-1976"),
+    ("Jose Lopez Portillo", "López Portillo", "1976–82", "1977-1982"),
+    ("Miguel de la Madrid Hurtado", "de la Madrid", "1982–88", "1983-1988"),
+    ("Carlos Salinas de Gortari", "Salinas", "1988–92", "1989-1992"),
+]
+
+
+def land_by_president():
+    cols = ["action_id", "president_signing", "president_source", "is_land_grant", "hectares_total", "ha_agostadero", "beneficiaries"]
+    L = pd.read_csv(LAND / "agrarian_actions_1916_1992.csv", usecols=cols, low_memory=False)
+    G = L[L.is_land_grant == 1]
+    names = [p[0] for p in PRESIDENTS]
+    assert set(G.president_signing.dropna()) == set(names), set(G.president_signing.dropna()) ^ set(names)
+    g = G.groupby("president_signing").agg(hectares=("hectares_total", "sum"), ha_agostadero=("ha_agostadero", "sum"),
+                                           beneficiaries=("beneficiaries", "sum"), resolutions=("action_id", "size"),
+                                           hectares_missing=("hectares_total", lambda s: int(s.isna().sum()))).reindex(names)
+    g.insert(0, "president", [p[1] for p in PRESIDENTS])
+    g.insert(1, "term", [p[2] for p in PRESIDENTS])
+    g["ehm_term"] = [p[3] for p in PRESIDENTS]
+    una = G[G.president_signing.isna()]
+    print(f"unattributed land-grant rows left out of the bars: {len(una)} rows, {una.hectares_total.sum() / 1e6:.2f} M ha, "
+          f"{una.beneficiaries.sum() / 1e3:.0f} thousand beneficiaries ({una.president_source.fillna('no president').value_counts().to_dict()})")
+    tot_ha, tot_ben = G.hectares_total.sum(), G.beneficiaries.sum()
+    g["share_hectares"] = g.hectares / tot_ha
+    g["share_beneficiaries"] = g.beneficiaries / tot_ben
+    # INEGI EHM 2014 (national rows), by presidential term
+    e = pd.read_csv(LAND / "ehm2014_land_by_state_term.csv")
+    e = e[(e.state_code == 0) & (e.table.isin([9.50, 9.51])) & (e.measure.isin(["hectares", "beneficiaries"]))]
+    e = e.pivot_table(index="ehm_term", columns="measure", values="value")
+    g["inegi_hectares"] = g.ehm_term.map(e.hectares)
+    g["inegi_beneficiaries"] = g.ehm_term.map(e.beneficiaries)
+    g["ratio_hectares"] = g.hectares / g.inegi_hectares
+    g["ratio_beneficiaries"] = g.beneficiaries / g.inegi_beneficiaries
+    g.to_csv(OUT / "land_by_president_data.csv", index=False)
+    early = g[g.ehm_term.isna()]
+    print(f"1916-34 (seven presidents): ledger {early.hectares.sum() / 1e6:.2f} M ha vs INEGI 1915-34 {e.loc['1915-1934', 'hectares'] / 1e6:.2f}; "
+          f"beneficiaries {early.beneficiaries.sum() / 1e3:.0f} vs {e.loc['1915-1934', 'beneficiaries'] / 1e3:.0f} thousand")
+    print(f"1916-92 total: ledger {tot_ha / 1e6:.1f} M ha, {tot_ben / 1e6:.2f} M beneficiaries; INEGI 1915-Feb 1992 "
+          f"{(e.hectares.sum() - e.loc['1900-1992', 'hectares'] - e.loc['1900-1914', 'hectares']) / 1e6:.1f} M ha, "
+          f"{(e.beneficiaries.sum() - e.loc['1900-1992', 'beneficiaries'] - e.loc['1900-1914', 'beneficiaries']) / 1e6:.2f} M")
+    show = g[["president", "term", "hectares", "inegi_hectares", "ratio_hectares", "beneficiaries", "inegi_beneficiaries", "ratio_beneficiaries", "share_hectares", "share_beneficiaries", "hectares_missing"]].copy()
+    for c in ["hectares", "inegi_hectares"]:
+        show[c] = show[c] / 1e6
+    for c in ["beneficiaries", "inegi_beneficiaries"]:
+        show[c] = show[c] / 1e3
+    print(show.round(2).to_string(index=False))
+
+    n = len(g)
+    y = list(range(n))[::-1]  # Carranza at the top
+    fig, (ax, bx) = plt.subplots(1, 2, figsize=SIZE, dpi=200, sharey=True, gridspec_kw={"width_ratios": [1.55, 1]})
+    fig.patch.set_facecolor("white")
+    ic, io = g.index.get_loc("Lazaro Cardenas"), g.index.get_loc("Gustavo Diaz Ordaz")
+    colors = [ACC if i == ic else Z4 for i in range(n)]
+    for a, col, scale, fmt, xlab, icol, inside in [
+            (ax, "hectares", 1e6, "{:.1f}", "Hectares granted, millions", "inegi_hectares", f"{100 * g.share_hectares.iloc[ic]:.0f}% of all land granted 1916–92"),
+            (bx, "beneficiaries", 1e3, "{:.0f}", "Beneficiaries, thousands", "inegi_beneficiaries", f"{100 * g.share_beneficiaries.iloc[ic]:.0f}% of all beneficiaries 1916–92")]:
+        style(a)
+        vals = g[col].values / scale
+        iv = g[icol].values / scale
+        xmax = vals.max() * 1.4
+        a.barh(y, vals, height=0.66, color=colors, zorder=2)
+        for i, (yi, v, t) in enumerate(zip(y, vals, iv)):
+            lab = fmt.format(v)
+            if i == io and col == "hectares":
+                lab += f" ({100 * g.ha_agostadero.iloc[io] / g.hectares.iloc[io]:.0f}% pasture)"
+            x0 = max(v, 0 if pd.isna(t) else t)  # past the INEGI tick when it lies beyond the bar
+            a.text(x0 + 0.012 * xmax, yi, lab, va="center", ha="left", fontsize=8, color=ACC if i == ic else Z6, zorder=4)
+        ok = ~pd.isna(iv)
+        a.vlines(iv[ok], [yi - 0.42 for yi, m in zip(y, ok) if m], [yi + 0.42 for yi, m in zip(y, ok) if m], color=INK, lw=1.1, zorder=3)
+        a.text(0.012 * xmax, y[ic], inside, va="center", ha="left", fontsize=8.5, color="white", zorder=4)
+        a.set_xlabel(xlab, fontsize=10.5, color=INK)
+        a.spines["left"].set_visible(False)
+        a.tick_params(axis="y", length=0)
+        a.set_xlim(0, xmax)
+        a.set_xticks([t for t in a.get_xticks() if t <= 0.95 * xmax])
+    # inline key for the INEGI ticks (on the Calles row, where the panel is empty)
+    ik = g.index.get_loc("Plutarco Elias Calles")
+    ax.vlines(12, y[ik] - 0.3, y[ik] + 0.3, color=INK, lw=1.1)
+    ax.text(12.5, y[ik], "INEGI, Estadísticas Históricas 2014, by presidential term", va="center", ha="left", fontsize=8, color=Z6)
+    ax.set_yticks(y)
+    ax.set_yticklabels([f"{p}  {t}" for p, t in zip(g.president, g.term)], fontsize=8.5, color=INK)
+    ax.set_ylim(-0.7, n - 0.3)
+    note(fig, ["Source: ledger of land grants (dotación, ampliación, restitución, new centres, communal land) by signing president — Sanderson (1984) to 3 Nov 1976; "
+               "Diario Oficial resolutions, 4 Nov 1976 to 1992.",
+               "Ticks: INEGI, by term, to Feb 1992. The ledger under-covers INEGI in 1977–82 (0.84 of its hectares) and 1983–88 (0.77); "
+               "0.2 M ha signed by agrarian bodies or unattributed are left out."])
+    fig.subplots_adjust(left=0.185, right=0.99, top=0.98, bottom=0.19, wspace=0.08)
+    save(fig, "land_by_president")
+    return g
+
+
+if __name__ == "__main__":
+    pri_vote()
+    land_by_president()
