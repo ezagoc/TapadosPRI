@@ -112,16 +112,18 @@ def fig_shares(panel: pd.DataFrame, rates: pd.DataFrame):
     for y, lab, colour, bold, x in end_pos:
         texts.append(ax.annotate(lab, (x, y), xytext=(5, 0), textcoords="offset points", fontsize=9,
                                  color=colour, va="center", fontweight="bold" if bold else "normal"))
-    texts.append(ax.text(GAP[0] + 0.3, 40.5, "1964–69, shaded: imputed as authorized budget × execution rate", fontsize=8, color=RED, va="top"))
+    texts.append(ax.text(GAP[0] + 0.3, 40.5, "1964–69 imputed", fontsize=8, color=RED, va="top"))
     ax.set_xlim(1925, 2010)
     ax.set_ylim(0, 58)                                    # railways: 55% in 1925
     ax.set_ylabel("share of federal public investment, percent")
     ax.set_xlabel("")
     ax.set_xticks(range(1930, 2010, 10))
     ax.set_yticks(range(0, 51, 10))
-    fig.text(0.01, 0.01, "Source: Secretaría de la Presidencia (1925–70), SPP (1970–80), INEGI (1980–2003); real 1960 pesos.",
-             fontsize=8, color=GREY, ha="left", va="bottom")
-    fig.tight_layout(rect=(0, 0.03, 1, 1))
+    fig.text(0.01, 0.01, "Source: Secretaría de la Presidencia (1925–70), SPP (1970–80), INEGI (1980–2003); real 1960 pesos. 1964–69: no realized figures by agency were\n"
+                         "published; each agency's authorized budget is multiplied by the execution rate of its purpose (realized over authorized, by purpose, from the same\n"
+                         "books: 0.80 in 1965, 0.75 in 1966, 0.95–0.96 in 1967–69) and scaled to the printed realized total.",
+             fontsize=7.5, color=GREY, ha="left", va="bottom", linespacing=1.3)
+    fig.tight_layout(rect=(0, 0.07, 1, 1))
     for a, b in _overlaps(fig, texts):
         print(f"  WARNING: labels overlap: '{a}' / '{b}'")
     return fig
