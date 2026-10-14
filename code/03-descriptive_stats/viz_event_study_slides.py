@@ -65,8 +65,7 @@ def posts_pesos():
     fig, axes = plt.subplots(1, 2, figsize=(11.5, 4.6), dpi=200); fig.patch.set_facecolor("white")
     for ax, (key, ylabel, key_number) in zip(axes, [
         ("extensive", "Gap in the share heading an investment agency\n(designee's vs. losers' followers)", "post-destape gap: +9 pp\n95% CI [+6, +13]"),
-        ("intensive", "Gap in the share of federal investment commanded\n(pp of the federal total)", "post-destape gap: −0.1 pp
-95% CI [−0.4, +0.3]"),
+        ("intensive", "Gap in the share of federal investment commanded\n(pp of the federal total)", "post-destape gap: −0.1 pp\n95% CI [−0.4, +0.3]"),
     ]):
         style(ax); draw(ax, bu[bu.outcome == key], "est", "lo", "hi")
         ax.set_ylabel(ylabel, fontsize=10.5, color=INK)
