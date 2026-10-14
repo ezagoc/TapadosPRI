@@ -178,9 +178,9 @@ def pri_vote():
     fig, ax = plt.subplots(figsize=SIZE, dpi=200)
     fig.patch.set_facecolor("white")
     style(ax)
-    # the nine destape successions, 1940-88
+    # the nine successions studied, 1940-88
     ax.axvspan(1937, 1991, color=Z7, zorder=0, lw=0)
-    ax.text(1964, 1.0, "the nine destape successions, 1940–88", transform=ax.get_xaxis_transform(), ha="center", va="bottom", fontsize=9, color=Z6)
+    ax.text(1964, 1.0, "1940–1988 successions", transform=ax.get_xaxis_transform(), ha="center", va="bottom", fontsize=9, color=Z6)
     # every state (small translucent dots, jittered), the PRI's national share (dark red line)
     jit = np.random.default_rng(0).uniform(-0.9, 0.9, len(W))
     ax.plot(W.election + jit, 100 * W.pri_share, "o", color=ACC, alpha=0.25, ms=2.8, mec="none", zorder=1.5)
@@ -194,12 +194,12 @@ def pri_vote():
     # key numbers
     ax.text(1976, 100 * nat.loc[1976, "pri_share"] + 2.2, "100%: no registered opponent", ha="center", va="bottom", fontsize=8.5, color=ACC)
     ax.text(1988 + 1.3, 100 * nat.loc[1988, "pri_share"] - 0.5, f"{100 * nat.loc[1988, 'pri_share']:.0f}%", ha="left", va="top", fontsize=8.5, color=ACC)
-    ax.text(2000 + 1.3, 100 * nat.loc[2000, "pri_share"] - 0.5, f"{100 * nat.loc[2000, 'pri_share']:.0f}%, the PRI loses", ha="left", va="top", fontsize=8.5, color=ACC)
+    ax.text(2000 + 1.3, 100 * nat.loc[2000, "pri_share"] - 0.5, f"{100 * nat.loc[2000, 'pri_share']:.0f}%", ha="left", va="top", fontsize=8.5, color=ACC)
     # key (upper right, the empty corner after 1991)
     handles = [Line2D([0], [0], color=ACC, marker="o", ms=5.5, lw=1.8),
                Line2D([0], [0], color=ACC, marker="o", ms=2.8, lw=0, alpha=0.25, mec="none"),
                Line2D([0], [0], color="white", marker="o", ms=5.5, lw=0, mec=Z6, mew=1.1)]
-    leg = ax.legend(handles, ["PRI (PNR, PRM) candidate,\nnational share", "one state", "leading opposition candidate"],
+    leg = ax.legend(handles, ["PRI (PNR, PRM) candidate,\nnational share", "state shares", "leading opposition candidate"],
                     loc="upper right", bbox_to_anchor=(1.0, 0.985), frameon=False, fontsize=7.5, handlelength=1.6, labelspacing=0.5, borderaxespad=0)
     for t in leg.get_texts():
         t.set_color(Z6)
