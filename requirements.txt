@@ -7,3 +7,5 @@ pandas
 pdfplumber
 python-dotenv
 spacy
+scipy
+threadpoolctl

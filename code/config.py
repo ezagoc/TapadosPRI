@@ -448,3 +448,19 @@ def openai_api_key() -> str | None:
 RAN_SHAPEFILES_DIR = Path(os.environ.get("RAN_SHAPEFILES_DIR", str(Path.home() / "Dropbox" / "Ejido shapefiles"))).expanduser()
 LAND_REFORM_DIR    = DATA_DIR / "land_reform"
 EJIDOS_GPKG        = LAND_REFORM_DIR / "ejidos_procede_2006.gpkg"
+
+# Agrarian-action ledger (06-land/02-04): Diario Oficial (SIDOF API) harvest + Sanderson + PROCEDE crosswalk.
+WEB_DISCOVERY_DIR          = DATA_DIR / "_web_discovery_2026-10-13"
+DOF_SIDOF_INDEX_DIR        = WEB_DISCOVERY_DIR / "dof_sidof_daily_index_pilot"     # raw daily index, sidof_notes_<years>.jsonl
+DOF_SIDOF_FULLTEXT_DIR     = WEB_DISCOVERY_DIR / "dof_sidof_agrarian_fulltext"     # raw full text of agrarian notes, sidof_fulltext_<year>.jsonl[.gz]
+SANDERSON_DTA              = (WEB_DISCOVERY_DIR / "garfias_2018_apsr_state_capacity" / "extracted"
+                              / "APSR_StateCapacityReplication" / "data" / "SandersonData.dta")
+RAN_CATALOGUE_CSV          = (WEB_DISCOVERY_DIR / "ran_catalogo_nucleos_agrarios_datamx_mirror"
+                              / "ran_phina_catalogo_nucleos_agrarios_datamx_dump.csv")
+EHM2014_ZIP                = WEB_DISCOVERY_DIR / "inegi_estadisticas_historicas_2014" / "EHM2014.zip"
+EJIDOS_ATTRIBUTES_CSV      = LAND_REFORM_DIR / "ejidos_procede_2006_attributes.csv"
+DOF_AGRARIAN_INDEX_CSV     = LAND_REFORM_DIR / "dof_agrarian_index_1916_1992.csv"     # every agrarian DOF title (index only)
+DOF_AGRARIAN_NOTES_CSV     = LAND_REFORM_DIR / "dof_agrarian_notes_1975_1992.csv"     # parsed full texts
+AGRARIAN_LEDGER_CSV        = LAND_REFORM_DIR / "agrarian_actions_1916_1992.csv"
+EJIDO_ACTION_CROSSWALK_CSV = LAND_REFORM_DIR / "ejido_action_crosswalk.csv"
+LAND_REFORM_VALIDATION_CSV = LAND_REFORM_DIR / "land_reform_validation.csv"
