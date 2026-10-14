@@ -288,40 +288,30 @@ def land_by_president():
     fig.patch.set_facecolor("white")
     ic, io = g.index.get_loc("Lazaro Cardenas"), g.index.get_loc("Gustavo Diaz Ordaz")
     colors = [ACC if i == ic else Z4 for i in range(n)]
-    for a, col, scale, fmt, xlab, icol, inside in [
+    for a, col, scale, fmt, xlab, icol, inside in [  # icol: INEGI column, kept in the csv only
             (ax, "hectares", 1e6, "{:.1f}", "Hectares granted, millions", "inegi_hectares", f"{100 * g.share_hectares.iloc[ic]:.0f}% of all land granted 1916–92"),
             (bx, "beneficiaries", 1e3, "{:.0f}", "Beneficiaries, thousands", "inegi_beneficiaries", f"{100 * g.share_beneficiaries.iloc[ic]:.0f}% of all beneficiaries 1916–92")]:
         style(a)
         vals = g[col].values / scale
-        iv = g[icol].values / scale
         xmax = vals.max() * 1.4
         a.barh(y, vals, height=0.66, color=colors, zorder=2)
-        for i, (yi, v, t) in enumerate(zip(y, vals, iv)):
+        for i, (yi, v) in enumerate(zip(y, vals)):
             lab = fmt.format(v)
             if i == io and col == "hectares":
                 lab += f" ({100 * g.ha_agostadero.iloc[io] / g.hectares.iloc[io]:.0f}% pasture)"
-            x0 = max(v, 0 if pd.isna(t) else t)  # past the INEGI tick when it lies beyond the bar
-            a.text(x0 + 0.012 * xmax, yi, lab, va="center", ha="left", fontsize=8, color=ACC if i == ic else Z6, zorder=4)
-        ok = ~pd.isna(iv)
-        a.vlines(iv[ok], [yi - 0.42 for yi, m in zip(y, ok) if m], [yi + 0.42 for yi, m in zip(y, ok) if m], color=INK, lw=1.1, zorder=3)
+            a.text(v + 0.012 * xmax, yi, lab, va="center", ha="left", fontsize=8, color=ACC if i == ic else Z6, zorder=4)
         a.text(0.012 * xmax, y[ic], inside, va="center", ha="left", fontsize=8.5, color="white", zorder=4)
         a.set_xlabel(xlab, fontsize=10.5, color=INK)
         a.spines["left"].set_visible(False)
         a.tick_params(axis="y", length=0)
         a.set_xlim(0, xmax)
         a.set_xticks([t for t in a.get_xticks() if t <= 0.95 * xmax])
-    # inline key for the INEGI ticks (on the Calles row, where the panel is empty)
-    ik = g.index.get_loc("Plutarco Elias Calles")
-    ax.vlines(12, y[ik] - 0.3, y[ik] + 0.3, color=INK, lw=1.1)
-    ax.text(12.5, y[ik], "INEGI, Estadísticas Históricas 2014, by presidential term", va="center", ha="left", fontsize=8, color=Z6)
     ax.set_yticks(y)
     ax.set_yticklabels([f"{p}  {t}" for p, t in zip(g.president, g.term)], fontsize=8.5, color=INK)
     ax.set_ylim(-0.7, n - 0.3)
-    note(fig, ["Source: ledger of land grants (dotación, ampliación, restitución, new centres, communal land) by signing president — Sanderson (1984) to 3 Nov 1976; "
-               "Diario Oficial resolutions, 4 Nov 1976 to 1992.",
-               "Ticks: INEGI, by term, to Feb 1992. The ledger under-covers INEGI in 1977–82 (0.84 of its hectares) and 1983–88 (0.77); "
-               "0.2 M ha signed by agrarian bodies or unattributed are left out."])
-    fig.subplots_adjust(left=0.185, right=0.99, top=0.98, bottom=0.19, wspace=0.08)
+    # one measure only: the ledger, by signing president (INEGI's term totals are checked above, in the console and the csv, not drawn)
+    note(fig, ["Source: Sanderson (1984), 1916–76; Diario Oficial resolutions, 1976–92; by signing president. 1977–92 incomplete: some resolutions lack published text."])
+    fig.subplots_adjust(left=0.185, right=0.99, top=0.98, bottom=0.155, wspace=0.08)
     save(fig, "land_by_president")
     return g
 
