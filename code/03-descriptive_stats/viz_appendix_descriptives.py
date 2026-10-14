@@ -25,6 +25,7 @@ import pandas as pd
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
+from matplotlib.lines import Line2D  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "code"))
@@ -80,26 +81,13 @@ def note(fig, lines, size=7.5, dy=0.028):
 # ----------------------------------------------------------------------------------------------------------------------
 # Figure 1: the PRI's presidential vote, 1929-2000
 # ----------------------------------------------------------------------------------------------------------------------
-DOT = "#c6c6ca"
-# Every opposition candidate with at least 5% of the valid vote: election, column of the state panel, surname, kind and
-# where the label goes (hand-placed around the state clouds of 1988-2000). `rebel` = ex-PRI dissident, `pan` = PAN.
-OPPOSITION = [
-    (1929, "rebel", "Vasconcelos", "dissident", "above_left"),
-    (1940, "rebel", "Almazán", "dissident", "above"),
-    (1946, "rebel", "Padilla", "dissident", "above"),
-    (1952, "rebel", "Henríquez", "dissident", "above"),
-    (1952, "pan", "González Luna", "pan", "below"),
-    (1958, "pan", "Álvarez", "pan", "above"),
-    (1964, "pan", "González Torres", "pan", "right"),
-    (1970, "pan", "González Morfín", "pan", "above"),
-    (1982, "pan", "Madero", "pan", "below"),
-    (1988, "rebel", "Cárdenas", "dissident", "left"),
-    (1988, "pan", "Clouthier", "pan", "above"),
-    (1994, "pan", "Fernández\nde Cevallos", "pan", "above"),
-    (1994, "rebel", "Cárdenas", "dissident", "below"),
-    (2000, "pan", "Fox", "pan", "right"),
-    (2000, "rebel", "Cárdenas", "dissident", "right"),
-]
+# The leading opposition candidate of each election (the most votes after the PRI; none in 1976): surname and the column of the
+# state panel that holds his votes (`rebel` = ex-PRI dissident, `pan` = PAN; 1934 Villarreal is pooled in `other`, read from
+# Ramirez Rancano). Only five are labelled on the plot.
+LEADING = {1929: ("Vasconcelos", "rebel"), 1934: ("Villarreal", "rr"), 1940: ("Almazán", "rebel"), 1946: ("Padilla", "rebel"),
+           1952: ("Henríquez", "rebel"), 1958: ("Álvarez", "pan"), 1964: ("González Torres", "pan"), 1970: ("González Morfín", "pan"),
+           1982: ("Madero", "pan"), 1988: ("Cárdenas", "rebel"), 1994: ("Fernández de Cevallos", "pan"), 2000: ("Fox", "pan")}
+LABELLED = {1940, 1946, 1952, 1988, 2000}
 
 
 def votes_by_state():
@@ -137,7 +125,7 @@ def votes_by_state():
 
 
 def minor_candidates_check(shown):
-    """No candidate outside OPPOSITION reaches 5% of the valid vote: candidate rows of Ramirez Rancano 1929-52 (1958-70 print
+    """No candidate outside the panel's dissident and PAN columns reaches 5% of the valid vote: candidate rows of Ramirez Rancano 1929-52 (1958-70 print
     PRI and PAN only; the other 1970 lines ran Echeverria) and the party lines of Magar/IFE 1976-2000."""
     rr = pd.read_csv(ELEC / "ramirez_rancano" / "ramirez_rancano_presidential_by_state_1917_1970.csv")
     out = {}
@@ -169,14 +157,20 @@ def pri_vote():
         "pri_share_max": d.pri_share.max(), "state_max": d.loc[d.pri_share.idxmax(), "state"],
         "source": d.source.iloc[0]}), include_groups=False)
     nat = nat.join(rng)
-    opp = pd.DataFrame([{"election": e, "candidate": n.replace("\n", " "), "kind": k, "share": nat.loc[e, f"{c}_share"]} for e, c, n, k, _ in OPPOSITION])
-    assert (opp.share >= 0.05).all(), opp
-    print("opposition candidates shown (share of the valid vote):")
-    print(opp.assign(share=lambda d: (100 * d.share).round(1)).to_string(index=False))
+    # leading opposition candidate per election
+    rr = pd.read_csv(ELEC / "ramirez_rancano" / "ramirez_rancano_presidential_by_state_1917_1970.csv")
+    r34 = rr[(rr.election_year == 1934) & (rr.edon > 0) & (rr.candidate != "TOTAL (printed row total)")].groupby("candidate").votes.sum()
+    nat["opposition"] = [LEADING.get(e, ("", ""))[0] for e in nat.index]
+    nat["opposition_share"] = [r34["Antonio Villarreal"] / r34.sum() if c == "rr" else nat.loc[e, f"{c}_share"] if c else float("nan")
+                               for e, (_, c) in ((e, LEADING.get(e, ("", ""))) for e in nat.index)]
+    for e, (_, c) in LEADING.items():  # the leading candidate is the larger of the dissident and PAN columns
+        assert c == "rr" or nat.loc[e, f"{c}_share"] == max(nat.loc[e, "rebel_share"], nat.loc[e, "pan_share"]), e
+    assert pd.isna(nat.loc[1976, "opposition_share"])
+    print("leading opposition candidate per election (share of the valid vote):")
+    print(nat[["opposition", "opposition_share"]].assign(opposition_share=lambda d: (100 * d.opposition_share).round(1)).to_string())
     print("minor lines check:")
     minor_candidates_check(nat)
     nat.to_csv(OUT / "pri_vote_data.csv")
-    opp.to_csv(OUT / "pri_vote_opposition.csv", index=False)
     W.to_csv(OUT / "pri_vote_states.csv", index=False)
     print(nat[["pri_share", "pri_share_min", "state_min", "pri_share_max", "state_max", "n_states"]].round(3).to_string())
 
@@ -187,45 +181,38 @@ def pri_vote():
     # the nine destape successions, 1940-88
     ax.axvspan(1937, 1991, color=Z7, zorder=0, lw=0)
     ax.text(1964, 1.0, "the nine destape successions, 1940–88", transform=ax.get_xaxis_transform(), ha="center", va="bottom", fontsize=9, color=Z6)
-    # every state (light dots, jittered), the PRI's national share (dark red)
+    # every state (small translucent dots, jittered), the PRI's national share (dark red line)
     jit = np.random.default_rng(0).uniform(-0.9, 0.9, len(W))
-    ax.plot(W.election + jit, 100 * W.pri_share, "o", color=DOT, ms=2.8, mec="none", zorder=1.5)
+    ax.plot(W.election + jit, 100 * W.pri_share, "o", color=ACC, alpha=0.25, ms=2.8, mec="none", zorder=1.5)
     ax.plot(yrs, 100 * nat.pri_share, "-o", color=ACC, lw=1.8, ms=5.5, zorder=4)
-    ax.text(1930.3, 100 * nat.loc[1929, "pri_share_min"], "each dot: one state", ha="left", va="center", fontsize=8.5, color=Z5)
-    # opposition candidates: hollow markers, dark grey for the ex-PRI dissidents, light grey for the PAN
-    for e, col, name, kind, side in OPPOSITION:
-        sh = 100 * nat.loc[e, f"{col}_share"]
-        mec, tc = (Z6, Z6) if kind == "dissident" else (Z4, Z5)
-        ax.plot(e, sh, "o", mfc="white", mec=mec, mew=1.1, ms=5.5, zorder=3)
-        lab = f"{name} {sh:.0f}%"
-        if side == "right":
-            ax.text(e + 1.3, sh, lab, ha="left", va="center", fontsize=8.5, color=tc)
-        elif side == "left":
-            ax.text(e - 1.3, sh, lab, ha="right", va="center", fontsize=8.5, color=tc)
-        elif side == "above":
-            ax.text(e, sh + 1.4, lab, ha="center", va="bottom", fontsize=8.5, color=tc, linespacing=1.05)
-        elif side == "above_left":
-            ax.text(e - 2.7, sh + 1.4, lab, ha="left", va="bottom", fontsize=8.5, color=tc)
-        elif side == "below":
-            ax.text(e, sh - 1.4, lab, ha="center", va="top", fontsize=8.5, color=tc)
-    # direct labels and the key numbers
-    ax.text(1927, 101.5, "PRI (PNR, PRM) candidate", ha="left", va="bottom", fontsize=8.5, color=ACC)
+    # the leading opposition candidate (hollow marker), five of them labelled
+    opp = nat.dropna(subset=["opposition_share"])
+    ax.plot(opp.index, 100 * opp.opposition_share, "o", mfc="white", mec=Z6, mew=1.1, ms=5.5, ls="none", zorder=3)
+    for e in LABELLED:
+        sh = 100 * nat.loc[e, "opposition_share"]
+        ax.text(e + 1.3, sh, f"{nat.loc[e, 'opposition']} {sh:.0f}%", ha="left", va="center", fontsize=8.5, color=Z6)
+    # key numbers
     ax.text(1976, 100 * nat.loc[1976, "pri_share"] + 2.2, "100%: no registered opponent", ha="center", va="bottom", fontsize=8.5, color=ACC)
     ax.text(1988 + 1.3, 100 * nat.loc[1988, "pri_share"] - 0.5, f"{100 * nat.loc[1988, 'pri_share']:.0f}%", ha="left", va="top", fontsize=8.5, color=ACC)
-    ax.text(2000 + 1.3, 100 * nat.loc[2000, "pri_share"] - 0.5, f"{100 * nat.loc[2000, 'pri_share']:.0f}%\nthe PRI loses", ha="left", va="top", fontsize=8.5, color=ACC)
+    ax.text(2000 + 1.3, 100 * nat.loc[2000, "pri_share"] - 0.5, f"{100 * nat.loc[2000, 'pri_share']:.0f}%, the PRI loses", ha="left", va="top", fontsize=8.5, color=ACC)
+    # key (upper right, the empty corner after 1991)
+    handles = [Line2D([0], [0], color=ACC, marker="o", ms=5.5, lw=1.8),
+               Line2D([0], [0], color=ACC, marker="o", ms=2.8, lw=0, alpha=0.25, mec="none"),
+               Line2D([0], [0], color="white", marker="o", ms=5.5, lw=0, mec=Z6, mew=1.1)]
+    leg = ax.legend(handles, ["PRI (PNR, PRM) candidate,\nnational share", "one state", "leading opposition candidate"],
+                    loc="upper right", bbox_to_anchor=(1.0, 0.985), frameon=False, fontsize=7.5, handlelength=1.6, labelspacing=0.5, borderaxespad=0)
+    for t in leg.get_texts():
+        t.set_color(Z6)
     ax.set_xticks(yrs)
     ax.set_xticklabels([str(y) for y in yrs], fontsize=9)
-    ax.set_xlim(1925.5, 2010)
-    ax.set_ylim(0, 108)
+    ax.set_xlim(1925.5, 2013)
+    ax.set_ylim(-3, 108)
     ax.set_yticks([0, 25, 50, 75, 100])
     ax.set_ylabel("Share of the valid vote, %", fontsize=10.5, color=INK)
     ax.set_xlabel("Presidential election", fontsize=10.5, color=INK)
     one = ("Source: official counts by state — Colegio Electoral 1929–70 (Ramírez Rancaño 1977); CFE 1976–88 (Magar 2012; CEDE 1988); "
            "IFE 1994–2000 (Magar 2012). PRI incl. the allied PPS–PARM lines, 1970–82.")
-    if not note(fig, [one]):
-        note(fig, ["Source: official counts by state — Colegio Electoral 1929–70 (Ramírez Rancaño 1977); Comisión Federal Electoral 1976–88 "
-                   "(Banamex via Magar 2012; CEDE 1988); IFE 1994–2000 (Magar 2012).",
-                   "PRI candidate incl. the allied PPS–PARM lines, 1970–82."])
+    assert note(fig, [one])
     fig.subplots_adjust(left=0.075, right=0.99, top=0.93, bottom=0.17)
     save(fig, "pri_vote")
     return nat
