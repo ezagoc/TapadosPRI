@@ -87,7 +87,6 @@ def fig_shares(panel: pd.DataFrame, rates: pd.DataFrame):
     tot = totals(panel, "value_mn_new_pesos")
     fig, ax = plt.subplots(figsize=(10, 5.2))
     ax.axvspan(GAP[0] - 0.5, GAP[1] + 0.5, color="#f3e4e7", zorder=0)
-    sexenio_lines(ax, 50)
     texts = []
     end_pos = []                                          # (y, text, colour, bold)
     for name, (keys, colour, last, end_label, peak_label) in AGENCIES.items():
@@ -113,15 +112,15 @@ def fig_shares(panel: pd.DataFrame, rates: pd.DataFrame):
     for y, lab, colour, bold, x in end_pos:
         texts.append(ax.annotate(lab, (x, y), xytext=(5, 0), textcoords="offset points", fontsize=9,
                                  color=colour, va="center", fontweight="bold" if bold else "normal"))
-    texts.append(ax.text(GAP[0] + 0.3, 40.5, "1964–69 imputed from authorized budgets", fontsize=8, color=RED, va="top"))
+    texts.append(ax.text(GAP[0] + 0.3, 40.5, "1964–69, shaded: imputed as authorized budget × execution rate", fontsize=8, color=RED, va="top"))
     ax.set_xlim(1925, 2010)
     ax.set_ylim(0, 58)                                    # railways: 55% in 1925
     ax.set_ylabel("share of federal public investment, percent")
     ax.set_xlabel("")
     ax.set_xticks(range(1930, 2010, 10))
     ax.set_yticks(range(0, 51, 10))
-    fig.text(0.01, 0.01, "Source: Secretaría de la Presidencia (1925–70), SPP (1970–80), INEGI (1980–2003); the "
-                         "public-works ministry (SAHOP, printed as SEDUE in 1980–82) is shown to 1982.", fontsize=7.5, color="#777777")
+    fig.text(0.01, 0.01, "Source: Secretaría de la Presidencia (1925–70), SPP (1970–80), INEGI (1980–2003); real 1960 pesos.",
+             fontsize=8, color=GREY, ha="left", va="bottom")
     fig.tight_layout(rect=(0, 0.03, 1, 1))
     for a, b in _overlaps(fig, texts):
         print(f"  WARNING: labels overlap: '{a}' / '{b}'")
