@@ -4,7 +4,7 @@
 Two figures from the agency panel (10_*), for the appendix slide on the 1964–69 imputation:
 
   investment_series        shares of federal public investment commanded by the largest
-                           agencies, 1925–2003 (PEMEX, CFE, Ferrocarriles Nacionales,
+                           agencies, 1925–2003 (PEMEX, CFE, National Railways,
                            SCOP/SOP/SAHOP, Recursos Hidráulicos/SARH, IMSS), the imputed
                            1964–69 stretch shaded. Share of the year's total: dependencias +
                            paraestatal; 1984–97 the sector view (ramo_sector), where the
@@ -46,7 +46,7 @@ SEXENIO_STARTS = [1934, 1940, 1946, 1952, 1958, 1964, 1970, 1976, 1982, 1988, 19
 GAP = (1964, 1969)
 # label → (keys, colour, last year shown, end label, peak label)
 AGENCIES = {
-    "Ferrocarriles Nacionales": (["fnm"], "#4a4a4a", None, "Ferrocarriles", "Ferrocarriles Nacionales"),
+    "National Railways": (["fnm"], "#4a4a4a", None, "National Railways", "National Railways"),
     # SCOP 1925–58 → SOP 1959–76 → SAHOP 1977–82 (INEGI's 1986 edition prints 1980–82 under the later name SEDUE)
     "Public works ministry (SCOP / SOP)": (["scop", "sop", "sahop", "sedue"], "#8c8c8c", 1982, "Public works ministry",
                                            "Public works ministry (SCOP / SOP)"),
@@ -54,7 +54,7 @@ AGENCIES = {
     "CFE": (["cfe"], "#d9707f", None, "CFE", None),
     "IMSS": (["imss"], "#c4c4c4", None, "IMSS", None),
 }
-PEAK_LABEL_AT = {"Ferrocarriles Nacionales": (1927.0, 48.0),            # above its 1925–27 segment (55→44%)
+PEAK_LABEL_AT = {"National Railways": (1927.0, 48.0),            # above its 1925–27 segment (55→44%)
                  "Public works ministry (SCOP / SOP)": (1938.5, 44.3)}   # above its 1936 peak (43%)
 KEY_LINE = "Federal investment moved from the railways and the\npublic-works ministry to PEMEX and CFE."
 
@@ -113,7 +113,6 @@ def fig_shares(panel: pd.DataFrame, rates: pd.DataFrame):
     for y, lab, colour, bold, x in end_pos:
         texts.append(ax.annotate(lab, (x, y), xytext=(5, 0), textcoords="offset points", fontsize=9,
                                  color=colour, va="center", fontweight="bold" if bold else "normal"))
-    texts.append(ax.text(2009, 47, KEY_LINE, fontsize=9.5, color=DARK, ha="right", va="top", linespacing=1.3))
     texts.append(ax.text(GAP[0] + 0.3, 40.5, "1964–69 imputed from authorized budgets", fontsize=8, color=RED, va="top"))
     ax.set_xlim(1925, 2010)
     ax.set_ylim(0, 58)                                    # railways: 55% in 1925
