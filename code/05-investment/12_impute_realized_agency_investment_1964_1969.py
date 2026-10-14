@@ -264,7 +264,13 @@ def impute(auth: pd.DataFrame, rates: pd.DataFrame, use_1964_pattern: bool) -> p
             ln = norm(r.label)
             grp, item = purpose_of(ln)
             if y == 1964 and ln.startswith("instituto mexicano del seguro social"):
-                rate, basis = 1.0, "printed as realized (Book A Cuadro 1, footnote 4)"
+                # Book A Cuadro 1 footnote 4: the IMSS figure is the investment REALIZED as reported
+                # by the institute (oficio 36/77, 18 May 1965): 'hospitales, centros asistenciales y
+                # unidades de habitación' (Cuadro 3), financed by domestic credit (Book B annex IV).
+                # It is 2.4× IMSS's 1963 realized and 7.6× its 1965 authorization; INEGI's 1964
+                # 'hospitales' total (2 528) carries it. Kept as printed, flagged.
+                rate, basis = 1.0, ("printed as realized, IMSS-reported (Book A Cuadro 1 note 4: hospitals, care "
+                                    "centres and housing units; 2.4x its 1963 realized) — use with caution")
             elif y == 1964:
                 k = (2, grp, item) if item else (1, grp, None)
                 rr = rel.get(k, np.nan) if (grp and use_1964_pattern) else np.nan
