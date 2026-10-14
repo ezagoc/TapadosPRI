@@ -243,12 +243,12 @@ PRESIDENTS = [  # name in the ledger, label, term, INEGI term (None: 1915-34 is 
 
 
 def land_by_president():
-    cols = ["action_id", "president_signing", "president_source", "is_land_grant", "hectares_total", "ha_agostadero", "beneficiaries"]
+    cols = ["action_id", "president_signing", "president_source", "is_land_grant", "hectares_total", "ha_riego", "ha_temporal", "ha_agostadero", "beneficiaries"]
     L = pd.read_csv(LAND / "agrarian_actions_1916_1992.csv", usecols=cols, low_memory=False)
     G = L[L.is_land_grant == 1]
     names = [p[0] for p in PRESIDENTS]
     assert set(G.president_signing.dropna()) == set(names), set(G.president_signing.dropna()) ^ set(names)
-    g = G.groupby("president_signing").agg(hectares=("hectares_total", "sum"), ha_agostadero=("ha_agostadero", "sum"),
+    g = G.groupby("president_signing").agg(hectares=("hectares_total", "sum"), ha_riego=("ha_riego", "sum"), ha_temporal=("ha_temporal", "sum"), ha_agostadero=("ha_agostadero", "sum"),
                                            beneficiaries=("beneficiaries", "sum"), resolutions=("action_id", "size"),
                                            hectares_missing=("hectares_total", lambda s: int(s.isna().sum()))).reindex(names)
     g.insert(0, "president", [p[1] for p in PRESIDENTS])
@@ -298,7 +298,7 @@ def land_by_president():
         for i, (yi, v) in enumerate(zip(y, vals)):
             lab = fmt.format(v)
             if i == io and col == "hectares":
-                lab += f" ({100 * g.ha_agostadero.iloc[io] / g.hectares.iloc[io]:.0f}% pasture)"
+                lab += f" ({100 * (g.ha_riego.iloc[io] + g.ha_temporal.iloc[io]) / g.hectares.iloc[io]:.0f}% cropland)"  # irrigated + rain-fed
             a.text(v + 0.012 * xmax, yi, lab, va="center", ha="left", fontsize=8, color=ACC if i == ic else Z6, zorder=4)
         a.text(0.012 * xmax, y[ic], inside, va="center", ha="left", fontsize=8.5, color="white", zorder=4)
         a.set_xlabel(xlab, fontsize=10.5, color=INK)
