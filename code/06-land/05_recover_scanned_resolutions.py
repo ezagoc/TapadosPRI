@@ -10,8 +10,8 @@ script's table into the ledger (04_build_agrarian_ledger.py reads config.DOF_SCA
 Modes (each resumable; re-run in this order)
   harvest  For each edition (codDiario), sequentially and politely (>= 1 s between requests, 5 tries with back-off,
            done-list): fetch each target's note record (.../notas/nota/<codNota>: codSeccion, pagina, codEdicion),
-           download the whole edition (.../documentos/pdf/<codDiario>) to the LOCAL work folder
-           config.DOF_SCANNED_LOCAL_DIR (never Dropbox; sha256 while downloading), write its whole text layer
+           download the whole edition (.../documentos/pdf/<codDiario>) to the LOCAL folder
+           config.DOF_SCANNED_PDF_TMP_DIR (never Dropbox; sha256 while downloading; deleted after), write its whole text layer
            (pdftotext -layout, one JSON line per PDF page) to config.DOF_SCANNED_EDITIONS_DIR and one MANIFEST row (in
            place, under the file lock that 06_reparse_dof_texts.py also takes), keep a column-ordered text of every page
            (word boxes split at the column gutters, band by band: Paper Capture lines run across both columns) and
@@ -47,8 +47,11 @@ Modes (each resumable; re-run in this order)
 Downloads are untrusted data: they are only read with poppler (pdftotext, pdfinfo, pdfseparate, pdftoppm) and
 tesseract and parsed as text; run this script with `python -I` from outside the download folder.
 
+Work files kept for rebuilding (single pages, column texts of both OCRs, renders, sheets, hand check, parsed.csv)
+live in config.DOF_SCANNED_LOCAL_DIR = data/_web_discovery_2026-10-13/dof_scanned_work/ (moved there from the local
+temp folder on 15 Oct 2026; `build` needs only parsed.csv and the image reads, so it runs from Dropbox alone).
+
 Run:
-  export DOF_SCANNED_LOCAL_DIR=/private/tmp/claude-501/dof_editions
   python -I code/06-land/05_recover_scanned_resolutions.py harvest
   python -I code/06-land/05_recover_scanned_resolutions.py parse
   python -I code/06-land/05_recover_scanned_resolutions.py ocr
@@ -86,7 +89,7 @@ CODE_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(CODE_DIR))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import (  # noqa: E402
-    AGRARIAN_LEDGER_CSV, DOF_SIDOF_INDEX_DIR, DOF_SCANNED_EDITIONS_DIR, DOF_SCANNED_TEXTS_DIR, DOF_SCANNED_LOCAL_DIR,
+    AGRARIAN_LEDGER_CSV, DOF_SIDOF_INDEX_DIR, DOF_SCANNED_EDITIONS_DIR, DOF_SCANNED_TEXTS_DIR, DOF_SCANNED_LOCAL_DIR, DOF_SCANNED_PDF_TMP_DIR,
     DOF_SCANNED_RESOLUTIONS_CSV, DOF_SCANNED_VALIDATION_CSV, openai_api_key,
 )
 from dof_agrarian_utils import iter_jsonl, index_files, norm  # noqa: E402
@@ -108,7 +111,7 @@ MIN_INTERVAL = 1.5          # seconds between the start of two requests (>= 1 s 
 
 LOCAL = DOF_SCANNED_LOCAL_DIR
 NOTES_DIR = LOCAL / "notes"           # cached note records (JSON)
-PDF_DIR = LOCAL / "pdf"               # edition PDFs while being read (deleted after)
+PDF_DIR = DOF_SCANNED_PDF_TMP_DIR    # whole-edition PDFs while being read (local, outside Dropbox; deleted after)
 COLTEXT_DIR = LOCAL / "coltext"       # column-ordered page text + line boxes per edition
 PAGES_DIR = LOCAL / "pages"           # single-page PDFs around each target
 RENDER_DIR = LOCAL / "render"         # page renders for vision crops and the hand check

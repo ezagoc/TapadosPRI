@@ -468,12 +468,15 @@ LAND_REFORM_VALIDATION_CSV = LAND_REFORM_DIR / "land_reform_validation.csv"
 
 # Scanned DOF editions (06-land/05_recover_scanned_resolutions.py): land-grant resolutions whose note has no HTML
 # in SIDOF are read from the scanned edition PDF (Adobe Paper Capture OCR text layer; vision LLM as fallback).
-# Edition PDFs are downloaded to a LOCAL, non-Dropbox work folder and deleted once read; the whole OCR text of each
-# edition is kept in DOF_SCANNED_EDITIONS_DIR, the extracted resolutions in DOF_SCANNED_TEXTS_DIR.
+# Whole-edition PDFs are downloaded to a LOCAL, non-Dropbox folder (DOF_SCANNED_PDF_TMP_DIR) and deleted once read; the
+# whole OCR text of each edition is kept in DOF_SCANNED_EDITIONS_DIR, the extracted resolutions in DOF_SCANNED_TEXTS_DIR,
+# and every work file needed to rebuild the table (single pages, column texts, renders, parsed.csv) in DOF_SCANNED_LOCAL_DIR.
 DOF_SCANNED_EDITIONS_DIR     = WEB_DISCOVERY_DIR / "dof_scanned_editions"    # <date>_<codEdicion>_<codDiario>.jsonl.gz + MANIFEST.csv
 DOF_SCANNED_TEXTS_DIR        = WEB_DISCOVERY_DIR / "dof_scanned_texts"       # one .txt per codNota + PNGs read by vision / hand-checked
 DOF_SCANNED_LOCAL_DIR        = Path(os.environ.get("DOF_SCANNED_LOCAL_DIR",
-                                                   str(Path(tempfile.gettempdir()) / "dof_editions"))).expanduser()
+                                                   str(WEB_DISCOVERY_DIR / "dof_scanned_work"))).expanduser()   # kept work files (pages, OCR texts, renders, parsed.csv)
+DOF_SCANNED_PDF_TMP_DIR      = Path(os.environ.get("DOF_SCANNED_PDF_TMP_DIR",
+                                                   str(Path(tempfile.gettempdir()) / "dof_editions_pdf"))).expanduser()  # whole-edition PDFs while read (local, deleted after)
 DOF_SCANNED_RESOLUTIONS_CSV  = LAND_REFORM_DIR / "dof_scanned_resolutions_1976_1992.csv"
 DOF_SCANNED_VALIDATION_CSV   = LAND_REFORM_DIR / "dof_scanned_resolutions_validation.csv"
 
