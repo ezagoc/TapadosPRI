@@ -1,12 +1,15 @@
 """
 Shared helpers for the Diario Oficial (DOF / SIDOF API) agrarian scripts of the 06-land stage
-(02_harvest_dof_agrarian.py, 03_parse_dof_agrarian.py, 04_build_agrarian_ledger.py).
+(02_harvest_dof_agrarian.py, 03_parse_dof_agrarian.py, 04_build_agrarian_ledger.py, 05_recover_scanned_resolutions.py,
+06_reparse_dof_texts.py).
 
 - reading the raw harvest files (daily index and full-text JSONL, plain or gzipped)
 - deciding which DOF notes are agrarian (issuing body or title keywords)
 - a priority class used to order the full-text downloads (land grants first)
 - HTML -> plain text, and the light HTML slimming applied before storing full texts
 - text normalisation (accents, case) shared by the parser and the name matcher
+- the DOF land-grant notes that the ledger counts (dof_ledger_land_grant_notes), so that 04, 05 and 06 select the same
+  notes from 03's output without reading the ledger they feed
 
 Downloaded DOF content is untrusted data: it is only parsed as JSON / text here, never executed.
 """
@@ -167,3 +170,37 @@ def html_to_text(h: str | None) -> str:
     t = re.sub(r"[ \t\r\f\v]+", " ", t)
     t = re.sub(r" *\n[ \n]*", "\n", t)
     return t.strip()
+
+
+# ------------------------------------------------------------------------------------- ledger land-grant population
+LAND_GRANT_ACTIONS = {"dotacion", "ampliacion", "restitucion", "ncpe", "bienes_comunales"}   # = INEGI "dotacion de tierras"
+
+
+def sanderson_last_dof_date(sanderson_dta: Path) -> dt.date:
+    """Last publication date in Sanderson's file (3 Nov 1976). The ledger's DOF rows start the next day
+    (04_build_agrarian_ledger.py). Sanderson stores dates as yymmdd integers counted from 1900."""
+    import pyreadstat
+    s, _ = pyreadstat.read_dta(str(sanderson_dta), usecols=["fechadepublicacion"])
+    best = None
+    for x in s["fechadepublicacion"].dropna():
+        x = int(x)
+        try:
+            d = dt.date(1900 + x // 10000, (x // 100) % 100, x % 100)
+        except ValueError:
+            continue
+        best = d if best is None or d > best else best
+    return best
+
+
+def dof_ledger_land_grant_notes(notes, san_end: dt.date):
+    """The rows of 03's notes table (dof_agrarian_notes_1975_1992.csv, read with pandas) that 04 turns into DOF
+    land-grant rows of the ledger, as 03 parsed them: published after Sanderson's last date, in the ledger's scope, on a
+    land-grant action (dotacion, ampliacion, restitucion, NCPE, bienes comunales), and either granted in 03's parse or a
+    resolucion without a parsed outcome (04 counts those as grants, `grant_imputed`). Denials (grant == 0) and decrees /
+    acuerdos without an outcome are left out, as in the ledger. With or without a full text."""
+    import pandas as pd
+    d = pd.to_datetime(notes["dof_date"]).dt.date
+    g = pd.to_numeric(notes["grant"], errors="coerce")
+    keep = ((d > san_end) & (notes["in_ledger_scope"] == 1) & notes["action_type"].isin(LAND_GRANT_ACTIONS)
+            & ((g == 1) | (g.isna() & (notes["doc_type"] == "resolucion"))))
+    return notes[keep].copy()

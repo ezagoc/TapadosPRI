@@ -8,6 +8,12 @@ Inputs
   config.EJIDOS_ATTRIBUTES_CSV    PROCEDE nucleos (2006); config.RAN_CATALOGUE_CSV RAN catalogue (2019);
   config.LAND_REFORM_DIR / localities_2000_in_ejidos.csv   census localities inside each nucleo (aliases)
   config.EHM2014_ZIP              INEGI Estadisticas Historicas de Mexico 2014, tables 9.49-9.51 (needs `pdftotext`)
+  config.DOF_TEXT_CORRECTIONS_CSV corrections to 03's parse of every DOF land-grant note with text, Nov 1976-1992
+                                  (06_reparse_dof_texts.py): hectares and classes 03 misread, beneficiaries and signing
+                                  date / signer of multi-document texts, notes that are not land grants in print
+  config.DOF_SCANNED_RESOLUTIONS_CSV  DOF land grants without SIDOF text read on the scanned editions
+                                  (05_recover_scanned_resolutions.py): hectares, classes, beneficiaries, signing date,
+                                  signer, method / confidence, not land grants in print
 
 Outputs (config.LAND_REFORM_DIR)
   agrarian_actions_1916_1992.csv  the ledger: Sanderson rows 1916 - 3 Nov 1976 (one per Sanderson row; the DOF
@@ -16,8 +22,12 @@ Outputs (config.LAND_REFORM_DIR)
                                   Sanderson's last date to 31 Dec 1992 (one per resolution / decree / acuerdo in
                                   scope). `president_signing` from the text when available, else the president in
                                   office on the DOF date (flagged, with the handover-window risk quantified from
-                                  the 1975-92 signing lags). DOF land-grant resolutions without text count as
-                                  grants (`grant_imputed`; denials were practically not published after 1975).
+                                  the 1975-92 signing lags). DOF land-grant resolutions without a readable text count as
+                                  grants (`grant_imputed`; denials were practically not published after 1975). DOF rows
+                                  carry 06's corrections and 05's scanned readings (apply_dof_corrections): every value
+                                  has a source column (hectares_source, beneficiaries_source, signing_source: sanderson /
+                                  dof_text_03 / dof_text_reparse / dof_scan) and the pre-correction value (*_prev); notes
+                                  that are not land grants in print have land_grant_printed = 0 and do not count.
   ejido_action_crosswalk.csv      action_id -> nucleo_key (PROCEDE) / ran_claveunica, score, method, accepted;
                                   best candidate kept even when rejected (never forced).
   land_reform_validation.csv      Sanderson events vs DOF index titles by year x group; link rates and link
@@ -26,7 +36,9 @@ Outputs (config.LAND_REFORM_DIR)
                                   beneficiaries, resolutions, land classes); president inferred from the DOF
                                   date vs the signer in the text; parse yields; crosswalk match rates by period
                                   and state; matched nucleos' granted hectares vs their PROCEDE surface; file-history
-                                  (stage) yields, lags, files inherited by the signer, and the stage hand checks.
+                                  (stage) yields, lags, files inherited by the signer, and the stage hand checks; value
+                                  sources by term; DOF land grants with and without hectares by year; identical amounts
+                                  booked twice on one DOF date (double-count check).
   ehm2014_land_by_state_term.csv  EHM 2014 tables 9.49 (national), 9.50 (hectares) and 9.51 (beneficiaries), long.
 
 Linking DOF titles to Sanderson (1917-1976). Sanderson has no village names. A Sanderson *event* is the set of
@@ -67,6 +79,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import (  # noqa: E402
     SANDERSON_DTA, DOF_AGRARIAN_INDEX_CSV, DOF_AGRARIAN_NOTES_CSV, EJIDOS_ATTRIBUTES_CSV, RAN_CATALOGUE_CSV,
     LAND_REFORM_DIR, EHM2014_ZIP, AGRARIAN_LEDGER_CSV, EJIDO_ACTION_CROSSWALK_CSV, LAND_REFORM_VALIDATION_CSV,
+    DOF_TEXT_CORRECTIONS_CSV, DOF_SCANNED_RESOLUTIONS_CSV,
 )
 from dof_agrarian_utils import norm  # noqa: E402
 
@@ -751,6 +764,174 @@ def crosswalk(ledger: pd.DataFrame, nix: NucleoIndex) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+HA_CLASSES = ["ha_riego", "ha_temporal", "ha_agostadero", "ha_monte", "ha_desertico", "ha_indefinido"]
+CHANGED = ["dof_text_reparse", "dof_scan"]
+AUDIT_COLS = ["hectares_source", "hectares_method", "hectares_confidence", "hectares_prev", "beneficiaries_source",
+              "beneficiaries_confidence", "beneficiaries_prev", "signing_source", "signing_date_confidence",
+              "signing_date_prev", "president_signing_prev", "land_grant_printed", "not_land_grant_reason",
+              "correction_note"]
+
+
+def apply_dof_corrections(dof: pd.DataFrame) -> pd.DataFrame:
+    """Write 06's corrections (notes with text) and 05's scanned readings (notes without text) into the DOF rows.
+    Before: every value as 03 parsed it, kept in *_prev (president_signing_prev is filled later, once the DOF-date
+    president is known). Sources: dof_text_03 = 03 unchanged; dof_text_reparse = 06's rules or a hand reading on the SIDOF
+    text; dof_scan = read on the scanned edition (05, or 06's hand readings of scanned pages). A changed signing date or
+    signer replaces president_signing / president_source as given (empty = inferred from the DOF date later).
+    land_grant_printed: 1 the printed note is a land grant (text parsed, or the scan read), 0 it is another act (a
+    privacion de derechos, a division, an initiation notice, a dotacion de aguas ...; it does not count as a land grant),
+    empty not checked."""
+    C = pd.read_csv(DOF_TEXT_CORRECTIONS_CSV, low_memory=False)
+    B = pd.read_csv(DOF_SCANNED_RESOLUTIONS_CSV, low_memory=False)
+    dof = dof.copy()
+    dof["hectares_prev"] = dof["hectares_total"]
+    dof["beneficiaries_prev"] = dof["beneficiaries"]
+    dof["signing_date_prev"] = dof["signing_date"]
+    dof["_president_03"], dof["_president_source_03"] = dof["president_signing"], dof["president_source"]
+    dof["hectares_source"] = np.where(dof["hectares_total"].notna(), "dof_text_03", None)
+    dof["hectares_method"] = np.where(dof["hectares_total"].notna(), "03", None)
+    dof["beneficiaries_source"] = np.where(dof["beneficiaries"].notna(), "dof_text_03", None)
+    dof["signing_source"] = np.where(dof["signing_date"].notna() | dof["president_signing"].notna(), "dof_text_03", None)
+    for c in ("hectares_confidence", "beneficiaries_confidence", "signing_date_confidence", "land_grant_printed",
+              "not_land_grant_reason", "correction_note"):
+        dof[c] = None
+    for c in ("hectares_total", *HA_CLASSES, "beneficiaries", "grant", "land_grant_printed"):
+        dof[c] = dof[c].astype(float)
+    for c in ("signing_date", "president_signing", "president_source", "signer_body", "hectares_source", "hectares_method",
+              "hectares_confidence", "beneficiaries_source", "beneficiaries_confidence", "signing_source",
+              "signing_date_confidence", "not_land_grant_reason", "correction_note"):
+        dof[c] = dof[c].astype(object)
+    pos = pd.Series(dof.index, index=dof["codNota"].astype(int).values)
+
+    # ---- 06: notes with a full text (06 selects them from 03's notes with the same rule, so all must be here)
+    assert C.codNota.isin(pos.index).all(), "06's corrections cover notes that are not DOF rows of the ledger: rerun 06"
+    assert (dof.loc[pos[C.codNota].values, "has_fulltext"] == 1).all()
+    for r in C.to_dict("records"):
+        i = pos[int(r["codNota"])]
+        if r["hectares_source"] in CHANGED:
+            dof.at[i, "hectares_total"] = r["hectares"]
+            for c in HA_CLASSES:
+                dof.at[i, c] = r[c]
+            for c in ("hectares_source", "hectares_method", "hectares_confidence"):
+                dof.at[i, c] = r[c] if pd.notna(r[c]) else None
+        if r["beneficiaries_source"] in CHANGED:
+            dof.at[i, "beneficiaries"] = r["beneficiaries"]
+            dof.at[i, "beneficiaries_source"] = r["beneficiaries_source"]
+        if r["signing_source"] in CHANGED:
+            for c in ("signing_date", "president_signing", "president_source", "signer_body"):
+                dof.at[i, c] = r[c] if pd.notna(r[c]) else None
+            dof.at[i, "signing_source"] = r["signing_source"]
+        dof.at[i, "grant"] = r["grant"]
+        dof.at[i, "land_grant_printed"] = r["land_grant_printed"]
+        dof.at[i, "not_land_grant_reason"] = r["not_land_grant_reason"] if pd.notna(r["not_land_grant_reason"]) else None
+        dof.at[i, "correction_note"] = r["note"] if pd.notna(r["note"]) else None
+
+    # ---- 05: notes without a full text, read on the scanned editions
+    assert B.codNota.isin(pos.index).all(), "05's table covers notes that are not DOF rows of the ledger"
+    for r in B.to_dict("records"):
+        i = pos[int(r["codNota"])]
+        assert dof.at[i, "has_fulltext"] == 0, r["codNota"]
+        if r["is_land_grant_printed"] == 0:
+            dof.at[i, "land_grant_printed"] = 0
+            dof.at[i, "grant"] = np.nan
+            dof.at[i, "not_land_grant_reason"] = str(r["note"])
+            continue
+        if pd.isna(r["hectares"]):                       # not located in the scan (18 notes of 30 Nov 1976)
+            dof.at[i, "correction_note"] = str(r["note"]) if pd.notna(r["note"]) else None
+            continue
+        dof.at[i, "land_grant_printed"] = 1
+        dof.at[i, "grant"] = r["grant"]
+        dof.at[i, "hectares_total"] = r["hectares"]
+        for c in HA_CLASSES:
+            dof.at[i, c] = r[c] if pd.notna(r[c]) else 0.0
+        dof.at[i, "hectares_source"], dof.at[i, "hectares_method"] = "dof_scan", r["method"]
+        dof.at[i, "hectares_confidence"] = r["confidence"]
+        if pd.notna(r["beneficiaries"]):
+            dof.at[i, "beneficiaries"] = r["beneficiaries"]
+            dof.at[i, "beneficiaries_source"], dof.at[i, "beneficiaries_confidence"] = "dof_scan", r["beneficiaries_confidence"]
+        if pd.notna(r["signing_date"]) or pd.notna(r["signer"]):
+            dof.at[i, "signing_date"] = str(r["signing_date"])[:10] if pd.notna(r["signing_date"]) else None
+            dof.at[i, "signing_date_confidence"] = r["signing_date_confidence"] if pd.notna(r["signing_date"]) else None
+            if pd.notna(r["signer"]):
+                dof.at[i, "president_signing"] = r["signer"]
+                # the printed signature (text layer, second OCR or read on the page); else the president on the signing date
+                dof.at[i, "president_source"] = "text_signing_date" if r["signer_source"] == "signing_date" else "text_name"
+                dof.at[i, "signer_body"] = "president"
+            dof.at[i, "signing_source"] = "dof_scan"
+        dof.at[i, "correction_note"] = str(r["note"]) if pd.notna(r["note"]) else None
+    n_h = dof.hectares_source.isin(CHANGED)
+    print(f"DOF corrections: hectares {int(n_h.sum())} rows ({dof[n_h].hectares_source.value_counts().to_dict()}), "
+          f"beneficiaries {int(dof.beneficiaries_source.isin(CHANGED).sum())}, signing {int(dof.signing_source.isin(CHANGED).sum())}, "
+          f"not land grants in print {int((dof.land_grant_printed == 0).sum())}")
+    return dof
+
+
+def flag_reprints(L: pd.DataFrame) -> None:
+    """A resolution the DOF printed more than once is one grant (El Porvenir, Coah., Reg. 19115, signed 13 Aug 1981, was
+    printed on 7, 9 and 21 Oct 1981; some reprints are a scanned note and a note with text). DOF land-grant rows of the
+    same state and village (core poblado / NCPE name), the same surface (within 0.01 ha) and the same signing date -- or
+    one signing date missing and publications at most 120 days apart -- are one resolution: the first publication counts,
+    later ones get duplicate_of = its action_id and is_land_grant = 0 (in place). A re-resolution (the same village and
+    surface signed again years later, e.g. Zacatecas NCPEs of 1979 re-granted in 1989 after an amparo) has a different
+    signing date and is kept."""
+    L["duplicate_of"] = None
+    G = L[(L.source == "dof") & (L.is_land_grant == 1) & L.hectares_total.notna()].copy()
+    G["name"] = [(name_variants(p if isinstance(p, str) else n) or [""])[0] for p, n in zip(G.poblado, G.ncpe_name)]
+    G = G[G["name"] != ""].sort_values(["dof_date", "action_id"])
+    for _, g in G.groupby(["state_code", "name"]):
+        if len(g) < 2:
+            continue
+        kept = []
+        for r in g.itertuples():
+            first = None
+            for k in kept:
+                same_sd = pd.notna(r.signing_date) and pd.notna(k.signing_date) and r.signing_date == k.signing_date
+                near = ((pd.isna(r.signing_date) or pd.isna(k.signing_date))
+                        and 0 <= (r.dof_date - k.dof_date).days <= 120)
+                if abs(r.hectares_total - k.hectares_total) <= 0.01 and (same_sd or near):
+                    first = k
+                    break
+            if first is None:
+                kept.append(r)
+            else:
+                L.at[r.Index, "duplicate_of"] = first.action_id
+    dup = L["duplicate_of"].notna()
+    L.loc[dup, "is_land_grant"] = 0.0
+    print(f"reprints: {int(dup.sum())} DOF land-grant rows are later publications of a resolution already counted "
+          f"({L.loc[dup, 'hectares_total'].sum():,.1f} ha left out)")
+
+
+def recompute_stage_lags(L: pd.DataFrame, rows: pd.Series) -> None:
+    """03's add_stage_lags on the rows whose signing date or signer changed (in place): lags to the signature, the
+    stage-order flag and whether the file predates the signer's term."""
+    if not rows.any():
+        return
+    d = L.loc[rows]
+    dt_ = {c: pd.to_datetime(d[c], errors="coerce") for c in ("petition_date", "petition_published_date",
+                                                              "cam_dictamen_date", "mandamiento_date", "cca_approval_date",
+                                                              "signing_date", "dof_date")}
+    sig, dof_ = dt_["signing_date"], dt_["dof_date"]
+    L.loc[rows, "lag_mandamiento_to_signing_days"] = (sig - dt_["mandamiento_date"]).dt.days
+    L.loc[rows, "lag_petition_to_signing_days"] = (sig - dt_["petition_date"]).dt.days
+    L.loc[rows, "lag_signing_to_publication_days"] = (dof_ - sig).dt.days
+    order = [dt_["petition_date"], dt_["cam_dictamen_date"], dt_["mandamiento_date"], dt_["cca_approval_date"], sig, dof_]
+    bad = pd.Series(False, index=d.index)
+    for a in range(len(order)):
+        for b in range(a + 1, len(order)):
+            bad |= (order[a] > order[b]).fillna(False)
+    L.loc[rows, "stage_order_flag"] = bad.astype(int)
+    start = {n: a for n, a, _ in PRES_TABLE}
+    # as in 03: only a signer read in the text (name or signing date) dates the signer's term
+    ts = pd.to_datetime(d["president_signing"].where(d["president_source"].astype(str).str.startswith("text")).map(start))
+    inh = pd.Series(np.nan, index=d.index)
+    has_p = dt_["petition_date"].notna() & ts.notna()
+    inh[has_p] = (dt_["petition_date"][has_p] < ts[has_p]).astype(int)
+    bound = dt_["petition_date"].isna() & dt_["petition_published_date"].notna() & ts.notna() & (dt_["petition_published_date"] < ts)
+    inh[bound] = 1
+    L.loc[rows, "petition_predates_signer_term"] = inh
+    L.loc[rows, "petition_predates_signer_term_basis"] = np.where(has_p, "petition_date", np.where(bound, "published_bound", None))
+
+
 def main():
     print("loading Sanderson, DOF tables, nucleo names ...")
     san = load_sanderson()
@@ -797,6 +978,10 @@ def main():
     res = [nix.resolve_municipality(s, m) for s, m in zip(dof.state_code, dof.municipality)]
     dof["mun_code"] = [r[0] for r in res]
     dof["mun_match_score"] = [r[1] for r in res]
+    dof = apply_dof_corrections(dof)
+    san["hectares_source"] = np.where(san["hectares_total"].notna(), "sanderson", None)
+    san["beneficiaries_source"] = np.where(san["beneficiaries"].notna(), "sanderson", None)
+    san["signing_source"] = np.where(san["signing_date"].notna() | san["president_signing"].notna(), "dof_text_03", None)
 
     cols_common = ["action_id", "source", "dof_date", "dof_year", "signing_date", "president_signing", "president_source",
                    "signer_body",
@@ -806,7 +991,8 @@ def main():
                    "ha_riego", "ha_temporal", "ha_agostadero", "ha_monte", "ha_desertico", "ha_indefinido",
                    "water_volume_m3", "expropriation_beneficiary", "indemnity_pesos", "dof_codNota", "dof_title",
                    "dof_issuing_body", "dof_link_method", "dof_link_score", "has_fulltext", "title_body_mismatch",
-                   "dof_hectares_total", "dof_beneficiaries", "mun_match_score", *STAGE_FIELDS]
+                   "dof_hectares_total", "dof_beneficiaries", "mun_match_score", *STAGE_FIELDS, *AUDIT_COLS,
+                   "_president_03", "_president_source_03"]
     for c in cols_common:
         for df_ in (san, dof):
             if c not in df_:
@@ -820,12 +1006,24 @@ def main():
     ledger["is_land_grant_action"] = ledger["action_type"].isin(LAND_GRANT_ACTIONS).astype(int)
     # DOF land-grant resolutions without a readable text: 1975-92 resolutions with text are grants in >99.9%
     # of cases (denials were not published in this period), so they count as grants, flagged.
+    # Notes the print shows are another act (land_grant_printed == 0) are neither imputed nor counted.
+    not_printed_grant = ledger["land_grant_printed"] == 0
     imp = ((ledger["source"] == "dof") & (ledger["is_land_grant_action"] == 1) & ledger["grant"].isna()
-           & ledger["action_detail"].astype(str).str.startswith("resolucion"))
+           & ledger["action_detail"].astype(str).str.startswith("resolucion") & ~not_printed_grant)
     ledger["grant_imputed"] = imp.astype(int)
     ledger.loc[imp, "grant"] = 1
     ledger["is_land_grant"] = np.where(ledger["is_land_grant_action"] == 1, ledger["grant"].astype("float"), 0.0)
+    ledger.loc[not_printed_grant, "is_land_grant"] = 0.0
     ledger = add_president_columns(ledger, lags)
+    # the president the ledger gave each DOF row before the corrections (03's signer, else the DOF-date president)
+    dofr = ledger["source"] == "dof"
+    nonpres03 = ledger["_president_source_03"].astype(str).str.startswith("not_presidential")
+    ledger["president_signing_prev"] = None
+    ledger.loc[dofr, "president_signing_prev"] = ledger.loc[dofr, "_president_03"].where(
+        ledger.loc[dofr, "_president_03"].notna(), ledger.loc[dofr, "president_in_office_at_dof"].where(~nonpres03[dofr]))
+    recompute_stage_lags(ledger, dofr & ledger["signing_source"].isin(CHANGED))
+    ledger = ledger.drop(columns=["_president_03", "_president_source_03"])
+    flag_reprints(ledger)
     ledger["ehm_term"] = ledger["president_signing"].map(EHM_TERM_OF)
     ledger["poblado_any"] = ledger["poblado"].fillna(ledger["ncpe_name"])
     ledger["municipality_name"] = ledger["mun_code"].map(nix.mun_label).fillna(ledger["municipality_dof"])
@@ -858,11 +1056,12 @@ def main():
              "ha_agostadero", "ha_monte", "ha_desertico", "ha_indefinido", "water_volume_m3",
              "expropriation_beneficiary", "indemnity_pesos", "dof_codNota", "dof_title", "dof_issuing_body",
              "dof_link_method", "dof_link_score", "has_fulltext", "title_body_mismatch", "dof_hectares_total",
-             "dof_beneficiaries", *STAGE_FIELDS, "nucleo_key", "ran_claveunica", "nucleo_name", "nucleo_match_score",
-             "nucleo_match_method"]
+             "dof_beneficiaries", *AUDIT_COLS, "duplicate_of", *STAGE_FIELDS, "nucleo_key", "ran_claveunica", "nucleo_name",
+             "nucleo_match_score", "nucleo_match_method"]
     ledger = ledger[order].sort_values(["dof_date", "action_id"], na_position="last")
     ledger["dof_date"] = ledger["dof_date"].dt.date
     ledger["signing_date"] = ledger["signing_date"].dt.date
+    ledger["signing_date_prev"] = pd.to_datetime(ledger["signing_date_prev"], errors="coerce").dt.date
     ledger.to_csv(AGRARIAN_LEDGER_CSV, index=False)
     cw.to_csv(EJIDO_ACTION_CROSSWALK_CSV, index=False)
     print(f"ledger: {len(ledger):,} rows -> {AGRARIAN_LEDGER_CSV.name}; crosswalk {len(cw):,} rows "
@@ -1031,9 +1230,68 @@ def build_validation(ledger, idx, notes, san, links, ehm, cw) -> pd.DataFrame:
                              float(r_.median()), "granted_ha/registered_ha", float(len(r_)), "nucleos_with_original_grant"))
             rows.append(vrow("matched_nucleo_granted_vs_registered_surface", "all", "00", src, "share_ratio_0.5_to_1.5",
                              float(((r_ >= 0.5) & (r_ <= 1.5)).mean()), "share", float(len(r_)), "nucleos_with_original_grant"))
+    rows += source_validation(L)
     rows += stage_validation()
     out = pd.DataFrame(rows)
     return out
+
+
+def source_validation(L: pd.DataFrame) -> list[dict]:
+    """Where the values of the land grants come from, by INEGI term of the signer; DOF land grants with and without
+    hectares by year; and identical amounts booked to two land grants of one DOF date (a double count, as when 03 read
+    another village's grant from an appended note: Agiabampo's 15,548.5 ha on Tepetzintla)."""
+    rows = []
+    G = L[L.is_land_grant == 1].copy()
+    G["term"] = G["president_signing"].map(EHM_TERM_OF).fillna("unattributed")
+    for field, val in (("hectares_source", "hectares_total"), ("beneficiaries_source", "beneficiaries"), ("signing_source", None)):
+        for term, g in G[G.source == "dof"].groupby("term"):
+            for src, gg in g.groupby(g[field].fillna("none")):
+                rows.append(vrow(f"ledger_value_source_{field.replace('_source', '')}", term, "00", "land_grant", f"share_rows_{src}",
+                                 float(len(gg)), "dof_land_grant_rows", float(len(g)), "dof_land_grant_rows_in_term"))
+                if val:
+                    rows.append(vrow(f"ledger_value_source_{field.replace('_source', '')}", term, "00", "land_grant", f"share_{val}_{src}",
+                                     float(gg[val].sum()), val, float(g[val].sum()), f"{val}_in_term"))
+    D = L[(L.source == "dof") & (L.is_land_grant_action == 1)]
+    for y, g in D.groupby("dof_year"):
+        lg = g[g.is_land_grant == 1]
+        rows.append(vrow("dof_land_grants_with_hectares", str(int(y)), "00", "land_grant", "share_with_hectares",
+                         float(lg.hectares_total.notna().sum()), "with_hectares", float(len(lg)), "land_grant_rows"))
+        rows.append(vrow("dof_land_grants_with_hectares", str(int(y)), "00", "land_grant", "share_without_text_recovered_from_scan",
+                         float(((lg.has_fulltext == 0) & (lg.hectares_source == "dof_scan")).sum()), "recovered_from_scan",
+                         float((lg.has_fulltext == 0).sum()), "land_grant_rows_without_text"))
+        rows.append(vrow("dof_land_grants_with_hectares", str(int(y)), "00", "title_land_grant", "n_not_land_grant_in_print",
+                         float((g.land_grant_printed == 0).sum()), "land_grant_printed_0", float(len(g)), "title_land_grant_rows"))
+    dd = L[(L.source == "dof") & (L.is_land_grant == 1) & (L.hectares_total >= 1)].copy()
+    dd["ha_key"] = dd["hectares_total"].round(4)
+    dup = dd[dd.duplicated(["dof_date", "ha_key"], keep=False)]
+    for (d, h), g in dup.groupby(["dof_date", "ha_key"]):
+        rows.append(vrow("duplicate_amount_same_dof_date", str(pd.Timestamp(d).date()), "00", "land_grant", "hectares", float(h),
+                         "codNotas " + " ".join(str(int(c)) for c in g.dof_codNota), float(len(g)), "rows",
+                         note="villages: " + "; ".join(str(x) for x in g.poblado.fillna(g.ncpe_name))))
+    rows.append(vrow("duplicate_amount_same_dof_date", "1976-1992", "00", "land_grant", "n_groups", float(dup.groupby(["dof_date", "ha_key"]).ngroups),
+                     "groups_of_rows_with_the_same_hectares_on_one_dof_date", float(len(dup)), "rows"))
+    # reprints (flag_reprints): later publications of one resolution, left out of the land-grant counts
+    R = L[L.duplicate_of.notna()]
+    first = L.set_index("action_id")
+    for r in R.itertuples():
+        rows.append(vrow("reprint_left_out", str(pd.Timestamp(r.dof_date).date()), r.state_code, "land_grant", "hectares",
+                         float(r.hectares_total), f"{r.action_id} (reprint)", float(first.at[r.duplicate_of, "hectares_total"]),
+                         f"{r.duplicate_of} (first publication, {pd.Timestamp(first.at[r.duplicate_of, 'dof_date']).date()})",
+                         note=f"{r.poblado if isinstance(r.poblado, str) else r.ncpe_name}; signed {r.signing_date}"))
+    for term, g in R.assign(term=R.president_signing.map(EHM_TERM_OF)).groupby("term"):
+        rows.append(vrow("reprint_left_out", term, "00", "land_grant", "n_rows_hectares", float(len(g)), "reprint_rows",
+                         float(g.hectares_total.sum()), "hectares_left_out"))
+    # re-resolutions: same state, village and surface signed again on another date (kept; counted in both terms)
+    K = L[(L.source == "dof") & (L.is_land_grant == 1) & L.hectares_total.notna()].copy()
+    K["name"] = [(name_variants(p if isinstance(p, str) else n) or [""])[0] for p, n in zip(K.poblado, K.ncpe_name)]
+    K = K[K.name != ""]
+    K["ha_key"] = K.hectares_total.round(2)
+    rr = K[K.duplicated(["state_code", "name", "ha_key"], keep=False)].sort_values("dof_date")
+    for (st, nm, h), g in rr.groupby(["state_code", "name", "ha_key"]):
+        rows.append(vrow("same_grant_signed_again", " ".join(str(pd.Timestamp(d).date()) for d in g.dof_date), st, "land_grant",
+                         "hectares", float(h), " ".join(g.action_id), float(len(g)), "rows",
+                         note=f"{nm}; signed " + ", ".join(str(x) for x in g.signing_date) + "; " + ", ".join(g.president_signing.astype(str))))
+    return rows
 
 
 def _q(x: pd.Series) -> dict:

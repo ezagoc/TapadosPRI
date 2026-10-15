@@ -13,7 +13,8 @@ land_by_president
     1976, Diario Oficial 4 Nov 1976 - 1992), checked against INEGI EHM 2014 tables 9.50-9.51 by presidential term.
 
 Writes OUTPUT_DIR/slides/<name>.{pdf,png} and the plotted numbers as <name>_data.csv, and copies the pdf/png to
-research/slides/pri_succession_slides/figures/. Data are read only.
+research/slides/pri_succession_slides/figures/. Data are read only. Run one figure with its name as argument
+(python -I viz_appendix_descriptives.py land_by_president); no argument runs both.
 """
 import shutil
 import sys
@@ -310,12 +311,20 @@ def land_by_president():
     ax.set_yticklabels([f"{p}  {t}" for p, t in zip(g.president, g.term)], fontsize=8.5, color=INK)
     ax.set_ylim(-0.7, n - 0.3)
     # one measure only: the ledger, by signing president (INEGI's term totals are checked above, in the console and the csv, not drawn)
-    note(fig, ["Source: Sanderson (1984), 1916–76; Diario Oficial resolutions, 1976–92; by signing president. 1977–92 incomplete: some resolutions lack published text."])
+    # what the ledger still lacks: de la Madrid's resolutions that INEGI counts but the Diario Oficial does not carry (22 printed
+    # 1976-92 resolutions without a legible area are too few to show: 18 pages missing from the 30 Nov 1976 scan, 4 unprinted grants)
+    e49 = pd.read_csv(LAND / "ehm2014_land_by_state_term.csv")
+    inegi_dlm = int(e49[(e49.measure == "resolutions") & (e49.ehm_term == "1983-1988") & (e49.state_code == 0)].value.iloc[0])
+    dof_dlm = int(g.loc["Miguel de la Madrid Hurtado", "resolutions"])
+    print(f"printed land grants without hectares, 1976-92: {int(G[G.action_id.str.startswith('DOF')].hectares_total.isna().sum())}")
+    assert note(fig, [f"Source: Sanderson (1984), 1916–76; Diario Oficial (text or scanned page), 1976–92; by signing president. "
+                      f"INEGI counts {inegi_dlm:,} de la Madrid resolutions; the Diario Oficial printed {dof_dlm:,}."])
     fig.subplots_adjust(left=0.185, right=0.99, top=0.98, bottom=0.155, wspace=0.08)
     save(fig, "land_by_president")
     return g
 
 
 if __name__ == "__main__":
-    pri_vote()
-    land_by_president()
+    # python -I viz_appendix_descriptives.py [pri_vote] [land_by_president]   (no argument: both figures)
+    for name in sys.argv[1:] or ["pri_vote", "land_by_president"]:
+        {"pri_vote": pri_vote, "land_by_president": land_by_president}[name]()

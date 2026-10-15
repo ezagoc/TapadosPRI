@@ -4,6 +4,7 @@ Shared configuration for the TapadosPRI political network analysis pipeline.
 
 import os
 import re
+import tempfile
 import unicodedata
 from pathlib import Path
 
@@ -464,3 +465,21 @@ DOF_AGRARIAN_NOTES_CSV     = LAND_REFORM_DIR / "dof_agrarian_notes_1975_1992.csv
 AGRARIAN_LEDGER_CSV        = LAND_REFORM_DIR / "agrarian_actions_1916_1992.csv"
 EJIDO_ACTION_CROSSWALK_CSV = LAND_REFORM_DIR / "ejido_action_crosswalk.csv"
 LAND_REFORM_VALIDATION_CSV = LAND_REFORM_DIR / "land_reform_validation.csv"
+
+# Scanned DOF editions (06-land/05_recover_scanned_resolutions.py): land-grant resolutions whose note has no HTML
+# in SIDOF are read from the scanned edition PDF (Adobe Paper Capture OCR text layer; vision LLM as fallback).
+# Edition PDFs are downloaded to a LOCAL, non-Dropbox work folder and deleted once read; the whole OCR text of each
+# edition is kept in DOF_SCANNED_EDITIONS_DIR, the extracted resolutions in DOF_SCANNED_TEXTS_DIR.
+DOF_SCANNED_EDITIONS_DIR     = WEB_DISCOVERY_DIR / "dof_scanned_editions"    # <date>_<codEdicion>_<codDiario>.jsonl.gz + MANIFEST.csv
+DOF_SCANNED_TEXTS_DIR        = WEB_DISCOVERY_DIR / "dof_scanned_texts"       # one .txt per codNota + PNGs read by vision / hand-checked
+DOF_SCANNED_LOCAL_DIR        = Path(os.environ.get("DOF_SCANNED_LOCAL_DIR",
+                                                   str(Path(tempfile.gettempdir()) / "dof_editions"))).expanduser()
+DOF_SCANNED_RESOLUTIONS_CSV  = LAND_REFORM_DIR / "dof_scanned_resolutions_1976_1992.csv"
+DOF_SCANNED_VALIDATION_CSV   = LAND_REFORM_DIR / "dof_scanned_resolutions_validation.csv"
+
+# Re-parsed DOF texts (06-land/06_reparse_dof_texts.py): the land grants whose hectares 03 missed (side table), and the
+# corrections table that 04 applies to every DOF land-grant note with a full text (values, source of each field, 03's
+# value kept for audit).
+DOF_REPARSED_TEXTS_CSV       = LAND_REFORM_DIR / "dof_reparsed_texts_1976_1992.csv"
+DOF_REPARSED_VALIDATION_CSV  = LAND_REFORM_DIR / "dof_reparsed_texts_validation.csv"
+DOF_TEXT_CORRECTIONS_CSV     = LAND_REFORM_DIR / "dof_text_corrections_1976_1992.csv"
