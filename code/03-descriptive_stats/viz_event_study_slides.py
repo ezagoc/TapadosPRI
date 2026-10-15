@@ -24,6 +24,30 @@ ag = pd.read_csv(MAIN / "budget_agencies_event_study.csv")
 bu = pd.read_csv(MAIN / "budget_event_study.csv")
 NOTE = "Point estimates; thick bars 90% and thin bars 95% confidence intervals (Conley-Taber, size-corrected). Reference year: two years before the election."
 
+# key numbers written on the panels, read from the official R reports (never typed by hand)
+import re  # noqa: E402
+_num = r"([+-]?\d+\.\d+)"
+
+
+def post_average(outcome):
+    """(est, lo, hi) of the post-period average t=+1..+4 in event_study_result.txt for one outcome."""
+    txt = (MAIN / "event_study_result.txt").read_text()
+    block = txt.split(f"== {outcome} ==")[1].split("==")[0]
+    m = re.search(r"post-period average t=\+1\.\.\+4: " + _num + r" \[" + _num + r", " + _num + r"\]", block)
+    return tuple(float(x) for x in m.groups())
+
+
+def budget_gap(margin):
+    """(est, lo, hi) of the budget-under-command gap (extensive or intensive) in budget_result.txt."""
+    txt = (MAIN / "budget_result.txt").read_text()
+    m = re.search(r"^  " + margin + r": .*?\(post - pre\) " + _num + r".*?95% CT\+FP \[" + _num + r", " + _num + r"\]", txt, re.M)
+    return tuple(float(x) for x in m.groups())
+
+
+def sgn(x, nd):
+    v = round(x, nd)
+    return ("+" if v > 0 else ("" if v == 0 else "\u2212")) + f"{abs(v):.{nd}f}"
+
 
 def style(ax):
     ax.set_facecolor("white")
@@ -64,8 +88,10 @@ def posts_pesos():
     """Two panels: heads an investment agency (pp) and share of federal investment commanded (pp of the federal total)."""
     fig, axes = plt.subplots(1, 2, figsize=(11.5, 4.6), dpi=200); fig.patch.set_facecolor("white")
     for ax, (key, ylabel, key_number) in zip(axes, [
-        ("extensive", "Gap in the share heading an investment agency\n(designee's vs. losers' followers)", "post-destape gap: +9 pp\n95% CI [+6, +13]"),
-        ("intensive", "Gap in the share of federal investment commanded\n(pp of the federal total)", "post-destape gap: −0.1 pp\n95% CI [−0.4, +0.3]"),
+        ("extensive", "Gap in the share heading an investment agency\n(designee's vs. losers' followers)",
+         "post-destape gap: {} pp\n95% CI [{}, {}]".format(*[sgn(100 * v, 0) for v in budget_gap("extensive")])),
+        ("intensive", "Gap in the share of federal investment commanded\n(pp of the federal total)",
+         "post-destape gap: {} pp\n95% CI [{}, {}]".format(*[sgn(v, 1) for v in budget_gap("intensive")])),
     ]):
         style(ax); draw(ax, bu[bu.outcome == key], "est", "lo", "hi")
         ax.set_ylabel(ylabel, fontsize=10.5, color=INK)
@@ -136,8 +162,10 @@ def margins():
     """R3: extensive and intensive margins side by side."""
     fig, axes = plt.subplots(1, 2, figsize=(11.5, 4.6), dpi=200); fig.patch.set_facecolor("white")
     for ax, (key, ylabel, note) in zip(axes, [
-        ("extensive", "Gap in the share holding a post\n(designee's vs. losers' followers)", "post-destape average +0.06 [−0.07, +0.17]"),
-        ("intensive", "Rank gap among those in office, rungs\n(designee's vs. losers' followers)", "post-destape average +0.54 [+0.24, +0.88]"),
+        ("extensive", "Gap in the share holding a post\n(designee's vs. losers' followers)",
+         "post-destape average {} [{}, {}]".format(*[sgn(v, 2) for v in post_average("extensive")])),
+        ("intensive", "Rank gap among those in office, rungs\n(designee's vs. losers' followers)",
+         "post-destape average {} [{}, {}]".format(*[sgn(v, 2) for v in post_average("intensive")])),
     ]):
         style(ax); draw(ax, es[es.outcome == key], "main", "main_lo", "main_hi", "main_lo90", "main_hi90")
         ax.set_ylabel(ylabel, fontsize=10.5, color=INK)
