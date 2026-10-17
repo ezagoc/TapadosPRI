@@ -29,6 +29,9 @@ The code is written so you and your coauthor can work from the GitHub repo while
 `requirements.txt`
 : Python dependencies for the repo.
 
+`code/04-analysis/main_direct_tie/`
+: Main career specification, R estimator, inference validation, and current result. Run `Rscript code/04-analysis/main_direct_tie/estimate_main.R`; outputs are written to the shared Dropbox `output/main_direct_tie/` directory. See its `MAIN_SPEC.md` and `README.md`.
+
 `.env.example`
 : Example environment variables for pointing the code to the shared Dropbox project root.
 
