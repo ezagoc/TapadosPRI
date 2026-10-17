@@ -15,6 +15,8 @@ set.seed(seed)
 
 elections <- seq(1940L, 1988L, by = 6L)
 tie_types <- c("co_work", "co_education", "co_military", "co_revolution")
+# Years before the election by which a tie must have formed (main: 2; MAIN_SPEC section 10 (8): 4).
+tie_lag <- as.integer(Sys.getenv("TAPADOS_TIE_CUTOFF", "2"))
 read_data <- function(...) fread(file.path(data_dir, ...), na.strings = c("", "NA"))
 
 nodes <- read_data("networks", "network_nodes.csv")
@@ -85,7 +87,7 @@ for (e in elections) {
   d[, lrec := log1p(v)]
 
   slate <- slates[[as.character(e)]]
-  ct <- unique(long_ties[candidate %in% slate$candidates & year_start <= t0,
+  ct <- unique(long_ties[candidate %in% slate$candidates & year_start <= e - tie_lag,
                          .(pid, candidate)])
   ct <- ct[pid %in% d$pid]
   ct[, direct_ties := .N, by = pid]
@@ -278,7 +280,7 @@ fwrite(data.table(term = names(beta), coefficient = as.vector(beta)),
        file.path(out_dir, "control_model.csv"))
 
 summary <- data.table(
-  design_version = "2026-10-17-primary-v2",
+  design_version = "2026-10-17-primary-v2", tie_cutoff_years = tie_lag,
   estimate = theta, ci_lower = ci[1], ci_upper = ci[2], p_bootstrap = p,
   bootstrap_draws = B, seed = seed,
   A_network = AB[1], B_person = AB[2], control_donor_networks = K,
@@ -293,12 +295,22 @@ input_paths <- file.path(data_dir,
 fwrite(data.table(source = sub(paste0("^", data_dir, "/"), "", input_paths),
                   md5 = unname(tools::md5sum(input_paths))),
        file.path(out_dir, "input_hashes.csv"))
-fwrite(data.table(design_version = summary$design_version,
-                  R_version = R.version.string,
-                  data_table_version = as.character(packageVersion("data.table")),
-                  estimator_script_md5 = unname(tools::md5sum(file.path(here, "estimate_main.R"))),
-                  specification_md5 = unname(tools::md5sum(file.path(here, "MAIN_SPEC.md")))),
-       file.path(out_dir, "run_metadata.csv"))
+metadata_new <- data.table(design_version = summary$design_version,
+                           R_version = R.version.string,
+                           data_table_version = as.character(packageVersion("data.table")),
+                           estimator_script_md5 = unname(tools::md5sum(file.path(here, "estimate_main.R"))),
+                           specification_md5 = unname(tools::md5sum(file.path(here, "MAIN_SPEC.md"))))
+# Keep the hashes other scripts added (validation, event study) while the estimator and the spec are unchanged.
+metadata_path <- file.path(out_dir, "run_metadata.csv")
+if (file.exists(metadata_path)) {
+  metadata_old <- fread(metadata_path)
+  if (identical(metadata_old$estimator_script_md5, metadata_new$estimator_script_md5) &&
+      identical(metadata_old$specification_md5, metadata_new$specification_md5)) {
+    extra <- setdiff(names(metadata_old), names(metadata_new))
+    if (length(extra)) metadata_new <- cbind(metadata_new, metadata_old[, ..extra])
+  }
+}
+fwrite(metadata_new, metadata_path)
 
 cat("Main relative direct-tie premium, whole rungs:", round(theta, 3), "\n")
 cat("Ferman-Pinto network-bootstrap 95% CI:", paste(round(ci, 3), collapse = " to "), "\n")

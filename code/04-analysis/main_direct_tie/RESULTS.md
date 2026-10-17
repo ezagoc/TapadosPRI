@@ -36,6 +36,29 @@ The leads are flat and jointly indistinguishable from zero. The gap appears at t
 
 Extensive margin (holds any ranked post): leads −5 pp [−14, +4]; $e+1,\ldots,e+4$ +7 pp [−5, +18]; main window +10 pp [−2, +21], $p=0.09$. A gap in office holding is not detected, but its point estimate is large enough that about half of the rung premium could come from the zero coding of no recorded post.
 
+## Margins of the premium (17 October 2026, MAIN_SPEC section 8)
+
+| Window contrast | Estimate | 95% interval | $p$ |
+|---|---:|---:|---:|
+| Rank, 0 if no recorded post (rungs) | +1.15 | [+0.46, +1.82] | 0.001 |
+| Holds a ranked post (percentage points) | +10.2 | [−1.9, +22.0] | 0.10 |
+| Rank if in office before and after (rungs; 739 politicians) | +0.58 | [+0.21, +0.95] | 0.002 |
+| Lee bounds for selection into office | [−0.03, +1.23] | | |
+
+About half of the rank premium is promotion among those who stay in office; the office margin is +10 points but imprecise. The year-by-year event study of rank among those in office is noisy because the group in office changes every year (`margins_event_study.csv`); the window contrast is the one to quote.
+
+## Federal investment commanded (17 October 2026, MAIN_SPEC section 9)
+
+After designation 11.1% of the designee's followers head an agency with federal investment, against 3.2% of the losers' followers (5.9% and 5.6% before). Heads an investment agency: +7.7 points [+2.6, +12.8], $p=0.003$. Percent of federal investment commanded: +0.34 points [+0.02, +0.69], $p=0.05$. Event study: flat before designation, +0.32 and +0.33 points in $e+1$ and $e+2$, about zero afterwards (`budget_event_study.csv`). The outcome moves with both the post and the agency's budget; it does not hold the office fixed. 572 of 1,577 head-of-agency records resolve to an agency of the investment panel (`budget_crosswalk_audit.csv`).
+
+## Appendix diagnostics (17 October 2026, MAIN_SPEC section 10)
+
+- **Balance.** Fourteen predetermined traits; largest standardized difference 0.18 (military career), smallest bootstrap $p$ 0.25 (`balance.csv`).
+- **Robustness of the main estimate** (`robustness.csv`): successions weighted by the designee's followers 0.92 [0.37, 1.45]; succession indicators only 1.20 [0.13, 2.26]; without rank bands 1.23 [0.46, 1.99]; exact baseline rung 1.02 [0.35, 1.67]; ties dated by $e-4$ 1.10 [0.32, 1.86] (962 politician-successions). Without 1976 and 1988, when the outgoing president leaned toward the designee years ahead (Castañeda 1999), 1.33 [0.50, 2.14]; without Díaz Serrano's group in 1982, 1.15 [0.39, 1.89]. Share above a rung: rung 7 or above +20.5 points [12.3, 28.4], rung 5 or above +6.9 [3.0, 10.7], rung 4 or above +5.9 [0.7, 11.0].
+- **Anticipation.** Designees formed more ties than losing contenders in $e-4$ and $e-3$, driven by 1976 (López Portillo, Finance 1973) and 1982 (de la Madrid, Programming and Budget 1979); the $e-4$ cutoff above removes those recruits (`anticipation_ties.csv`).
+- **Losing teams vs random regroupings.** Between-team variation of residual changes among losers' followers equals that of random teams of the same sizes (permutation $p=0.42$, `camps_permutation.csv`).
+- **Coverage** of the interval in simulations: 92.7% to 97.0% (`inference_coverage.csv`).
+
 ## What supports the interval, and what does not
 
 There are nine winning networks and 45 nonempty losing networks. Within a succession, the person-weighted controls correspond to roughly 1.9–4.9 equally weighted losing networks. The primary bootstrap resamples **both winner and loser network contributions**, correcting donor residual moments for regression leverage and allowing network variance to depend on effective network size. The fitted variance components are $\widehat A=0$ for common network shocks and $\widehat B=15.226$ for individual noise, and the interval plugs them in as Ferman and Pinto (2019) do, with no inflation factor (the 1.20 widening of the 16 October run was dropped on 17 October). In six simulated scenarios on the observed network layout (`inference_coverage.csv`), its coverage is 96.8% without network shocks, 97.0% with repeated-person correlation, 94.3% with a common network shock $A=1$, and 92.7–93.5% with $A=2$ under normal, heavy-tailed and negatively related networks (Monte Carlo s.e. 0.6–1.2 percentage points). These simulations validate the algorithm **under their assumed error structures**; they cannot establish exchangeability of winner and loser shocks in the historical setting.
@@ -52,4 +75,4 @@ The pre-designation trend check is the event study above; the next design check 
 
 ## Reproduction
 
-Run `estimate_main.R`, `validate_inference.R` and `event_study.R` as described in [README.md](README.md). Machine-readable source outputs are `main_result.csv`, `succession_contrasts.csv`, `network_contributions.csv`, `sample_flow.csv`, `post_recording.csv`, `inference_coverage.csv`, `network_variance_sensitivity.csv`, and the `event_study*.csv` tables in `TapadosPRI/output/main_direct_tie/` (or the directory set by `TAPADOS_MAIN_OUTPUT_DIR`).
+Run the scripts in the order given in [README.md](README.md). Machine-readable source outputs are `main_result.csv`, `succession_contrasts.csv`, `network_contributions.csv`, `sample_flow.csv`, `post_recording.csv`, `inference_coverage.csv`, `network_variance_sensitivity.csv`, and the `event_study*.csv` tables in `TapadosPRI/output/main_direct_tie/` (or the directory set by `TAPADOS_MAIN_OUTPUT_DIR`).
