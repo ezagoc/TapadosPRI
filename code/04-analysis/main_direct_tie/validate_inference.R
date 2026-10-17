@@ -1,5 +1,6 @@
-# Finite-sample calibration of the prespecified network bootstrap on the
-# observed candidate-network sizes and covariate design. Run from the repo root.
+# Finite-sample coverage of the network bootstrap (Ferman-Pinto, plug-in variance
+# components) on the observed candidate-network sizes and covariate design.
+# Run from the repo root.
 args <- commandArgs(FALSE)
 script_arg <- sub("^--file=", "", args[grepl("^--file=", args)][1])
 script_dir <- dirname(normalizePath(script_arg))
@@ -12,15 +13,13 @@ draw_unit <- function(n, distribution) {
   stop("Unknown distribution")
 }
 
-calibrate_one <- function(A_true, B_true, distribution, reps, boot_draws,
+coverage_one <- function(A_true, B_true, distribution, reps, boot_draws,
                           repeat_person_share = 0,
                           network_structure = "independent") {
   network_ix <- match(sample$network, network_info$network)
   person_ix <- match(sample$pid, unique(sample$pid))
-  multipliers <- c(1, 1.05, 1.10, 1.15, 1.20)
-  out <- matrix(NA_real_, nrow = reps, ncol = 4 + length(multipliers),
-                dimnames = list(NULL, c(paste0("coverage_", gsub("\\.", "_", as.character(multipliers))),
-                                        "width", "A_hat", "B_hat", "theta_error")))
+  out <- matrix(NA_real_, nrow = reps, ncol = 5,
+                dimnames = list(NULL, c("covered", "width", "A_hat", "B_hat", "theta_error")))
   for (s in seq_len(reps)) {
     net_z <- draw_unit(nrow(network_info), distribution)
     if (network_structure == "zero_sum") {
@@ -44,19 +43,15 @@ calibrate_one <- function(A_true, B_true, distribution, reps, boot_draws,
     net_sd <- sqrt(nuisance[1] + nuisance[2] / network_info$n_eff)
     draw_error <- bootstrap_error(boot_draws, z, net_sd, network_info$g)
     q <- as.numeric(quantile(draw_error, c(.025, .975), type = 1, names = FALSE))
-    covered <- vapply(multipliers, function(k) {
-      interval <- theta_error - k * rev(q)
-      as.numeric(interval[1] <= 0 && interval[2] >= 0)
-    }, 0)
+    interval <- theta_error - rev(q)
+    covered <- as.numeric(interval[1] <= 0 && interval[2] >= 0)
     out[s, ] <- c(covered, diff(q), nuisance, theta_error)
   }
   valid <- out[complete.cases(out), , drop = FALSE]
-  cv <- colMeans(valid[, seq_along(multipliers), drop = FALSE])
+  cv <- mean(valid[, "covered"])
   data.table(A_true, B_true, distribution, repeat_person_share, network_structure,
              reps = nrow(valid), boot_draws,
-             coverage_1 = cv[1], coverage_1_05 = cv[2], coverage_1_10 = cv[3],
-             coverage_1_15 = cv[4], coverage_1_20 = cv[5],
-             coverage_mc_se_1_20 = sqrt(cv[5] * (1 - cv[5]) / nrow(valid)),
+             coverage = cv, coverage_mc_se = sqrt(cv * (1 - cv) / nrow(valid)),
              mean_width = mean(valid[, "width"]),
              mean_A_hat = mean(valid[, "A_hat"]),
              A_hat_zero_share = mean(valid[, "A_hat"] < 1e-10),
@@ -64,14 +59,14 @@ calibrate_one <- function(A_true, B_true, distribution, reps, boot_draws,
 }
 
 scenarios <- rbindlist(list(
-  calibrate_one(0, AB[2], "normal", 500L, 3000L),
-  calibrate_one(1, AB[2], "normal", 400L, 2500L),
-  calibrate_one(2, AB[2], "normal", 1500L, 2500L),
-  calibrate_one(2, AB[2], "t5", 1500L, 2500L),
-  calibrate_one(0, AB[2], "normal", 400L, 2500L, repeat_person_share = .5),
-  calibrate_one(2, AB[2], "normal", 800L, 2500L, network_structure = "zero_sum")
+  coverage_one(0, AB[2], "normal", 500L, 3000L),
+  coverage_one(1, AB[2], "normal", 400L, 2500L),
+  coverage_one(2, AB[2], "normal", 1500L, 2500L),
+  coverage_one(2, AB[2], "t5", 1500L, 2500L),
+  coverage_one(0, AB[2], "normal", 400L, 2500L, repeat_person_share = .5),
+  coverage_one(2, AB[2], "normal", 800L, 2500L, network_structure = "zero_sum")
 ))
-fwrite(scenarios, file.path(out_dir, "inference_calibration.csv"))
+fwrite(scenarios, file.path(out_dir, "inference_coverage.csv"))
 print(scenarios)
 
 # Observed-data sensitivity to network-shock variance. This does not estimate
@@ -85,9 +80,9 @@ sensitivity <- rbindlist(lapply(c(0, .5, 1, 2, 4), function(A_assumed) {
   draws <- bootstrap_error(30000L, z, net_sd, network_info$g)
   q <- as.numeric(quantile(draws, c(.025, .975), type = 1, names = FALSE))
   data.table(A_assumed, B_assumed,
-             ci_lower = theta - calibration_factor * q[2],
-             ci_upper = theta - calibration_factor * q[1],
-             p_value = mean(abs(calibration_factor * draws) >= abs(theta)))
+             ci_lower = theta - q[2],
+             ci_upper = theta - q[1],
+             p_value = mean(abs(draws) >= abs(theta)))
 }))
 fwrite(sensitivity, file.path(out_dir, "network_variance_sensitivity.csv"))
 print(sensitivity)

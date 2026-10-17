@@ -1,8 +1,8 @@
-# New main result — 16 October 2026
+# Main result — 16 October 2026 (inference revised 17 October 2026)
 
 **Estimand.** Adjusted difference in the four-year change in highest recorded career rung between politicians directly and exclusively tied to the observed designee and politicians directly and exclusively tied to an unsuccessful contender in the same succession. Each of the nine successions has equal weight. The specification was written before this outcome was calculated.
 
-**Estimate.** **+1.147 career rungs**; simulation-calibrated approximate network-bootstrap 95% interval **[+0.323, +1.954]**; approximate bootstrap $p=0.0051$. The uncalibrated interval is [0.460, 1.819]. This is an adjusted **relative premium**. It does not distinguish a reward to the winner's followers from a penalty to the losers' followers, and it is not an ATT over alternative presidents.
+**Estimate.** **+1.147 career rungs**; Ferman–Pinto network-bootstrap 95% interval **[+0.460, +1.819]**; bootstrap $p=0.0007$. This is an adjusted **relative premium**. It does not distinguish a reward to the winner's followers from a penalty to the losers' followers, and it is not an ATT over alternative presidents.
 
 | Succession | Winner followers | Loser followers | Adjusted relative change |
 |---:|---:|---:|---:|
@@ -18,11 +18,29 @@
 
 The analysis contains 1,097 politician-succession observations from 776 distinct politicians; 255 politicians appear in more than one succession. Eight of nine cohort contrasts are positive. With any one succession omitted, the average ranges from +0.919 to +1.421.
 
+## Event study (17 October 2026, MAIN_SPEC section 7)
+
+Same sample, estimator and weights, year by year relative to $e-2$; covariates without the two rank bands (they are functions of the lead-year outcome). Ferman–Pinto network-bootstrap intervals, joint over years (`event_study.csv`, `event_study_summary.csv`, figure `event_study_rank.pdf`).
+
+| Contrast (rank, rungs) | Estimate | 95% interval | $p$ |
+|---|---:|---:|---:|
+| Leads, average of $e-7,\ldots,e-3$ | −0.15 | [−0.64, +0.33] | 0.55 |
+| Joint lead test, max $|t|$ | 0.83 | | 0.79 |
+| $e+1$ | +0.94 | [+0.18, +1.70] | 0.015 |
+| Average of $e+1,\ldots,e+4$ (annual ranks) | +0.90 | [+0.08, +1.70] | 0.028 |
+| Average of $e+7, e+8$ (next president) | 0.00 | [−0.77, +0.78] | 1.00 |
+| $\theta_7-\theta_6$ (patron leaves office) | −0.49 | [−0.92, −0.04] | 0.029 |
+| Main window $\Delta R$ with these covariates | +1.23 | [+0.46, +1.99] | 0.001 |
+
+The leads are flat and jointly indistinguishable from zero. The gap appears at the handover (+0.41 in $e$, when the new cabinet is coded; +0.94 in $e+1$), holds at about +0.9 through $e+4$, shrinks in $e+5$ and $e+6$, and is gone under the next president; the fall when the patron leaves office is −0.49 [−0.92, −0.04]. Pointwise intervals exclude zero in $e+1$, $e+2$ and $e+4$; $e+3$ is [−0.07, +1.78]. The annual contrasts are about as noisy as the window contrast (plug-in person-level s.e. 0.32–0.35 in every version, event-study covariates) but smaller. Measured from the rank held in $e-2$ instead of the best rank in $e-5,\ldots,e-2$, the window contrast falls from +1.23 to +1.00: the designee's followers were slightly closer to their pre-window peak in $e-2$ (84% hold a recorded post in $e-2$, against 80% of the losers' followers), the same small difference the leads show. Averaging the annual ranks of $e+1,\ldots,e+4$ instead of taking their maximum lowers it by another 0.10.
+
+Extensive margin (holds any ranked post): leads −5 pp [−14, +4]; $e+1,\ldots,e+4$ +7 pp [−5, +18]; main window +10 pp [−2, +21], $p=0.09$. A gap in office holding is not detected, but its point estimate is large enough that about half of the rung premium could come from the zero coding of no recorded post.
+
 ## What supports the interval, and what does not
 
-There are nine winning networks and 45 nonempty losing networks. Within a succession, the person-weighted controls correspond to roughly 1.9–4.9 equally weighted losing networks. The primary bootstrap resamples **both winner and loser network contributions**, correcting donor residual moments for regression leverage and allowing network variance to depend on effective network size. The fitted variance components are $\widehat A=0$ for common network shocks and $\widehat B=15.226$ for individual noise. A fixed 1.20 widening of bootstrap error quantiles was chosen from simulations on the observed network layout: in the six simulated scenarios (normal/heavy-tailed errors, larger common shocks, repeated-person correlation, and negatively related networks within a slate), empirical coverage of the widened interval ranged from 95.9% to 99.3%, with Monte Carlo standard errors of roughly 0.4–0.9 percentage points. These simulations validate the algorithm **under their assumed error structures**; they cannot establish exchangeability of winner and loser shocks in the historical setting.
+There are nine winning networks and 45 nonempty losing networks. Within a succession, the person-weighted controls correspond to roughly 1.9–4.9 equally weighted losing networks. The primary bootstrap resamples **both winner and loser network contributions**, correcting donor residual moments for regression leverage and allowing network variance to depend on effective network size. The fitted variance components are $\widehat A=0$ for common network shocks and $\widehat B=15.226$ for individual noise, and the interval plugs them in as Ferman and Pinto (2019) do, with no inflation factor (the 1.20 widening of the 16 October run was dropped on 17 October). In six simulated scenarios on the observed network layout (`inference_coverage.csv`), its coverage is 96.8% without network shocks, 97.0% with repeated-person correlation, 94.3% with a common network shock $A=1$, and 92.7–93.5% with $A=2$ under normal, heavy-tailed and negatively related networks (Monte Carlo s.e. 0.6–1.2 percentage points). These simulations validate the algorithm **under their assumed error structures**; they cannot establish exchangeability of winner and loser shocks in the historical setting.
 
-The signal is sensitive to stronger unobserved common network shocks. Holding $B=15.226$, an imposed $A=0.5$ gives interval [0.090, 2.170], while $A=1$ gives [−0.064, 2.371]. The latter contains zero. These are assumption checks, not estimates of $A$. The control-network data yield $\widehat A=0$, but they cannot rule out every historically relevant shock structure. A mechanical succession-clustered interval is not used.
+Holding $B=15.226$, an imposed $A=0.5$ gives interval [0.266, 1.999], $A=1$ gives [0.138, 2.167], and $A=2$ gives [−0.110, 2.407]. These are assumption checks, not estimates of $A$. The control-network data yield $\widehat A=0$, but they cannot rule out every historically relevant shock structure. A mechanical succession-clustered interval is not used.
 
 ## Substantive limits to put in the talk
 
@@ -30,8 +48,8 @@ The signal is sensitive to stronger unobserved common network shocks. Holding $B
 - **Recorded office.** The post outcome is zero if no ranked office is recorded in the four-year post window. This occurs for 82/287 winner followers and 276/810 loser followers. A difference in recording or exit can contribute to the rank result. Do not describe the estimate as a pure promotion effect.
 - **Selection and interference.** The dedazo was endogenous. Conditional parallel trends requires that, after predetermined career and network covariates and succession effects, the designee's followers had no distinct future career momentum that would have occurred even if their patron lost. Direct loser followers may benefit indirectly from the winner or be penalized for backing a loser. Neither the regression nor the interval settles these issues.
 
-The next design check is a pre-designation trend graph on the frozen cohort, followed by an explicit study of multi-ties and meaningful indirect paths. Do not replace this estimate with a menu of post-hoc specifications.
+The pre-designation trend check is the event study above; the next design check is an explicit study of multi-ties and meaningful indirect paths. Do not replace this estimate with a menu of post-hoc specifications.
 
 ## Reproduction
 
-Run `estimate_main.R` and `validate_inference.R` as described in [README.md](README.md). Machine-readable source outputs are `main_result.csv`, `succession_contrasts.csv`, `network_contributions.csv`, `sample_flow.csv`, `post_recording.csv`, `inference_calibration.csv`, and `network_variance_sensitivity.csv` in `TapadosPRI/output/main_direct_tie/` (or the directory set by `TAPADOS_MAIN_OUTPUT_DIR`).
+Run `estimate_main.R`, `validate_inference.R` and `event_study.R` as described in [README.md](README.md). Machine-readable source outputs are `main_result.csv`, `succession_contrasts.csv`, `network_contributions.csv`, `sample_flow.csv`, `post_recording.csv`, `inference_coverage.csv`, `network_variance_sensitivity.csv`, and the `event_study*.csv` tables in `TapadosPRI/output/main_direct_tie/` (or the directory set by `TAPADOS_MAIN_OUTPUT_DIR`).

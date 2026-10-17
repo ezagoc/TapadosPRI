@@ -239,10 +239,8 @@ bootstrap_error <- function(B = 50000L, z = donor_z, sd_by_network = network_inf
 B <- 50000L
 err <- bootstrap_error(B)
 quant <- as.numeric(quantile(err, c(.025, .975), names = FALSE, type = 1))
-calibration_factor <- 1.20
-ci_raw <- c(theta - quant[2], theta - quant[1])
-ci <- c(theta - calibration_factor * quant[2], theta - calibration_factor * quant[1])
-p <- mean(abs(calibration_factor * err) >= abs(theta))
+ci <- c(theta - quant[2], theta - quant[1])
+p <- mean(abs(err) >= abs(theta))
 
 loo <- rbindlist(lapply(elections, function(e) data.table(
   omitted_election = e,
@@ -280,10 +278,9 @@ fwrite(data.table(term = names(beta), coefficient = as.vector(beta)),
        file.path(out_dir, "control_model.csv"))
 
 summary <- data.table(
-  design_version = "2026-10-16-primary-v1",
+  design_version = "2026-10-17-primary-v2",
   estimate = theta, ci_lower = ci[1], ci_upper = ci[2], p_bootstrap = p,
-  ci_uncalibrated_lower = ci_raw[1], ci_uncalibrated_upper = ci_raw[2],
-  calibration_factor = calibration_factor, bootstrap_draws = B, seed = seed,
+  bootstrap_draws = B, seed = seed,
   A_network = AB[1], B_person = AB[2], control_donor_networks = K,
   treated_networks = sum(network_info$treated == 1L),
   total_person_successions = nrow(sample), unique_people = uniqueN(sample$pid),
@@ -304,7 +301,7 @@ fwrite(data.table(design_version = summary$design_version,
        file.path(out_dir, "run_metadata.csv"))
 
 cat("Main relative direct-tie premium, whole rungs:", round(theta, 3), "\n")
-cat("Simulation-calibrated approximate network-bootstrap 95% CI:", paste(round(ci, 3), collapse = " to "), "\n")
+cat("Ferman-Pinto network-bootstrap 95% CI:", paste(round(ci, 3), collapse = " to "), "\n")
 cat("Bootstrap p-value:", round(p, 4), "\n")
 cat("Network variance components A, B:", paste(round(AB, 4), collapse = ", "), "\n")
 cat("Networks treated/control:", sum(network_info$treated == 1L), "/", K, "\n")
