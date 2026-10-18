@@ -49,7 +49,7 @@ About half of the rank premium is promotion among those who stay in office; the 
 
 ## Federal investment commanded (17 October 2026, MAIN_SPEC section 9)
 
-After designation 11.1% of the designee's followers head an agency with federal investment, against 3.2% of the losers' followers (5.9% and 5.6% before). Heads an investment agency: +7.7 points [+2.6, +12.8], $p=0.003$. Percent of federal investment commanded: +0.34 points [+0.02, +0.69], $p=0.05$. Event study: flat before designation, +0.32 and +0.33 points in $e+1$ and $e+2$, about zero afterwards (`budget_event_study.csv`). The outcome moves with both the post and the agency's budget; it does not hold the office fixed. 572 of 1,577 head-of-agency records resolve to an agency of the investment panel (`budget_crosswalk_audit.csv`).
+After designation 11.1% of the designee's followers head an agency with federal investment, against 3.2% of the losers' followers (5.9% and 5.6% before). Heads an investment agency: +7.7 points [+2.6, +12.8], $p=0.003$. Percent of federal investment commanded: +0.34 points [+0.02, +0.69], $p=0.05$. Event study: flat before designation, +0.32 and +0.33 points in $e+1$ and $e+2$, about zero afterwards (`budget_event_study.csv`). Heading an investment agency, by year: +7 points in $e$, +8 to +9 in $e+1,\ldots,e+4$, +5 in $e+5$ and $e+6$, zero in $e+7$: the investment edge ends after $e+2$ while the posts are kept. The outcome moves with both the post and the agency's budget; it does not hold the office fixed. 572 of 1,577 head-of-agency records resolve to an agency of the investment panel (`budget_crosswalk_audit.csv`).
 
 ## Appendix diagnostics (17 October 2026, MAIN_SPEC section 10)
 
@@ -58,6 +58,20 @@ After designation 11.1% of the designee's followers head an agency with federal 
 - **Anticipation.** Designees formed more ties than losing contenders in $e-4$ and $e-3$, driven by 1976 (López Portillo, Finance 1973) and 1982 (de la Madrid, Programming and Budget 1979); the $e-4$ cutoff above removes those recruits (`anticipation_ties.csv`).
 - **Losing teams vs random regroupings.** Between-team variation of residual changes among losers' followers equals that of random teams of the same sizes (permutation $p=0.42$, `camps_permutation.csv`).
 - **Coverage** of the interval in simulations: 92.7% to 97.0% (`inference_coverage.csv`).
+
+## Reward and punishment against unaligned politicians (18 October 2026, MAIN_SPEC section 11)
+
+Designee's followers ($D$) and losers' followers ($P$) each against one group of politicians tied to no contender ($N$), trimmed to the followers' support (2,954 of 4,754 kept) and entropy-balanced within succession to the followers' means (exact balance on all twelve traits; effective sample 52–170 per succession), with the §4 regression on top.
+
+| Specification | $D-N$ (reward) | $P-N$ (penalty) |
+|---|---:|---:|
+| Main | +0.80 [+0.23, +1.34] | −0.29 [−0.56, −0.01] |
+| (a) Without baseline-rank bands | +0.73 [+0.10, +1.34] | −0.49 [−0.78, −0.21] |
+| (b) All groups trimmed to propensity 0.1–0.9 | +1.00 [+0.47, +1.52] | −0.14 [−0.43, +0.14] |
+| (c) Without unaligned two strong steps from the designee | +0.98 [+0.38, +1.54] | −0.11 [−0.43, +0.21] |
+| (d) Within politician (politician and succession FE, 601 switchers) | +1.20 [+0.62, +1.77] | −0.15 [−0.46, +0.15] |
+
+The reward is +0.7 to +1.2 rungs in every specification. The penalty is small (−0.1 to −0.5), significant only in the main and (a), and temporary: in the event study (`rp_event_study.csv`, `es_reward_punishment.pdf`) the losers' followers dip by 0.24–0.34 rungs from $e$ to $e+4$ and are back at zero by $e+5$; their leads are flat. The designee's followers' leads are slightly negative (−0.37 to +0.03), the source of the small pre-designation gap in the main event study. With every tie, 65% of the comparable unaligned are two steps from the designee; with strong ties, 17%. Reading: $P-N$ is the penalty aimed at a loser's followers beyond what any unaligned politician bears; neither contrast is an absolute effect. Decomposition (`rp_decomposition.csv`, joint draws): reward minus penalty 1.09 [0.54, 1.63] against the §4 estimate 1.15; reward share 74% [37%, 99%], 60% to 90% across specifications.
 
 ## What supports the interval, and what does not
 

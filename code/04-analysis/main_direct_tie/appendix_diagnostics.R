@@ -237,7 +237,7 @@ print(ant_avg[order(designee, k)])
 
 # ------------------------------------------------------------------ 9. rank event-study figure and slide macros
 esr <- fread(file.path(out_dir, "event_study.csv"))[outcome == "rank"]
-es_figure(esr, "Difference in rank since e-2 (rungs)", "es_rank")
+es_figure(esr, "Gap in rank since e-2 (rungs)", "es_rank")
 ess <- fread(file.path(out_dir, "event_study_summary.csv"))[outcome == "rank"]
 mr <- fread(file.path(out_dir, "main_result.csv"))
 pv <- function(p) if (p < 0.001) "$<$0.001" else f2(p, 3)
@@ -277,4 +277,9 @@ lines_mac <- c("% main_direct_tie_macros.tex -- every number on the empirical sl
   mac("MDnoEarlyEst", neg(rob[grepl("^Without 1976", spec), estimate])),
   mac("MDnoEarlyLo", neg(rob[grepl("^Without 1976", spec), ci_lower])),
   mac("MDnoEarlyHi", neg(rob[grepl("^Without 1976", spec), ci_upper])))
+bes <- fread(file.path(out_dir, "budget_event_study.csv"))
+hd <- bes[outcome == "heads_investment_agency" & k %in% 1:4]; iv <- bes[outcome == "investment_commanded_pp"]
+lines_mac <- c(lines_mac,
+  mac("MDheadsEsMin", neg(100 * min(hd$estimate), 0)), mac("MDheadsEsMax", neg(100 * max(hd$estimate), 0)),
+  mac("MDinvOne", neg(iv[k == 1, estimate])), mac("MDinvTwo", neg(iv[k == 2, estimate])))
 writeLines(lines_mac, file.path(tab_dir, "main_direct_tie_macros.tex"))

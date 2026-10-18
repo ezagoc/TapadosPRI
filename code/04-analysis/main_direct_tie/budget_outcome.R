@@ -142,11 +142,19 @@ es <- estimate_columns(d_es, Bt[, colnames(Bt) != as.character(ref)] - Bt[, as.c
 es <- rbind(es[, .(k = as.integer(column), estimate, ci_lower, ci_upper, p_bootstrap)],
             data.table(k = ref, estimate = 0, ci_lower = 0, ci_upper = 0, p_bootstrap = NA))
 setorder(es, k)
-fwrite(es, file.path(out_dir, "budget_event_study.csv"))
-es_figure(es, "Difference in federal investment commanded\nsince e-2 (percentage points)", "es_budget")
+es_h <- estimate_columns(d_es, Ht[, colnames(Ht) != as.character(ref)] - Ht[, as.character(ref)])$table
+es_h <- rbind(es_h[, .(k = as.integer(column), estimate, ci_lower, ci_upper, p_bootstrap)],
+              data.table(k = ref, estimate = 0, ci_lower = 0, ci_upper = 0, p_bootstrap = NA))
+setorder(es_h, k)
+fwrite(rbind(es[, outcome := "investment_commanded_pp"], es_h[, outcome := "heads_investment_agency"]),
+       file.path(out_dir, "budget_event_study.csv"))
+es_figure(es_h, "Gap in heading an investment\nagency since e-2 (pp)", "es_budget_heads", scale = 100)
+es <- es[, outcome := NULL]
+es_figure(es, "Gap in federal investment\ncommanded since e-2 (pp)", "es_budget")
 
 cat("agency series:", uniqueN(series$agency_key), "agencies,", min(series$year), "-", max(series$year), "\n")
 cat("head records resolved:", sum(!is.na(heads$key)), "of", nrow(heads), "\n")
 print(windows[, .(label, estimate = round(estimate, 3), ci_lower = round(ci_lower, 3), ci_upper = round(ci_upper, 3), p_bootstrap)])
 print(desc)
 print(es[, .(k, estimate = round(estimate, 3), ci_lower = round(ci_lower, 3), ci_upper = round(ci_upper, 3))])
+print(es_h[, .(k, heads_pp = round(100 * estimate, 1), lo = round(100 * ci_lower, 1), hi = round(100 * ci_upper, 1))])
