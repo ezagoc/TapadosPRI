@@ -65,8 +65,6 @@ setorder(ext_es, k); setorder(int_es, k)
 fwrite(rbind(ext_es[, margin := "extensive"], int_es[, margin := "intensive"], fill = TRUE),
        file.path(out_dir, "margins_event_study.csv"))
 
-es_figure(ext_es, "Gap in holding a ranked post\nsince e-2 (percentage points)", "es_extensive", scale = 100)
-es_figure(int_es, "Gap in rank since e-2,\nthose in office both years (rungs)", "es_intensive")
 
 print(windows[, .(label, estimate = round(estimate, 3), ci_lower = round(ci_lower, 3), ci_upper = round(ci_upper, 3),
                   p_bootstrap, n, lee_lower = round(lee_lower, 3), lee_upper = round(lee_upper, 3))])

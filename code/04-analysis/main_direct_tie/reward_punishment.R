@@ -247,27 +247,7 @@ es <- rbind(es, data.table(group = c("D", "P"), estimate = 0, ci_lower = 0, ci_u
 setorder(es, group, k)
 fwrite(es, file.path(out_dir, "rp_event_study.csv"))
 
-pd <- copy(es)[, x := k + fifelse(group == "D", -0.12, 0.12)]
-pd[, lab := fifelse(group == "D", "Designee's followers", "Losing contenders' followers")]
-top <- max(pd$ci_upper); bot <- min(pd$ci_lower); span <- top - bot
-mk <- data.table(x = c(-1.5, 0.5, 6.5), lab = c("Designation", "New president", "Next president"))
-g <- ggplot(pd, aes(x, estimate)) +
-  geom_hline(yintercept = 0, colour = RULE, linewidth = 0.35) +
-  geom_vline(data = mk, aes(xintercept = x), colour = RULE, linewidth = 0.35, linetype = "dashed") +
-  geom_text(data = mk, aes(x = x + 0.12, y = top + 0.10 * span, label = lab), hjust = 0, vjust = 0, colour = MUTED, size = 4.2, family = FAM) +
-  geom_linerange(aes(ymin = ci_lower, ymax = ci_upper, colour = group), linewidth = 0.45, show.legend = FALSE) +
-  geom_linerange(aes(ymin = ci90_lower, ymax = ci90_upper, colour = group), linewidth = 1.5, show.legend = FALSE) +
-  geom_point(aes(shape = group, colour = group), fill = "white", size = 2.6, stroke = 0.8) +
-  scale_colour_manual(values = c(D = INK, P = "#7a7a7a"), labels = c(D = "Designee's followers", P = "Losers' followers"), name = NULL) +
-  scale_shape_manual(values = c(D = 16, P = 21), labels = c(D = "Designee's followers", P = "Losers' followers"), name = NULL) +
-  scale_x_continuous(breaks = ks, labels = k_labels_ascii) +
-  coord_cartesian(ylim = c(bot - 0.03 * span, top + 0.20 * span), clip = "off") +
-  labs(x = "Year relative to the presidential election (e)",
-       y = "Gap with comparable unaligned,\nrank since e-2 (rungs)") + theme_paper(17) +
-  theme(legend.position = "inside", legend.position.inside = c(0.01, 0.80), legend.justification = c(0, 1),
-        legend.text = element_text(size = 14, colour = INK), legend.key = element_blank(), legend.background = element_blank())
-ggsave(file.path(out_dir, "es_reward_punishment.pdf"), g, width = 10, height = 4.1, bg = "white", device = "pdf")
-ggsave(file.path(out_dir, "es_reward_punishment.png"), g, width = 10, height = 4.1, dpi = 250, bg = "white")
+# figure: figures.R
 
 print(support_tab); print(balance[, lapply(.SD, function(x) if (is.numeric(x)) round(x, 2) else x)])
 print(decomp[, lapply(.SD, function(x) if (is.numeric(x)) round(x, 3) else x)])

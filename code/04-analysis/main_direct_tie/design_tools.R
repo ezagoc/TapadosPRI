@@ -113,7 +113,7 @@ k_labels_ascii <- function(x) ifelse(x == 0, "e", ifelse(x > 0, paste0("e+", x),
 # Event-study figure: points with 95% intervals, reference year hollow, vertical rules at designation
 # (between e-2 and e-1), the new president's inauguration (1 Dec of e) and the next one (1 Dec of e+6).
 es_figure <- function(d, ylab, file, scale = 1, out = out_dir, width = 10, height = 4.1, marks = TRUE,
-                      facet = NULL, base = 17) {
+                      facet = NULL, base = 17, ysize = 14) {
   d <- copy(d)
   d[, `:=`(est = scale * estimate, lo = scale * ci_lower, hi = scale * ci_upper)]
   if (!"ci90_lower" %in% names(d)) d[, `:=`(ci90_lower = ci_lower, ci90_upper = ci_upper)]
@@ -135,7 +135,8 @@ es_figure <- function(d, ylab, file, scale = 1, out = out_dir, width = 10, heigh
     geom_point(data = d[k %in% ref_k], shape = 21, fill = "white", colour = INK, size = 2.4, stroke = 0.7) +
     scale_x_continuous(breaks = sort(unique(d$k)), labels = k_labels_ascii) +
     coord_cartesian(ylim = c(bot - 0.03 * span, top + 0.20 * span), clip = "off") +
-    labs(x = "Year relative to the presidential election (e)", y = ylab) + theme_paper(base)
+    labs(x = "Year relative to the presidential election (e)", y = ylab) + theme_paper(base) +
+    theme(axis.title.y = element_text(size = ysize, lineheight = 0.95))
   if (!is.null(facet)) g <- g + facet_wrap(as.formula(paste("~", facet)), nrow = 1, scales = "free_y")
   ggsave(file.path(out, paste0(file, ".pdf")), g, width = width, height = height, bg = "white", device = "pdf")
   ggsave(file.path(out, paste0(file, ".png")), g, width = width, height = height, dpi = 250, bg = "white")

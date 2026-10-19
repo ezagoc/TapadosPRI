@@ -148,9 +148,7 @@ es_h <- rbind(es_h[, .(k = as.integer(column), estimate, ci_lower, ci_upper, ci9
 setorder(es_h, k)
 fwrite(rbind(es[, outcome := "investment_commanded_pp"], es_h[, outcome := "heads_investment_agency"]),
        file.path(out_dir, "budget_event_study.csv"))
-es_figure(es_h, "Gap in heading an investment\nagency since e-2 (pp)", "es_budget_heads", scale = 100)
 es <- es[, outcome := NULL]
-es_figure(es, "Gap in federal investment\ncommanded since e-2 (pp)", "es_budget")
 
 cat("agency series:", uniqueN(series$agency_key), "agencies,", min(series$year), "-", max(series$year), "\n")
 cat("head records resolved:", sum(!is.na(heads$key)), "of", nrow(heads), "\n")
