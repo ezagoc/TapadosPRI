@@ -6,28 +6,24 @@ suppressPackageStartupMessages(library(data.table))
 db_root <- Sys.getenv("TAPADOSPRI_DB_ROOT", file.path(path.expand("~"), "Dropbox", "TapadosPRI"))
 out_dir <- Sys.getenv("TAPADOS_MAIN_OUTPUT_DIR", file.path(db_root, "output", "main_direct_tie"))
 source(file.path(script_dir, "design_tools.R"))
-contrast <- "designee's minus losers' followers"
-
 es_rank <- fread(file.path(out_dir, "event_study.csv"))[outcome == "rank"]
-es_figure(es_rank, paste0("Change in rank since e-2 (rungs),\n", contrast), "es_rank")
+es_figure(es_rank, expression("Effect on rank, " * hat(theta)[k] * " (rungs)"), "es_rank")
 
 mg <- fread(file.path(out_dir, "margins_event_study.csv"))
-es_figure(mg[margin == "extensive"], paste0("Holds a post, change since e-2 (pp),\n", contrast), "es_extensive", scale = 100)
-es_figure(mg[margin == "intensive"], paste0("Rank among those in office,\nchange since e-2 (rungs),\n", contrast), "es_intensive", ysize = 13)
+es_figure(mg[margin == "extensive"], expression("Effect on holding a post, " * hat(theta)[k] * " (pp)"), "es_extensive", scale = 100)
+es_figure(mg[margin == "intensive"], expression("Effect on rank in office, " * hat(theta)[k] * " (rungs)"), "es_intensive")
 
 bg <- fread(file.path(out_dir, "budget_event_study.csv"))
-es_figure(bg[outcome == "investment_commanded_pp"],
-          "Share of federal investment\ncommanded, change since e-2 (pp),\ndesignee's minus losers' followers", "es_budget", ysize = 13)
-es_figure(bg[outcome == "heads_investment_agency"],
-          "Heads an investment agency,\nchange since e-2 (pp),\ndesignee's minus losers' followers", "es_budget_heads",
-          scale = 100, ysize = 13)
+es_figure(bg[outcome == "investment_commanded_pp"], expression("Effect on investment commanded, " * hat(theta)[k] * " (pp)"), "es_budget")
+es_figure(bg[outcome == "heads_investment_agency"], expression("Effect on heading an agency, " * hat(theta)[k] * " (pp)"),
+          "es_budget_heads", scale = 100)
 
 # Reward and penalty: two groups against the reweighted unaligned, symbol legend.
 es <- fread(file.path(out_dir, "rp_event_study.csv")); ks <- -7:8
 pd <- copy(es)[, x := k + fifelse(group == "D", -0.12, 0.12)]
 top <- max(pd$ci_upper); bot <- min(pd$ci_lower); span <- top - bot
 mk <- data.table(x = c(-1.5, 0.5, 6.5), lab = c("Designation", "New president", "Next president"))
-lab_g <- c(D = "Designee's followers", P = "Losers' followers")
+lab_g <- c(D = expression(hat(theta)^D * ": designee's followers"), P = expression(hat(theta)^P * ": losers' followers"))
 g <- ggplot(pd, aes(x, estimate)) +
   geom_hline(yintercept = 0, colour = RULE, linewidth = 0.35) +
   geom_vline(data = mk, aes(xintercept = x), colour = RULE, linewidth = 0.35, linetype = "dashed") +
@@ -37,10 +33,9 @@ g <- ggplot(pd, aes(x, estimate)) +
   geom_point(aes(shape = group, colour = group), fill = "white", size = 2.6, stroke = 0.8) +
   scale_colour_manual(values = c(D = INK, P = "#7a7a7a"), labels = lab_g, name = NULL) +
   scale_shape_manual(values = c(D = 16, P = 21), labels = lab_g, name = NULL) +
-  scale_x_continuous(breaks = ks, labels = k_labels_ascii) +
+  scale_x_continuous(breaks = ks, labels = k_numbers) +
   coord_cartesian(ylim = c(bot - 0.03 * span, top + 0.20 * span), clip = "off") +
-  labs(x = "Year relative to the presidential election (e)",
-       y = "Change in rank since e-2 (rungs),\ngroup minus comparable unaligned") + theme_paper(17) +
+  labs(x = x_label_k, y = expression(hat(theta)[k]^D * " and " * hat(theta)[k]^P * " (rungs)")) + theme_paper(17) +
   theme(axis.title.y = element_text(size = 14, lineheight = 0.95),
         legend.position = "inside", legend.position.inside = c(0.01, 0.80), legend.justification = c(0, 1),
         legend.text = element_text(size = 14, colour = INK), legend.key = element_blank(), legend.background = element_blank())
@@ -55,8 +50,8 @@ ga <- ggplot(ant, aes(k, ties, linetype = who, shape = who)) +
   scale_shape_manual(values = c(16, 21), name = NULL) + scale_linetype_manual(values = c("solid", "dashed"), name = NULL) +
   annotate("text", x = -3.3, y = max(ant[designee == TRUE, ties]) * 0.98, hjust = 1, vjust = 1, colour = MUTED, size = 3.9,
            family = FAM, lineheight = 0.9, label = "1976 and 1982 designees appointed\nto Finance and to Programming\nand Budget") +
-  scale_x_continuous(breaks = -10:-2, labels = k_labels_ascii) +
-  labs(x = "Year relative to the presidential election (e)", y = "New direct ties formed in the year\n(average per contender)") +
+  scale_x_continuous(breaks = -10:-2, labels = k_numbers) +
+  labs(x = x_label_k, y = "New direct ties formed in the year\n(average per contender)") +
   theme_paper(17) + theme(axis.title.y = element_text(size = 14, lineheight = 0.95),
                           legend.position = "inside", legend.position.inside = c(0.01, 0.99), legend.justification = c(0, 1),
                           legend.text = element_text(size = 14, colour = INK), legend.key = element_blank(),
