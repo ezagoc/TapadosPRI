@@ -165,16 +165,17 @@ ant[, share := ties / pmax(sum(ties[k <= -2]), 1), by = .(election, contender)]
 ant_avg <- ant[, .(share = mean(share), ties = mean(ties), contenders = .N), by = .(designee, k)]
 fwrite(ant_avg, file.path(out_dir, "anticipation_ties.csv"))
 pa <- ant_avg[k <= -2]
-ga <- ggplot(pa, aes(k, ties, linetype = designee, shape = designee)) +
-  geom_line(colour = INK, linewidth = 0.45) + geom_point(colour = INK, size = 1.9, fill = "white") +
-  scale_shape_manual(values = c(`TRUE` = 16, `FALSE` = 21)) + scale_linetype_manual(values = c(`TRUE` = "solid", `FALSE` = "dashed")) +
-  annotate("text", x = -9.9, y = max(pa$ties) * 1.08, label = "Solid: designee.  Dashed: average losing contender.",
-           hjust = 0, colour = INK, size = 4.2, family = FAM) +
+pa[, who := factor(fifelse(designee, "Designee", "Average losing contender"), levels = c("Designee", "Average losing contender"))]
+ga <- ggplot(pa, aes(k, ties, linetype = who, shape = who)) +
+  geom_line(colour = INK, linewidth = 0.45) + geom_point(colour = INK, size = 2.2, fill = "white") +
+  scale_shape_manual(values = c(16, 21), name = NULL) + scale_linetype_manual(values = c("solid", "dashed"), name = NULL) +
   annotate("text", x = -3.3, y = max(pa[designee == TRUE, ties]) * 0.98, hjust = 1, vjust = 1, colour = MUTED, size = 3.9,
            family = FAM, lineheight = 0.9, label = "1976 and 1982 designees appointed\nto Finance and to Programming\nand Budget") +
   scale_x_continuous(breaks = -10:-2, labels = k_labels_ascii) +
   labs(x = "Year relative to the presidential election (e)", y = "New direct ties formed in the year\n(average per contender)") +
-  theme_paper(17)
+  theme_paper(17) + theme(legend.position = "inside", legend.position.inside = c(0.01, 0.99), legend.justification = c(0, 1),
+                          legend.text = element_text(size = 14, colour = INK), legend.key = element_blank(),
+                          legend.background = element_blank(), legend.key.width = unit(1.6, "lines"))
 ggsave(file.path(out_dir, "anticipation_ties.pdf"), ga, width = 10, height = 4.1, bg = "white", device = "pdf")
 ggsave(file.path(out_dir, "anticipation_ties.png"), ga, width = 10, height = 4.1, dpi = 250, bg = "white")
 

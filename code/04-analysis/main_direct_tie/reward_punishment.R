@@ -127,8 +127,10 @@ rp_inference <- function(S, fit, B = 50000L) {
   seN <- sqrt(cr_var(D$a, D$u, S$cluster, S$group == "N"))
   draws <- draws + rnorm(B, 0, seN)
   q <- quantile(draws, c(.025, .975), names = FALSE, type = 1)
+  q90 <- quantile(draws, c(.05, .95), names = FALSE, type = 1)
   data.table(group = c("D", "P"), estimate = c(D$est, P$est),
              ci_lower = c(D$est - q[2], P$est - 1.96 * seP), ci_upper = c(D$est - q[1], P$est + 1.96 * seP),
+             ci90_lower = c(D$est - q90[2], P$est - 1.645 * seP), ci90_upper = c(D$est - q90[1], P$est + 1.645 * seP),
              se = c(sd(draws), seP), p_value = c(mean(abs(draws) >= abs(D$est)), 2 * pnorm(-abs(P$est / seP))),
              inference = c("Ferman-Pinto bootstrap, losing groups as donors", "clustered by contender group / unaligned politician"))
 }
@@ -241,7 +243,7 @@ es <- rbindlist(lapply(setdiff(ks, ref), function(k) {
   y <- YS[, as.character(k)] - YS[, as.character(ref)]
   r <- rp_inference(S_es, rp_fit(S_es, y, f_es), B = 20000L); r[, k := k]
 }))
-es <- rbind(es, data.table(group = c("D", "P"), estimate = 0, ci_lower = 0, ci_upper = 0, k = ref), fill = TRUE)
+es <- rbind(es, data.table(group = c("D", "P"), estimate = 0, ci_lower = 0, ci_upper = 0, ci90_lower = 0, ci90_upper = 0, k = ref), fill = TRUE)
 setorder(es, group, k)
 fwrite(es, file.path(out_dir, "rp_event_study.csv"))
 
@@ -253,16 +255,17 @@ g <- ggplot(pd, aes(x, estimate)) +
   geom_hline(yintercept = 0, colour = RULE, linewidth = 0.35) +
   geom_vline(data = mk, aes(xintercept = x), colour = RULE, linewidth = 0.35, linetype = "dashed") +
   geom_text(data = mk, aes(x = x + 0.12, y = top + 0.10 * span, label = lab), hjust = 0, vjust = 0, colour = MUTED, size = 4.2, family = FAM) +
-  geom_linerange(aes(ymin = ci_lower, ymax = ci_upper, colour = group), linewidth = 0.5) +
-  geom_point(data = pd[group == "D"], colour = INK, size = 2.4) +
-  geom_point(data = pd[group == "P"], shape = 21, fill = "white", colour = "#7a7a7a", size = 2.4, stroke = 0.8) +
-  scale_colour_manual(values = c(D = INK, P = "#7a7a7a")) +
-  annotate("text", x = -7.2, y = 0.72 * top, hjust = 0, vjust = 0.5, size = 4.2, family = FAM, colour = INK,
-           label = "Filled: designee's followers.  Hollow: losers' followers.") +
+  geom_linerange(aes(ymin = ci_lower, ymax = ci_upper, colour = group), linewidth = 0.45, show.legend = FALSE) +
+  geom_linerange(aes(ymin = ci90_lower, ymax = ci90_upper, colour = group), linewidth = 1.5, show.legend = FALSE) +
+  geom_point(aes(shape = group, colour = group), fill = "white", size = 2.6, stroke = 0.8) +
+  scale_colour_manual(values = c(D = INK, P = "#7a7a7a"), labels = c(D = "Designee's followers", P = "Losers' followers"), name = NULL) +
+  scale_shape_manual(values = c(D = 16, P = 21), labels = c(D = "Designee's followers", P = "Losers' followers"), name = NULL) +
   scale_x_continuous(breaks = ks, labels = k_labels_ascii) +
   coord_cartesian(ylim = c(bot - 0.03 * span, top + 0.20 * span), clip = "off") +
   labs(x = "Year relative to the presidential election (e)",
-       y = "Gap with comparable unaligned,\nrank since e-2 (rungs)") + theme_paper(17)
+       y = "Gap with comparable unaligned,\nrank since e-2 (rungs)") + theme_paper(17) +
+  theme(legend.position = "inside", legend.position.inside = c(0.01, 0.80), legend.justification = c(0, 1),
+        legend.text = element_text(size = 14, colour = INK), legend.key = element_blank(), legend.background = element_blank())
 ggsave(file.path(out_dir, "es_reward_punishment.pdf"), g, width = 10, height = 4.1, bg = "white", device = "pdf")
 ggsave(file.path(out_dir, "es_reward_punishment.png"), g, width = 10, height = 4.1, dpi = 250, bg = "white")
 

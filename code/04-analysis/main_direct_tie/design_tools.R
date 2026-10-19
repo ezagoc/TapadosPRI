@@ -116,6 +116,8 @@ es_figure <- function(d, ylab, file, scale = 1, out = out_dir, width = 10, heigh
                       facet = NULL, base = 17) {
   d <- copy(d)
   d[, `:=`(est = scale * estimate, lo = scale * ci_lower, hi = scale * ci_upper)]
+  if (!"ci90_lower" %in% names(d)) d[, `:=`(ci90_lower = ci_lower, ci90_upper = ci_upper)]
+  d[, `:=`(lo90 = scale * ci90_lower, hi90 = scale * ci90_upper)]
   ref_k <- d[estimate == 0 & ci_lower == 0 & ci_upper == 0, k]
   top <- max(d$hi, na.rm = TRUE); bot <- min(d$lo, na.rm = TRUE)
   span <- top - bot
@@ -127,7 +129,8 @@ es_figure <- function(d, ylab, file, scale = 1, out = out_dir, width = 10, heigh
       geom_text(data = mk, aes(x = x + 0.12, y = top + 0.10 * span, label = lab), hjust = 0, vjust = 0,
                 colour = MUTED, size = base * 0.25, family = FAM)
   }
-  g <- g + geom_linerange(aes(ymin = lo, ymax = hi), colour = INK, linewidth = 0.5) +
+  g <- g + geom_linerange(aes(ymin = lo, ymax = hi), colour = INK, linewidth = 0.45) +
+    geom_linerange(aes(ymin = lo90, ymax = hi90), colour = INK, linewidth = 1.5) +
     geom_point(data = d[!(k %in% ref_k)], colour = INK, size = 2.4) +
     geom_point(data = d[k %in% ref_k], shape = 21, fill = "white", colour = INK, size = 2.4, stroke = 0.7) +
     scale_x_continuous(breaks = sort(unique(d$k)), labels = k_labels_ascii) +

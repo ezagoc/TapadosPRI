@@ -139,12 +139,12 @@ fwrite(windows, file.path(out_dir, "budget_windows.csv"))
 fwrite(desc, file.path(out_dir, "budget_descriptives.csv"))
 d_es <- build_design(formula = formula_es)
 es <- estimate_columns(d_es, Bt[, colnames(Bt) != as.character(ref)] - Bt[, as.character(ref)])$table
-es <- rbind(es[, .(k = as.integer(column), estimate, ci_lower, ci_upper, p_bootstrap)],
-            data.table(k = ref, estimate = 0, ci_lower = 0, ci_upper = 0, p_bootstrap = NA))
+es <- rbind(es[, .(k = as.integer(column), estimate, ci_lower, ci_upper, ci90_lower, ci90_upper, p_bootstrap)],
+            data.table(k = ref, estimate = 0, ci_lower = 0, ci_upper = 0, ci90_lower = 0, ci90_upper = 0, p_bootstrap = NA))
 setorder(es, k)
 es_h <- estimate_columns(d_es, Ht[, colnames(Ht) != as.character(ref)] - Ht[, as.character(ref)])$table
-es_h <- rbind(es_h[, .(k = as.integer(column), estimate, ci_lower, ci_upper, p_bootstrap)],
-              data.table(k = ref, estimate = 0, ci_lower = 0, ci_upper = 0, p_bootstrap = NA))
+es_h <- rbind(es_h[, .(k = as.integer(column), estimate, ci_lower, ci_upper, ci90_lower, ci90_upper, p_bootstrap)],
+              data.table(k = ref, estimate = 0, ci_lower = 0, ci_upper = 0, ci90_lower = 0, ci90_upper = 0, p_bootstrap = NA))
 setorder(es_h, k)
 fwrite(rbind(es[, outcome := "investment_commanded_pp"], es_h[, outcome := "heads_investment_agency"]),
        file.path(out_dir, "budget_event_study.csv"))

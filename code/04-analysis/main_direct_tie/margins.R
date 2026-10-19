@@ -49,17 +49,17 @@ fwrite(lee, file.path(out_dir, "margins_lee_by_succession.csv"))
 d_es <- build_design(formula = formula_es)
 ext_cols <- E_[, colnames(E_) != as.character(ref)] - E_[, as.character(ref)]
 ext_es <- estimate_columns(d_es, ext_cols)$table
-ext_es <- rbind(ext_es[, .(k = as.integer(column), estimate, ci_lower, ci_upper, p_bootstrap, n)],
-                data.table(k = ref, estimate = 0, ci_lower = 0, ci_upper = 0, p_bootstrap = NA, n = nrow(sample)))
+ext_es <- rbind(ext_es[, .(k = as.integer(column), estimate, ci_lower, ci_upper, ci90_lower, ci90_upper, p_bootstrap, n)],
+                data.table(k = ref, estimate = 0, ci_lower = 0, ci_upper = 0, ci90_lower = 0, ci90_upper = 0, p_bootstrap = NA, n = nrow(sample)))
 int_es <- rbindlist(lapply(setdiff(ks, ref), function(k) {
   keep <- Y[, as.character(ref)] > 0 & Y[, as.character(k)] > 0
   d <- build_design(keep = keep, formula = formula_es)
   y <- (Y[, as.character(k)] - Y[, as.character(ref)])[d$rows]
   t <- estimate_columns(d, cbind(y), B = 20000L, seed = 17102026L + k)$table
-  data.table(k = k, estimate = t$estimate, ci_lower = t$ci_lower, ci_upper = t$ci_upper,
-             p_bootstrap = t$p_bootstrap, n = t$n, n_designee = t$n_designee)
+  data.table(k = k, estimate = t$estimate, ci_lower = t$ci_lower, ci_upper = t$ci_upper, ci90_lower = t$ci90_lower,
+             ci90_upper = t$ci90_upper, p_bootstrap = t$p_bootstrap, n = t$n, n_designee = t$n_designee)
 }))
-int_es <- rbind(int_es, data.table(k = ref, estimate = 0, ci_lower = 0, ci_upper = 0, p_bootstrap = NA,
+int_es <- rbind(int_es, data.table(k = ref, estimate = 0, ci_lower = 0, ci_upper = 0, ci90_lower = 0, ci90_upper = 0, p_bootstrap = NA,
                                    n = sum(Y[, as.character(ref)] > 0), n_designee = NA), fill = TRUE)
 setorder(ext_es, k); setorder(int_es, k)
 fwrite(rbind(ext_es[, margin := "extensive"], int_es[, margin := "intensive"], fill = TRUE),
