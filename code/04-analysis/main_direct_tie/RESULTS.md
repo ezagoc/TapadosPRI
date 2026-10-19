@@ -49,6 +49,8 @@ About half of the rank premium is promotion among those who stay in office; the 
 
 ## Federal investment commanded (17 October 2026, MAIN_SPEC section 9)
 
+**Status (18 October 2026): not used in the deck.** The investment-commanded estimate is driven by one politician: Enrique Estrada Reynoso (designee's follower, 1940), director of National Railways in 1941–42 when it executed 23% of federal investment, contributes 0.33 of the 0.34; without him 0.02; with person weights 0.09. Heading an investment agency (+7.7 points, positive in 7 of 9 successions) is the robust part, but the user dropped the investment results from the deck until a better use of the agency data is found. Descriptive checks (share of investment run by each camp; presence in state enterprises) are in `research/_explore_2026-10-18/` and show no money advantage for the winner's camp.
+
 After designation 11.1% of the designee's followers head an agency with federal investment, against 3.2% of the losers' followers (5.9% and 5.6% before). Heads an investment agency: +7.7 points [+2.6, +12.8], $p=0.003$. Percent of federal investment commanded: +0.34 points [+0.02, +0.69], $p=0.05$. Event study: flat before designation, +0.32 and +0.33 points in $e+1$ and $e+2$, about zero afterwards (`budget_event_study.csv`). Heading an investment agency, by year: +7 points in $e$, +8 to +9 in $e+1,\ldots,e+4$, +5 in $e+5$ and $e+6$, zero in $e+7$: the investment edge ends after $e+2$ while the posts are kept. The outcome moves with both the post and the agency's budget; it does not hold the office fixed. 572 of 1,577 head-of-agency records resolve to an agency of the investment panel (`budget_crosswalk_audit.csv`).
 
 ## Appendix diagnostics (17 October 2026, MAIN_SPEC section 10)
