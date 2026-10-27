@@ -135,10 +135,12 @@ es_figure <- function(d, ylab, file, scale = 1, out = out_dir, width = 10, heigh
                       yend = scale * summary$est, colour = "#940034", linewidth = 1.1, linetype = "dashed")
   }
   if (marks) {
-    mk <- data.table(x = c(-1.5, 0.5, 6.5), lab = c("Designation", "New president", "Next president"))
-    g <- g + geom_vline(data = mk, aes(xintercept = x), colour = RULE, linewidth = 0.35, linetype = "dashed") +
+    # The designation (the treatment) in near-black; the two handovers in grey.
+    mk <- data.table(x = c(-1.5, 0.5, 6.5), lab = c("Designation", "New president", "Next president"),
+                     col = c("#1a1a1a", RULE, RULE), lw = c(0.6, 0.35, 0.35), tcol = c("#1a1a1a", MUTED, MUTED))
+    g <- g + geom_vline(data = mk, aes(xintercept = x), colour = mk$col, linewidth = mk$lw, linetype = "dashed") +
       geom_text(data = mk, aes(x = x + 0.12, y = top + 0.10 * span, label = lab), hjust = 0, vjust = 0,
-                colour = MUTED, size = base * 0.25, family = FAM)
+                colour = mk$tcol, size = base * 0.25, family = FAM)
   }
   g <- g + geom_linerange(aes(ymin = lo, ymax = hi), colour = INK, linewidth = 0.45) +
     geom_linerange(aes(ymin = lo90, ymax = hi90), colour = INK, linewidth = 1.5) +

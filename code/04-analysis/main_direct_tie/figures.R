@@ -43,12 +43,13 @@ es_figure(bg[outcome == "heads_investment_agency"], expression("Effect on headin
 es <- fread(file.path(out_dir, "rp_event_study.csv")); ks <- -7:8
 pd <- copy(es)[, x := k + fifelse(group == "D", -0.12, 0.12)]
 top <- max(pd$ci_upper); bot <- min(pd$ci_lower); span <- top - bot
-mk <- data.table(x = c(-1.5, 0.5, 6.5), lab = c("Designation", "New president", "Next president"))
+mk <- data.table(x = c(-1.5, 0.5, 6.5), lab = c("Designation", "New president", "Next president"),
+                 col = c("#1a1a1a", RULE, RULE), lw = c(0.6, 0.35, 0.35), tcol = c("#1a1a1a", MUTED, MUTED))
 lab_g <- c(D = "Designee's followers", P = "Losers' followers")
 g <- ggplot(pd, aes(x, estimate)) +
   geom_hline(yintercept = 0, colour = RULE, linewidth = 0.35) +
-  geom_vline(data = mk, aes(xintercept = x), colour = RULE, linewidth = 0.35, linetype = "dashed") +
-  geom_text(data = mk, aes(x = x + 0.12, y = top + 0.10 * span, label = lab), hjust = 0, vjust = 0, colour = MUTED, size = 4.2, family = FAM) +
+  geom_vline(data = mk, aes(xintercept = x), colour = mk$col, linewidth = mk$lw, linetype = "dashed") +
+  geom_text(data = mk, aes(x = x + 0.12, y = top + 0.10 * span, label = lab), hjust = 0, vjust = 0, colour = mk$tcol, size = 4.2, family = FAM) +
   geom_linerange(aes(ymin = ci_lower, ymax = ci_upper, colour = group), linewidth = 0.45, show.legend = FALSE) +
   geom_linerange(aes(ymin = ci90_lower, ymax = ci90_upper, colour = group), linewidth = 1.5, show.legend = FALSE) +
   geom_point(aes(shape = group, colour = group), fill = "white", size = 2.6, stroke = 0.8) +
