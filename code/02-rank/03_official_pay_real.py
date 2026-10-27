@@ -44,7 +44,7 @@ OFFICES = [
     ("President of Mexico",                     1, 200.0, None),
     ("Cabinet secretary",                       2, 54.0,  (88278, 88278)),
     ("Undersecretary",                          4, 45.0,  (80085, 83768)),
-    ("Director general",                        5, 43.25, (51193, 72061)),
+    ("Director general",                        5, 41.5,  (51193, 72061)),   # Correos, p. 172
     ("Deputy director general",                 6, None,  (39163, 63036)),
     ("Area director",                           7, None,  (24676, 41473)),
     ("Department head (1927: jefe de sección)", 8, 13.5,  (10013, 15218)),
