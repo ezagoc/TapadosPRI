@@ -125,6 +125,15 @@ es_figure <- function(d, ylab, file, scale = 1, out = out_dir, width = 10, heigh
   span <- top - bot
   g <- ggplot(d, aes(k, est)) +
     geom_hline(yintercept = 0, colour = RULE, linewidth = 0.35)
+  # Optional summary of a stretch of years, drawn under the estimates: a soft band for its interval and a dashed
+  # line at the average over k0..k1 (the label is added last, below the points).
+  if (!is.null(summary)) {
+    if (!is.null(summary$lo))
+      g <- g + annotate("rect", xmin = summary$k0 - 0.45, xmax = summary$k1 + 0.45, ymin = scale * summary$lo,
+                        ymax = scale * summary$hi, fill = "#940034", alpha = 0.10)
+    g <- g + annotate("segment", x = summary$k0 - 0.45, xend = summary$k1 + 0.45, y = scale * summary$est,
+                      yend = scale * summary$est, colour = "#940034", linewidth = 1.1, linetype = "dashed")
+  }
   if (marks) {
     mk <- data.table(x = c(-1.5, 0.5, 6.5), lab = c("Designation", "New president", "Next president"))
     g <- g + geom_vline(data = mk, aes(xintercept = x), colour = RULE, linewidth = 0.35, linetype = "dashed") +
@@ -139,14 +148,9 @@ es_figure <- function(d, ylab, file, scale = 1, out = out_dir, width = 10, heigh
     coord_cartesian(ylim = c(bot - 0.03 * span, top + 0.20 * span), clip = "off") +
     labs(x = x_label_k, y = ylab) + theme_paper(base) +
     theme(axis.title.y = element_text(size = ysize, lineheight = 0.95))
-  # Optional summary of a stretch of years: a horizontal segment at the average over k0..k1 with its label below.
+  # The summary's label, below the points.
   if (!is.null(summary)) {
-    if (!is.null(summary$lo))   # its interval as a soft red band
-      g <- g + annotate("rect", xmin = summary$k0 - 0.45, xmax = summary$k1 + 0.45, ymin = scale * summary$lo,
-                        ymax = scale * summary$hi, fill = "#940034", alpha = 0.10)
-    g <- g + annotate("segment", x = summary$k0 - 0.45, xend = summary$k1 + 0.45, y = scale * summary$est,
-                      yend = scale * summary$est, colour = "#940034", linewidth = 1.1, linetype = "dashed") +
-      annotate("text", x = (summary$k0 + summary$k1) / 2, y = bot + 0.04 * span, label = summary$label,
+    g <- g + annotate("text", x = (summary$k0 + summary$k1) / 2, y = bot + 0.04 * span, label = summary$label,
                colour = "#940034", size = base * 0.25, family = FAM, vjust = 0, lineheight = 0.9)
   }
   if (!is.null(facet)) g <- g + facet_wrap(as.formula(paste("~", facet)), nrow = 1, scales = "free_y")
