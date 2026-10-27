@@ -107,7 +107,7 @@ theme_paper <- function(base = 15) theme_classic(base_size = base, base_family =
         strip.background = element_blank(), strip.text = element_text(colour = INK, size = base - 1, hjust = 0),
         plot.background = element_rect(fill = "white", colour = NA), legend.position = "none",
         plot.margin = margin(10, 14, 6, 6))
-x_label_k <- expression("Years relative to the election, " * italic(k))
+x_label_k <- "Years relative to the election"
 k_labels <- function(x) ifelse(x == 0, "e", ifelse(x > 0, paste0("e+", x), paste0("e−", abs(x))))
 k_labels_ascii <- function(x) ifelse(x == 0, "e", ifelse(x > 0, paste0("e+", x), paste0("e-", abs(x))))
 k_numbers <- function(x) as.character(x)
@@ -115,7 +115,7 @@ k_numbers <- function(x) as.character(x)
 # Event-study figure: points with 95% intervals, reference year hollow, vertical rules at designation
 # (between e-2 and e-1), the new president's inauguration (1 Dec of e) and the next one (1 Dec of e+6).
 es_figure <- function(d, ylab, file, scale = 1, out = out_dir, width = 10, height = 4.1, marks = TRUE,
-                      facet = NULL, base = 17, ysize = 14) {
+                      facet = NULL, base = 17, ysize = 14, summary = NULL) {
   d <- copy(d)
   d[, `:=`(est = scale * estimate, lo = scale * ci_lower, hi = scale * ci_upper)]
   if (!"ci90_lower" %in% names(d)) d[, `:=`(ci90_lower = ci_lower, ci90_upper = ci_upper)]
@@ -139,6 +139,13 @@ es_figure <- function(d, ylab, file, scale = 1, out = out_dir, width = 10, heigh
     coord_cartesian(ylim = c(bot - 0.03 * span, top + 0.20 * span), clip = "off") +
     labs(x = x_label_k, y = ylab) + theme_paper(base) +
     theme(axis.title.y = element_text(size = ysize, lineheight = 0.95))
+  # Optional summary of a stretch of years: a horizontal segment at the average over k0..k1 with its label below.
+  if (!is.null(summary)) {
+    g <- g + annotate("segment", x = summary$k0 - 0.45, xend = summary$k1 + 0.45, y = scale * summary$est,
+                      yend = scale * summary$est, colour = "#940034", linewidth = 1.1) +
+      annotate("text", x = (summary$k0 + summary$k1) / 2, y = bot + 0.04 * span, label = summary$label,
+               colour = "#940034", size = base * 0.25, family = FAM, vjust = 0, lineheight = 0.9)
+  }
   if (!is.null(facet)) g <- g + facet_wrap(as.formula(paste("~", facet)), nrow = 1, scales = "free_y")
   ggsave(file.path(out, paste0(file, ".pdf")), g, width = width, height = height, bg = "white", device = "pdf")
   ggsave(file.path(out, paste0(file, ".png")), g, width = width, height = height, dpi = 250, bg = "white")
