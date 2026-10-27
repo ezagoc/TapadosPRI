@@ -141,8 +141,11 @@ es_figure <- function(d, ylab, file, scale = 1, out = out_dir, width = 10, heigh
     theme(axis.title.y = element_text(size = ysize, lineheight = 0.95))
   # Optional summary of a stretch of years: a horizontal segment at the average over k0..k1 with its label below.
   if (!is.null(summary)) {
+    if (!is.null(summary$lo))   # its interval as a soft red band
+      g <- g + annotate("rect", xmin = summary$k0 - 0.45, xmax = summary$k1 + 0.45, ymin = scale * summary$lo,
+                        ymax = scale * summary$hi, fill = "#940034", alpha = 0.10)
     g <- g + annotate("segment", x = summary$k0 - 0.45, xend = summary$k1 + 0.45, y = scale * summary$est,
-                      yend = scale * summary$est, colour = "#940034", linewidth = 1.1) +
+                      yend = scale * summary$est, colour = "#940034", linewidth = 1.1, linetype = "dashed") +
       annotate("text", x = (summary$k0 + summary$k1) / 2, y = bot + 0.04 * span, label = summary$label,
                colour = "#940034", size = base * 0.25, family = FAM, vjust = 0, lineheight = 0.9)
   }

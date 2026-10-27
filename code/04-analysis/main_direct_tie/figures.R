@@ -9,7 +9,7 @@ source(file.path(script_dir, "design_tools.R"))
 es_rank <- fread(file.path(out_dir, "event_study.csv"))[outcome == "rank"]
 es_sum <- fread(file.path(out_dir, "event_study_summary.csv"))[outcome == "rank" & contrast == "main_window_average"]
 es_figure(es_rank, "Effect on rank (rungs),\ndesignee's minus losers' followers", "es_rank",
-          summary = list(k0 = 1, k1 = 4, est = es_sum$estimate,
+          summary = list(k0 = 1, k1 = 4, est = es_sum$estimate, lo = es_sum$ci_lower, hi = es_sum$ci_upper,
                          label = sprintf("Average of years 1 to 4: %.2f (p = %.2f)", es_sum$estimate, es_sum$p_bootstrap)))
 es_figure(es_rank, "Effect on rank (rungs),\ndesignee's minus losers' followers", "es_rank_plain")
 
