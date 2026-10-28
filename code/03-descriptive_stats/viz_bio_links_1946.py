@@ -140,7 +140,7 @@ def connector(x0, y0, x1, y1):
     fig.add_artist(plt.Line2D([x0 / W, x1 / W], [y0 / H, y1 / H], transform=fig.transFigure, color='#a1a1aa', linewidth=0.9))
 
 
-for i, (col, lab) in enumerate([(YEL, 'education tie'), (BLU, 'work tie')]):
+for i, (col, lab) in enumerate([(YEL, 'school tie'), (BLU, 'work tie')]):
     x = 0.25 + i * 3.0
     fig.patches.append(Rectangle((x / W, (H - 0.33) / H), 0.14 / W, 0.17 / H, transform=fig.transFigure, facecolor=col, edgecolor='none'))
     fig.text((x + 0.2) / W, (H - 0.245) / H, lab, fontsize=12, color=INK, va='center')
