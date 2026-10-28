@@ -7,11 +7,7 @@ db_root <- Sys.getenv("TAPADOSPRI_DB_ROOT", file.path(path.expand("~"), "Dropbox
 out_dir <- Sys.getenv("TAPADOS_MAIN_OUTPUT_DIR", file.path(db_root, "output", "main_direct_tie"))
 source(file.path(script_dir, "design_tools.R"))
 es_rank <- fread(file.path(out_dir, "event_study.csv"))[outcome == "rank"]
-es_sum <- fread(file.path(out_dir, "event_study_summary.csv"))[outcome == "rank" & contrast == "main_window_average"]
-es_figure(es_rank, "Effect on rank (rungs),\ndesignee's minus losers' followers", "es_rank",
-          summary = list(k0 = 1, k1 = 4, est = es_sum$estimate, lo = es_sum$ci_lower, hi = es_sum$ci_upper,
-                         label = sprintf("Average of years 1 to 4: %.2f (p = %.2f)", es_sum$estimate, es_sum$p_bootstrap)))
-es_figure(es_rank, "Effect on rank (rungs),\ndesignee's minus losers' followers", "es_rank_plain")
+es_figure(es_rank, "Effect on rank position,\ndesignee's minus losers' followers", "es_rank")   # the years 1-4 average is stated on the slide
 
 # Thresholds (robustness.csv, panel B): change in the share of followers whose best post is at or above an office.
 rb <- fread(file.path(out_dir, "robustness.csv"))[unit == "pp"]
@@ -32,7 +28,7 @@ ggsave(file.path(out_dir, "thresholds.png"), gth, width = 10, height = 3.3, dpi 
 
 mg <- fread(file.path(out_dir, "margins_event_study.csv"))
 es_figure(mg[margin == "extensive"], "Effect on holding a post (pp),\ndesignee's minus losers' followers", "es_extensive", scale = 100)
-es_figure(mg[margin == "intensive"], "Effect on rank in office (rungs),\ndesignee's minus losers' followers", "es_intensive")
+es_figure(mg[margin == "intensive"], "Effect on rank position in office,\ndesignee's minus losers' followers", "es_intensive")
 
 bg <- fread(file.path(out_dir, "budget_event_study.csv"))
 es_figure(bg[outcome == "investment_commanded_pp"], expression("Effect on investment commanded, " * hat(theta)[k] * " (pp)"), "es_budget")
@@ -57,7 +53,7 @@ g <- ggplot(pd, aes(x, estimate)) +
   scale_shape_manual(values = c(D = 16, P = 21), labels = lab_g, name = NULL) +
   scale_x_continuous(breaks = ks, labels = k_numbers) +
   coord_cartesian(ylim = c(bot - 0.03 * span, top + 0.20 * span), clip = "off") +
-  labs(x = x_label_k, y = "Effect on rank (rungs),\neach group minus the unconnected") + theme_paper(17) +
+  labs(x = x_label_k, y = "Effect on rank position,\neach group minus the unconnected") + theme_paper(17) +
   theme(axis.title.y = element_text(size = 14, lineheight = 0.95),
         legend.position = "inside", legend.position.inside = c(0.01, 0.80), legend.justification = c(0, 1),
         legend.text = element_text(size = 14, colour = INK), legend.key = element_blank(), legend.background = element_blank())
@@ -85,7 +81,7 @@ gc <- ggplot(pc, aes(x, estimate)) +
   scale_shape_manual(values = c(D = 16, Pk = 24, Pl = 21), labels = lab_c, name = NULL) +
   scale_x_continuous(breaks = ks, labels = k_numbers) +
   coord_cartesian(ylim = c(bot - 0.03 * span, top + 0.30 * span), clip = "off") +
-  labs(x = x_label_k, y = expression(hat(theta)[k] * " against the unaligned (rungs)")) + theme_paper(17) +
+  labs(x = x_label_k, y = "Effect on rank position,\neach group minus the unconnected") + theme_paper(17) +
   theme(axis.title.y = element_text(size = 14, lineheight = 0.95),
         legend.position = "inside", legend.position.inside = c(0.01, 0.84), legend.justification = c(0, 1),
         legend.text = element_text(size = 13, colour = INK), legend.key = element_blank(), legend.background = element_blank())
@@ -156,7 +152,7 @@ gh <- ggplot(ht, aes(x = estimate, y = row)) +
   scale_y_discrete(labels = setNames(ht$lab, ht$row)) +
   scale_x_continuous(limits = c(-2.2, 5.6), breaks = seq(-2, 4, 1)) +
   facet_grid(dimension ~ ., scales = "free_y", space = "free_y", switch = "y") +
-  labs(x = "Effect on the change in highest rung, by subgroup (rungs)", y = NULL) + theme_paper(15) +
+  labs(x = "Effect on the change in highest rank position, by subgroup", y = NULL) + theme_paper(15) +
   theme(axis.text.y = element_text(size = 11.5, colour = INK), axis.line.y = element_blank(), axis.ticks.y = element_blank(),
         strip.placement = "outside", strip.text.y.left = element_text(size = 11, angle = 0, hjust = 1, colour = MUTED),
         panel.spacing.y = unit(0.35, "lines"), axis.title.x = element_text(size = 12))
