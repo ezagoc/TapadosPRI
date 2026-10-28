@@ -34,9 +34,9 @@ bal[, `:=`(n_posts = expm1(lrec), n_ties = expm1(ldeg), prev_designee = as.numer
            military = as.numeric(pid %in% fm))]
 bal[is.na(elected), elected := 0]; bal[is.na(party), party := 0]
 bal_vars <- list(
-  list("age", "Age in the election year", "A"), list("pre", "Highest rung, $e-5$ to $e-2$", "A"),
-  list("earlier", "Highest rung, $e-9$ to $e-6$ (0 if none)", "A"), list("n_posts", "Ranked posts by $e-2$", "A"),
-  list("n_ties", "Dated ties by $e-2$", "A"), list("prev_designee", "Tied to the previous designee", "A"),
+  list("age", "Age in the election year", "A"), list("pre", "Highest rank, $e-5$ to $e-2$", "A"),
+  list("earlier", "Highest rank, $e-9$ to $e-6$ (0 if none)", "A"), list("n_posts", "Ranked posts by $e-2$", "A"),
+  list("n_ties", "Ties by $e-2$", "A"), list("prev_designee", "Tied to the previous designee", "A"),
   list("born_df", "Born in Mexico City", "B"), list("degree", "University degree", "B"),
   list("graduate", "Graduate degree", "B"), list("law", "Law degree", "B"), list("economics", "Economics degree", "B"),
   list("elected", "Elected office by $e-2$", "B"), list("party", "Party post by $e-2$", "B"),
@@ -76,13 +76,13 @@ sf <- merge(sf, largest, by = "election")
 fwrite(sf, file.path(out_dir, "sample_by_succession.csv"))
 sl <- c("% sample.tex -- the sample by succession (appendix_diagnostics.R, main design of 16-17 October 2026)",
         "\\begin{tabular}{llrrrrrr}", "\\toprule",
-        " & & & & \\multicolumn{3}{c}{Tied to exactly one contender} &  \\\\", "\\cmidrule(lr){5-7}",
-        "Succession & Designee & Slate & Eligible & Designee's & Largest & All losing & Two or \\\\",
-        " & & size & politicians & followers & loser's & followers & more \\\\", "\\midrule")
+        " & & & & \\multicolumn{3}{c}{Followers: tied to one contender only} & Excluded \\\\", "\\cmidrule(lr){5-7}\\cmidrule(lr){8-8}",
+        "Succession & Designee & Contenders & Eligible & Designee's & All losing & Largest & Tied to two \\\\",
+        " & & & politicians & & contenders' & losing camp & or more \\\\", "\\midrule")
 for (i in seq_len(nrow(sf))) sl <- c(sl, sprintf("%d & %s & %d & %s & %d & %d & %d & %d \\\\", sf$election[i],
   designee_names[[as.character(sf$election[i])]], sf$slate_size[i], format(sf$eligible[i], big.mark = ","),
-  sf$winner_followers[i], sf$largest_loser[i], sf$loser_followers[i], sf$multiple_direct_ties[i]))
-sl <- c(sl, "\\midrule", sprintf("Total & & %d & %s & %d & & %d & %d \\\\", sum(sf$slate_size), format(sum(sf$eligible), big.mark = ","),
+  sf$winner_followers[i], sf$loser_followers[i], sf$largest_loser[i], sf$multiple_direct_ties[i]))
+sl <- c(sl, "\\midrule", sprintf("Total & & %d & %s & %d & %d & & %d \\\\", sum(sf$slate_size), format(sum(sf$eligible), big.mark = ","),
                                  sum(sf$winner_followers), sum(sf$loser_followers), sum(sf$multiple_direct_ties)),
         "\\bottomrule", "\\end{tabular}")
 write_tab(sl, "sample.tex")
@@ -91,8 +91,8 @@ write_tab(sl, "sample.tex")
 bs <- merge(components[, .(election, n_winner, n_loser, relative_premium)],
             loo[, .(election = omitted_election, leave_out = relative_premium)], by = "election")
 bs_lines <- c("% by_succession.tex (appendix_diagnostics.R)", "\\begin{tabular}{llrrrr}", "\\toprule",
-              " & & \\multicolumn{2}{c}{Followers} & & Average of the \\\\", "\\cmidrule(lr){3-4}",
-              "Succession & Designee & Designee's & Losers' & Estimate & other eight \\\\", "\\midrule")
+              " & & \\multicolumn{2}{c}{Followers} & & Estimate without \\\\", "\\cmidrule(lr){3-4}",
+              "Succession & Designee & Designee's & Losers' & Estimate & this succession \\\\", "\\midrule")
 for (i in seq_len(nrow(bs))) bs_lines <- c(bs_lines, sprintf("%d & %s & %d & %d & %s & %s \\\\", bs$election[i],
   designee_names[[as.character(bs$election[i])]], bs$n_winner[i], bs$n_loser[i], f2(bs$relative_premium[i]), f2(bs$leave_out[i])))
 bs_lines <- c(bs_lines, "\\midrule", sprintf("Pooled & & %d & %d & %s & \\\\", sum(bs$n_winner), sum(bs$n_loser), f2(theta)),
@@ -100,15 +100,17 @@ bs_lines <- c(bs_lines, "\\midrule", sprintf("Pooled & & %d & %d & %s & \\\\", s
 write_tab(bs_lines, "by_succession.tex")
 
 # ------------------------------------------------------------------ 4. robustness of the main contrast
-thr <- list(list(1L, "Holds any ranked post (rung 10 or above)"), list(6L, "Federal deputy or area director or above (rung 7)"),
-            list(8L, "Director general or above (rung 5)"), list(9L, "Undersecretary or above (rung 4)"))
+thr <- list(list(1L, "Holds any ranked post (score 1 or above)"),
+            list(6L, "Director general / other governor or above (score 6)"),
+            list(8L, "Major-state governor / PRI president or above (score 8)"),
+            list(9L, "Cabinet rank or above (score 9)"))
 rob <- rbindlist(list(
   estimate_columns(build_design(), cbind(y = sample$delta))$table[, spec := "Main: equal succession weights, all covariates"],
   estimate_columns(build_design(weights = "person"), cbind(y = sample$delta))$table[, spec := "Successions weighted by designee's followers"],
   estimate_columns(build_design(formula = ~ election_factor), cbind(y = sample$delta))$table[, spec := "Succession indicators only"],
   estimate_columns(build_design(formula = formula_es), cbind(y = sample$delta))$table[, spec := "Without the baseline-rank bands"],
   estimate_columns(build_design(formula = ~ election_factor + factor(pmax(pre, 2L)) + earlier_band + age + ldeg + lrec + prior_status),
-                   cbind(y = sample$delta))$table[, spec := "Exact baseline rung instead of bands"]))
+                   cbind(y = sample$delta))$table[, spec := "Exact baseline rank instead of bands"]))
 # (exact rung: the 2 politicians at the lowest rung, with no loser follower there, are pooled with the next rung)
 e4_file <- file.path(out_dir, "robust_ties_e4", "main_result.csv")
 if (file.exists(e4_file)) {
@@ -131,9 +133,9 @@ rob <- rbind(rob, thr_tab)
 fwrite(rob, file.path(out_dir, "robustness.csv"))
 rl <- c("% robustness.tex (appendix_diagnostics.R)", "\\begin{tabular}{lrr}", "\\toprule",
         " & Estimate & 95\\% interval \\\\", "\\midrule",
-        "\\multicolumn{3}{l}{\\textit{A. Change in highest rung (rungs)}} \\\\")
+        "\\multicolumn{3}{l}{\\textit{A. Change in highest rank position}} \\\\")
 for (i in which(rob$unit == "rungs")) rl <- c(rl, sprintf("%s & %s & %s \\\\", rob$spec[i], f2(rob$estimate[i]), ci_txt(rob$ci_lower[i], rob$ci_upper[i])))
-rl <- c(rl, "\\addlinespace", "\\multicolumn{3}{l}{\\textit{B. Change in the share above a rung (percentage points)}} \\\\")
+rl <- c(rl, "\\addlinespace", "\\multicolumn{3}{l}{\\textit{B. Change in the share above a rank (percentage points)}} \\\\")
 for (i in which(rob$unit == "pp")) rl <- c(rl, sprintf("%s & %s & %s \\\\", rob$spec[i], f2(100 * rob$estimate[i], 1),
                                                          ci_txt(100 * rob$ci_lower[i], 100 * rob$ci_upper[i], 1)))
 rl <- c(rl, "\\bottomrule", "\\end{tabular}")
@@ -198,10 +200,10 @@ loser_mean <- c(mean(sample$delta[sample$treated == 0]), mean((sample$post > 0)[
                 mean(sample$delta[sample$treated == 0 & sample$post > 0]))
 mt <- c("% margins.tex (appendix_diagnostics.R from margins_windows.csv)", "\\begin{tabular}{lrrr}", "\\toprule",
         " & Estimate & 95\\% interval & Losers' followers \\\\", " & & & mean change \\\\", "\\midrule",
-        sprintf("Rank, 0 if no recorded post (rungs) & %s & %s & %s \\\\", f2(mw$estimate[1]), ci_txt(mw$ci_lower[1], mw$ci_upper[1]), f2(loser_mean[1])),
+        sprintf("Rank position, 0 if no recorded post & %s & %s & %s \\\\", f2(mw$estimate[1]), ci_txt(mw$ci_lower[1], mw$ci_upper[1]), f2(loser_mean[1])),
         sprintf("Holds a ranked post (percentage points) & %s & %s & %s \\\\", f2(100 * mw$estimate[2], 1),
                 ci_txt(100 * mw$ci_lower[2], 100 * mw$ci_upper[2], 1), f2(100 * loser_mean[2], 1)),
-        sprintf("Rank if in office before and after (rungs) & %s & %s & %s \\\\", f2(mw$estimate[3]), ci_txt(mw$ci_lower[3], mw$ci_upper[3]), f2(loser_mean[3])),
+        sprintf("Rank position if in office before and after & %s & %s & %s \\\\", f2(mw$estimate[3]), ci_txt(mw$ci_lower[3], mw$ci_upper[3]), f2(loser_mean[3])),
         sprintf("\\quad Bounds for selection into office (Lee) & \\multicolumn{2}{c}{%s} & \\\\", ci_txt(mw$lee_lower[3], mw$lee_upper[3])),
         "\\midrule", sprintf("Politicians & \\multicolumn{3}{l}{%s; %s in office before and after} \\\\",
                              format(mw$n[1], big.mark = ","), format(mw$n[3], big.mark = ",")), "\\bottomrule", "\\end{tabular}")
