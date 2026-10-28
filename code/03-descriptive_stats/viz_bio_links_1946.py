@@ -1,8 +1,8 @@
 """Slide figure: the 1946 succession read off the biographies.
 
 Real crops of Camp (2011), Mexican Political Biographies 1935-2009: two 1946 contenders, Miguel Aleman and
-Ezequiel Padilla, side by side, each above politicians tied to him (the men Aleman appointed in December 1946,
-which the slide does not say: it comes before the outcome is revealed). The phrases that generate each
+Ezequiel Padilla, one pyramid each: portrait, his biography, and below it the two politicians tied to him (the
+men Aleman appointed in December 1946, which the slide does not say: it comes before the outcome is revealed). The phrases that generate each
 position-based tie are highlighted: same school and cohort (yellow), same office and years (blue). Grey marks
 what the biographies state but the design does not use (an acquaintance named in the text). Pages are located
 by the entry heading, phrases by text search; the crops are whole text lines of the book's column.
@@ -118,9 +118,10 @@ TEL = stack([piece_for(P, ['Tello (Baurraud), Manuel']),
              piece_for(P, ['director general, Diplomatic Service and Political', 'Affairs, Secretariat of Foreign Relations, 1942–1943'])])
 
 ACC, INK, Z5, Z6 = '#940034', '#111111', '#71717a', '#52525b'
-W, H = 13.33, 6.7
-CW = 4.7                 # inches: width of every crop (the same magnification for all)
+W, H = 12.6, 5.6
+CW = 3.0                 # inches: width of every crop (the same magnification for all)
 SCALE = CW / COLW        # inches per point
+GAP = 0.15               # between the two crops at the base of each pyramid
 fig = plt.figure(figsize=(W, H), dpi=200); fig.patch.set_facecolor('white')
 
 
@@ -131,40 +132,33 @@ def place(img, x, y_top, border='#d4d4d8'):
     return h
 
 
-def portrait(name, x, y_top, width=1.0):
+def portrait(name, cx, y_top, width=1.3):
     img = Image.open(PORTRAITS / f'1946_portrait_{name}.png').convert('RGB')
     h = width * img.height / img.width
-    ax = fig.add_axes([x / W, (y_top - h) / H, width / W, h / H]); ax.imshow(img); ax.axis('off')
+    ax = fig.add_axes([(cx - width / 2) / W, (y_top - h) / H, width / W, h / H]); ax.imshow(img); ax.axis('off')
     return h
+
+
+def connector(x0, y0, x1, y1):
+    fig.add_artist(plt.Line2D([x0 / W, x1 / W], [y0 / H, y1 / H], transform=fig.transFigure, color='#a1a1aa', linewidth=0.9))
 
 
 for i, (col, lab) in enumerate([(YEL, 'same school, same cohort'), (BLU, 'same office, same years'),
                                 (GRY, 'stated in the biography: recorded, not used')]):
-    x = 0.2 + i * 3.0
+    x = 0.25 + i * 3.0
     fig.patches.append(Rectangle((x / W, (H - 0.33) / H), 0.14 / W, 0.17 / H, transform=fig.transFigure, facecolor=col, edgecolor='none'))
     fig.text((x + 0.2) / W, (H - 0.245) / H, lab, fontsize=12, color=INK, va='center')
 
 TOP = H - 0.6
-halves = [
-    (0.2, 'aleman', 'Miguel Alemán', 'Interior Secretary\n1940–45', ALE,
-     [(HPM, 'Héctor Pérez Martínez', 'Gobernación, 1945'),
-      (BET, 'Ramón Beteta', 'law school, 1925–26')]),
-    (6.8, 'padilla', 'Ezequiel Padilla', 'Foreign Affairs\nSecretary, 1940–45', PAD,
-     [(JTB, 'Jaime Torres Bodet', 'Foreign Relations, 1940–43'),
-      (TEL, 'Manuel Tello', 'Foreign Relations, 1942–43')]),
-]
-renderer = fig.canvas.get_renderer()
-for x0, pic, name, role, crop, people in halves:
-    h = portrait(pic, x0, TOP)
-    fig.text(x0 / W, (TOP - h - 0.16) / H, name, fontsize=12, weight='bold', color=ACC, va='center')
-    fig.text(x0 / W, (TOP - h - 0.34) / H, role, fontsize=10.5, color=Z6, va='top', linespacing=1.25)
-    xc = x0 + 1.6
-    y = TOP - place(crop, xc, TOP) - 0.26
-    for img, who, what in people:
-        t = fig.text(xc / W, y / H, who, fontsize=12, weight='bold', color=INK, va='center')
-        tw = t.get_window_extent(renderer).width / fig.dpi
-        fig.text((xc + tw + 0.12) / W, y / H, what, fontsize=10.5, color=Z6, va='center')
-        y = y - 0.12 - place(img, xc, y - 0.12) - 0.26
+# one pyramid per contender: portrait, his biography, then the two politicians tied to him
+for cx, pic, crop, people in [(W / 4, 'aleman', ALE, [HPM, BET]), (3 * W / 4, 'padilla', PAD, [JTB, TEL])]:
+    y = TOP - portrait(pic, cx, TOP) - 0.18
+    y_base = y - place(crop, cx - CW / 2, y)
+    y_people = y_base - 0.45
+    for k, img in enumerate(people):
+        x = cx - CW - GAP / 2 if k == 0 else cx + GAP / 2
+        connector(cx, y_base, x + CW / 2, y_people)
+        place(img, x, y_people)
 
 fig.savefig(OUT / 'bio_links_1946.png', dpi=200, facecolor='white'); fig.savefig(OUT / 'bio_links_1946.pdf', facecolor='white')
 print('saved; crop heights (in):', {k: round(v.height / DPI * 72 * SCALE, 2) for k, v in
