@@ -140,6 +140,7 @@ m <- c(
   PAYshareBottomThree = f0(100 * foll[pre <= 3L, sum(share)]),
   PAYgainMain = f0(main_est * mean_gain_eq$g / 1000), PAYgainMainUSD = f0(main_est * mean_gain_eq$g / USD),
   PAYgainWindow = f0(win_est * mean_gain_eq$g / 1000), PAYgainWindowUSD = f0(win_est * mean_gain_eq$g / USD),
+  PAYgainMainUSDapprox = f0(round(main_est * mean_gain_eq$g / USD, -2)), PAYgainWindowUSDapprox = f0(round(win_est * mean_gain_eq$g / USD, -2)),
   PAYgainMainFourYears = f1(4 * 12 * main_est * mean_gain_eq$g / 1e6),
   PAYgainWindowFourYears = f1(4 * 12 * win_est * mean_gain_eq$g / 1e6),
   PAYmainPct = f0(pct(main_est)), PAYwindowPct = f0(pct(win_est)), PAYrewardPct = f0(pct(reward)),
