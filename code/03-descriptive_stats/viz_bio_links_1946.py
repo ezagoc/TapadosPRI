@@ -1,0 +1,175 @@
+"""Slide figure: the 1946 succession read off the biographies.
+
+Real crops of Camp (2011), Mexican Political Biographies 1935-2009: Miguel Aleman (the designee) and Ezequiel
+Padilla (a losing contender) side by side, each above the men Aleman appointed in December 1946 who were tied to
+him or to Padilla. The phrases that generate each position-based tie are highlighted: same school and cohort
+(yellow), same office and years (blue). Grey marks what the biographies state but the design does not use (a
+named friend, a professor's pupil). Pages are located by the entry heading, phrases by text search; the crops
+are whole text lines of the book's column. Output: OUTPUT_DIR/slides/bio_links_1946.{png,pdf}
+"""
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from config import BIOGRAPHIES_DIR, OUTPUT_DIR  # noqa: E402
+import pymupdf, io
+from PIL import Image, ImageDraw
+import matplotlib; matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+from matplotlib.patches import Rectangle
+
+PDF = next(BIOGRAPHIES_DIR.glob('Mexican_Political_Biographies_1935-2009*.pdf'))
+OUT = OUTPUT_DIR / 'slides'; OUT.mkdir(parents=True, exist_ok=True)
+PORTRAITS = Path(__file__).resolve().parents[2] / 'research' / 'slides' / '3rdYearPresentation' / 'figures'
+doc = pymupdf.open(PDF)
+YEL, BLU, GRY = (1.0, 0.86, 0.25), (0.50, 0.74, 1.0), (0.80, 0.80, 0.80)
+DPI = 300
+COLW = 173  # points: width of a text column in the book
+COLS = (56, 234)  # x of the two columns
+
+
+def column(rect):
+    return COLS[0] if rect.x0 < 200 else COLS[1]
+
+
+def find(pages, text):
+    """First page (in order) where the text occurs, with its rectangles."""
+    for p in pages:
+        rs = doc[p].search_for(text)
+        if rs:
+            return p, rs
+    raise ValueError(f'{text!r} not found on pages {pages}')
+
+
+def mark(pages, marks):
+    for phrase, col in marks:
+        p, rs = find(pages, phrase)
+        page = doc[p]  # keep the page object alive while its annotations are updated
+        for r in rs:
+            a = page.add_highlight_annot(r); a.set_colors(stroke=col); a.update()
+
+
+def snap(page_no, x0, y0, y1):
+    """Expand (y0, y1) to whole text lines of the column whose centre lies inside the range."""
+    tops, bots = [], []
+    for block in doc[page_no].get_text("dict")["blocks"]:
+        for line in block.get("lines", []):
+            bx0, by0, bx1, by1 = line["bbox"]
+            if bx0 >= x0 - 6 and bx1 <= x0 + COLW + 6 and y0 <= (by0 + by1) / 2 <= y1:
+                tops.append(by0); bots.append(by1)
+    return (min(tops) - 1.2, max(bots) + 1.2) if tops else (y0, y1)
+
+
+def piece(page_no, x0, y0, y1):
+    y0, y1 = snap(page_no, x0, y0, y1)
+    pix = doc[page_no].get_pixmap(clip=pymupdf.Rect(x0, y0, x0 + COLW, y1), dpi=DPI)
+    return Image.open(io.BytesIO(pix.tobytes("png"))).convert("RGB")
+
+
+def piece_for(pages, texts):
+    """Crop covering the lines that hold the given phrases (all on one page and column)."""
+    p, rs = find(pages, texts[0])
+    x0 = column(rs[0])
+    rects = [r for t in texts for r in doc[p].search_for(t) if column(r) == x0]
+    return piece(p, x0, min(r.y0 for r in rects), max(r.y1 for r in rects))
+
+
+def stack(pieces, gap=10):
+    w = max(p.width for p in pieces); h = sum(p.height for p in pieces) + gap * (len(pieces) - 1)
+    out = Image.new("RGB", (w, h), "white"); d = ImageDraw.Draw(out); y = 0
+    for i, p in enumerate(pieces):
+        out.paste(p, (0, y)); y += p.height
+        if i < len(pieces) - 1:
+            for x in range(8, w - 8, 14): d.line([(x, y + gap // 2), (x + 6, y + gap // 2)], fill=(170, 170, 170), width=2)
+            y += gap
+    return out
+
+
+# --- Aleman (pdf p. 65): heading, the law-school cohort, the Interior post
+P = [65, 66]
+mark(P, [('law degree from National School of Law, 1925–1928', YEL), ('secretary of government, 1940–1945', BLU)])
+ALE = stack([piece_for(P, ['Alemán (Valdés), Miguel']),
+             piece_for(P, ['law degree from National School of Law, 1925–1928']),
+             piece_for(P, ['secretary of government, 1940–1945'])])
+# --- Perez Martinez (p. 783-784): oficial mayor under Aleman; Camp also records that Aleman knew him at UNAM
+P = [783, 784]
+mark(P, [('oficial mayor, Secretariat of Government, 1945', BLU),
+         ('Miguel Alemán knew Pérez Martínez as a student at UNAM', GRY)])
+HPM = stack([piece_for(P, ['Pérez Martínez, Héctor']),
+             piece_for(P, ['oficial mayor, Secretariat of Government, 1945']),
+             piece_for(P, ['Miguel Alemán knew Pérez Martínez as a student at UNAM'])])
+# --- Beteta (p. 136): the same law-school cohort as Aleman
+P = [136, 137]
+mark(P, [('law degree from National School of Law, 1925–1926', YEL)])
+BET = stack([piece_for(P, ['Beteta (Quintana), Ramón']),
+             piece_for(P, ['law degree from National School of Law, 1925–1926'])])
+# --- Gual Vidal (p. 467): Aleman's professor, a stated tie the design does not use
+P = [467, 468]
+mark(P, [('taught Miguel Alemán at UNAM', GRY)])
+GUAL = stack([piece_for(P, ['Gual Vidal, Manuel']), piece_for(P, ['taught Miguel Alemán at UNAM'])])
+# --- Padilla (p. 758): heading and the Foreign Relations post
+P = [758, 759]
+mark(P, [('secretary of foreign relations, 1940–1945', BLU)])
+PAD = stack([piece_for(P, ['Padilla (Peñalosa), Ezequiel']), piece_for(P, ['secretary of foreign relations, 1940–1945'])])
+# --- Torres Bodet (p. 983): assistant secretary under Padilla
+P = [983, 984]
+mark(P, [('assistant secretary of foreign relations, 1940–1943', BLU)])
+JTB = stack([piece_for(P, ['Torres Bodet, Jaime']), piece_for(P, ['assistant secretary of foreign relations, 1940–1943'])])
+# --- Tello (p. 975): Foreign Relations posts under Padilla, 1942-45
+P = [975, 976]
+mark(P, [('director general, Diplomatic Service and Political', BLU), ('Affairs, Secretariat of Foreign Relations, 1942–1943', BLU)])
+TEL = stack([piece_for(P, ['Tello (Baurraud), Manuel']),
+             piece_for(P, ['director general, Diplomatic Service and Political', 'Affairs, Secretariat of Foreign Relations, 1942–1943'])])
+
+ACC, INK, Z5, Z6 = '#940034', '#111111', '#71717a', '#52525b'
+W, H = 13.33, 6.7
+CW = 3.6                 # inches: width of every crop (the same magnification for all)
+SCALE = CW / COLW        # inches per point
+fig = plt.figure(figsize=(W, H), dpi=200); fig.patch.set_facecolor('white')
+
+
+def place(img, x, y_top, border='#d4d4d8'):
+    w = img.width / DPI * 72 * SCALE; h = img.height / DPI * 72 * SCALE
+    ax = fig.add_axes([x / W, (y_top - h) / H, w / W, h / H]); ax.imshow(img); ax.set_xticks([]); ax.set_yticks([])
+    for s in ax.spines.values(): s.set_color(border); s.set_linewidth(0.8)
+    return h
+
+
+def portrait(name, x, y_top, width=1.0):
+    img = Image.open(PORTRAITS / f'1946_portrait_{name}.png').convert('RGB')
+    h = width * img.height / img.width
+    ax = fig.add_axes([x / W, (y_top - h) / H, width / W, h / H]); ax.imshow(img); ax.axis('off')
+    return h
+
+
+for i, (col, lab) in enumerate([(YEL, 'same school, same cohort'), (BLU, 'same office, same years'),
+                                (GRY, 'stated in the biography: recorded, not used')]):
+    x = 0.2 + i * 3.0
+    fig.patches.append(Rectangle((x / W, (H - 0.33) / H), 0.14 / W, 0.17 / H, transform=fig.transFigure, facecolor=col, edgecolor='none'))
+    fig.text((x + 0.2) / W, (H - 0.245) / H, lab, fontsize=12, color=INK, va='center')
+
+TOP = H - 0.6
+halves = [
+    (0.2, 'aleman', 'Miguel Alemán', '▲ Designee\npresident 1946–52', ALE,
+     [(HPM, 'Héctor Pérez Martínez', 'Interior secretary, Dec. 1946'),
+      (BET, 'Ramón Beteta', 'Treasury secretary, Dec. 1946'),
+      (GUAL, 'Manuel Gual Vidal', 'Education secretary, Dec. 1946')]),
+    (6.8, 'padilla', 'Ezequiel Padilla', '▼ Losing contender\nran against Alemán', PAD,
+     [(JTB, 'Jaime Torres Bodet', 'Foreign Affairs secretary, Dec. 1946'),
+      (TEL, 'Manuel Tello', 'Foreign Affairs undersecretary, kept on')]),
+]
+renderer = fig.canvas.get_renderer()
+for x0, pic, name, role, crop, people in halves:
+    h = portrait(pic, x0, TOP)
+    fig.text(x0 / W, (TOP - h - 0.16) / H, name, fontsize=12, weight='bold', color=ACC, va='center')
+    fig.text(x0 / W, (TOP - h - 0.34) / H, role, fontsize=10.5, color=Z6, va='top', linespacing=1.25)
+    xc = x0 + 1.75
+    y = TOP - place(crop, xc, TOP) - 0.26
+    for img, who, what in people:
+        t = fig.text(xc / W, y / H, who, fontsize=12, weight='bold', color=INK, va='center')
+        tw = t.get_window_extent(renderer).width / fig.dpi
+        fig.text((xc + tw + 0.12) / W, y / H, what, fontsize=10.5, color=Z6, va='center')
+        y = y - 0.12 - place(img, xc, y - 0.12) - 0.26
+
+fig.savefig(OUT / 'bio_links_1946.png', dpi=200, facecolor='white'); fig.savefig(OUT / 'bio_links_1946.pdf', facecolor='white')
+print('saved; crop heights (in):', {k: round(v.height / DPI * 72 * SCALE, 2) for k, v in
+                                    dict(ALE=ALE, HPM=HPM, BET=BET, GUAL=GUAL, PAD=PAD, JTB=JTB, TEL=TEL).items()})
