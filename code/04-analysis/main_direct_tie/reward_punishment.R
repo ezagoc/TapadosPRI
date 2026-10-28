@@ -43,11 +43,13 @@ decompose <- function(S, fit, label, B = 50000L) {
 }
 # ------------------------------------------------------------------ 5. diagnostics
 bal_vars <- model.matrix(bal_formula_window, data = S_main)[, -1]
-lab <- c(pre_bandmiddle = "Baseline rank 5-7", pre_bandhigh = "Baseline rank 8-11", earlier_bandlow = "Rank 1-4 in e-9..e-6",
-         earlier_bandmiddle = "Rank 5-7 in e-9..e-6", earlier_bandhigh = "Rank 8-11 in e-9..e-6", age = "Age",
-         ldeg = "Log(1 + ties)", lrec = "Log(1 + ranked posts)", prior_statusno_direct = "Previous cohort, untied",
-         prior_statusprev_loser = "Previous cohort, tied to a loser", prior_statusprev_winner = "Previous cohort, tied to the designee",
-         fed_exec = "Federal executive post")
+lab <- c(pre_bandmiddle = "Highest rank 5--7, $e-5$ to $e-2$", pre_bandhigh = "Highest rank 8--11, $e-5$ to $e-2$",
+         earlier_bandlow = "Highest rank 1--4, $e-9$ to $e-6$", earlier_bandmiddle = "Highest rank 5--7, $e-9$ to $e-6$",
+         earlier_bandhigh = "Highest rank 8--11, $e-9$ to $e-6$", age = "Age in the election year",
+         ldeg = "Log(1 + ties by $e-2$)", lrec = "Log(1 + ranked posts by $e-2$)",
+         prior_statusno_direct = "Previous succession: tied to no contender",
+         prior_statusprev_loser = "Previous succession: tied to a loser", prior_statusprev_winner = "Previous succession: tied to the designee",
+         fed_exec = "Federal executive post, $e-5$ to $e-2$")
 Xall <- model.matrix(bal_formula_window, data = A)[, -1]
 balance <- rbindlist(lapply(colnames(bal_vars), function(v) {
   fol <- A$follower == 1L; nn <- A$group == "N"; sn <- S_main$group == "N"
@@ -148,12 +150,14 @@ for (i in seq_len(nrow(rows))) tl <- c(tl, sprintf("%s & %s & %s & %s\\%% \\\\",
   sprintf(" & {\\scriptsize %s} & {\\scriptsize %s} & \\\\", ci(rows$reward_lo[i], rows$reward_hi[i]), ci(rows$penalty_lo[i], rows$penalty_hi[i])))
 tl <- c(tl, "\\bottomrule", "\\end{tabular}")
 writeLines(tl, file.path(tab_dir, "rp_decomposition.tex"))
-bl <- c("% rp_balance.tex (reward_punishment.R)", "\\begin{tabular}{lrrrrr}", "\\toprule",
-        " & & \\multicolumn{2}{c}{Unaligned} & \\multicolumn{2}{c}{Standardized difference} \\\\",
-        "\\cmidrule(lr){3-4}\\cmidrule(lr){5-6}", " & Followers & Raw & Weighted & Raw & Weighted \\\\", "\\midrule")
+bl <- c("% rp_balance.tex (reward_punishment.R). Standardized: difference over the average of the two groups' s.d.",
+        "\begin{tabular}{lrrrrr}", "\toprule",
+        " & \multicolumn{3}{c}{Mean} & \multicolumn{2}{c}{Standardized difference} \\",
+        "\cmidrule(lr){2-4}\cmidrule(lr){5-6}", " & Followers & Unaligned & Unaligned, & Raw & Weighted \\",
+        " & & & weighted & & \\", "\midrule")
 for (i in seq_len(nrow(balance))) {
-  d <- if (balance$variable[i] == "Age") 1 else 2
-  bl <- c(bl, sprintf("%s & %s & %s & %s & %s & %s \\\\", gsub("e-9..e-6", "$e-9,\\dots,e-6$", balance$variable[i], fixed = TRUE),
+  d <- if (grepl("^Age", balance$variable[i])) 1 else 2
+  bl <- c(bl, sprintf("%s & %s & %s & %s & %s & %s \\\\", balance$variable[i],
                       f2(balance$followers[i], d), f2(balance$unaligned_raw[i], d), f2(balance$unaligned_weighted[i], d),
                       f2(balance$std_diff_raw[i]), f2(balance$std_diff_weighted[i])))
 }
