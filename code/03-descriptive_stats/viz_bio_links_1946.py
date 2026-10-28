@@ -3,8 +3,7 @@
 Real crops of Camp (2011), Mexican Political Biographies 1935-2009: two 1946 contenders, Miguel Aleman and
 Ezequiel Padilla, one pyramid each: portrait, his biography, and below it the two politicians tied to him (the
 men Aleman appointed in December 1946, which the slide does not say: it comes before the outcome is revealed). The phrases that generate each
-position-based tie are highlighted: same school and cohort (yellow), same office and years (blue). Grey marks
-what the biographies state but the design does not use (an acquaintance named in the text). Pages are located
+position-based tie are highlighted: same school and cohort (yellow), same office and years (blue). Pages are located
 by the entry heading, phrases by text search; the crops are whole text lines of the book's column.
 Output: OUTPUT_DIR/slides/bio_links_1946.{png,pdf}
 """
@@ -22,7 +21,7 @@ PDF = next(BIOGRAPHIES_DIR.glob('Mexican_Political_Biographies_1935-2009*.pdf'))
 OUT = OUTPUT_DIR / 'slides'; OUT.mkdir(parents=True, exist_ok=True)
 PORTRAITS = Path(__file__).resolve().parents[2] / 'research' / 'slides' / '3rdYearPresentation' / 'figures'
 doc = pymupdf.open(PDF)
-YEL, BLU, GRY = (1.0, 0.86, 0.25), (0.50, 0.74, 1.0), (0.80, 0.80, 0.80)
+YEL, BLU = (1.0, 0.86, 0.25), (0.50, 0.74, 1.0)
 DPI = 300
 COLW = 173  # points: width of a text column in the book
 COLS = (56, 234)  # x of the two columns
@@ -91,13 +90,11 @@ mark(P, [('law degree from National School of Law, 1925–1928', YEL), ('secreta
 ALE = stack([piece_for(P, ['Alemán (Valdés), Miguel']),
              piece_for(P, ['law degree from National School of Law, 1925–1928']),
              piece_for(P, ['secretary of government, 1940–1945'])])
-# --- Perez Martinez (p. 783-784): oficial mayor under Aleman; Camp also records that Aleman knew him at UNAM
+# --- Perez Martinez (p. 783-784): oficial mayor under Aleman
 P = [783, 784]
-mark(P, [('oficial mayor, Secretariat of Government, 1945', BLU),
-         ('Miguel Alemán knew Pérez Martínez as a student at UNAM', GRY)])
+mark(P, [('oficial mayor, Secretariat of Government, 1945', BLU)])
 HPM = stack([piece_for(P, ['Pérez Martínez, Héctor']),
-             piece_for(P, ['oficial mayor, Secretariat of Government, 1945']),
-             piece_for(P, ['Miguel Alemán knew Pérez Martínez as a student at UNAM'])])
+             piece_for(P, ['oficial mayor, Secretariat of Government, 1945'])])
 # --- Beteta (p. 136): the same law-school cohort as Aleman
 P = [136, 137]
 mark(P, [('law degree from National School of Law, 1925–1926', YEL)])
@@ -143,8 +140,7 @@ def connector(x0, y0, x1, y1):
     fig.add_artist(plt.Line2D([x0 / W, x1 / W], [y0 / H, y1 / H], transform=fig.transFigure, color='#a1a1aa', linewidth=0.9))
 
 
-for i, (col, lab) in enumerate([(YEL, 'same school, same cohort'), (BLU, 'same office, same years'),
-                                (GRY, 'stated in the biography: recorded, not used')]):
+for i, (col, lab) in enumerate([(YEL, 'same school, same cohort'), (BLU, 'same office, same years')]):
     x = 0.25 + i * 3.0
     fig.patches.append(Rectangle((x / W, (H - 0.33) / H), 0.14 / W, 0.17 / H, transform=fig.transFigure, facecolor=col, edgecolor='none'))
     fig.text((x + 0.2) / W, (H - 0.245) / H, lab, fontsize=12, color=INK, va='center')
