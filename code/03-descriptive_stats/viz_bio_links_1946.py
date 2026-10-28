@@ -1,11 +1,12 @@
 """Slide figure: the 1946 succession read off the biographies.
 
-Real crops of Camp (2011), Mexican Political Biographies 1935-2009: Miguel Aleman (the designee) and Ezequiel
-Padilla (a losing contender) side by side, each above the men Aleman appointed in December 1946 who were tied to
-him or to Padilla. The phrases that generate each position-based tie are highlighted: same school and cohort
-(yellow), same office and years (blue). Grey marks what the biographies state but the design does not use (a
-named friend, a professor's pupil). Pages are located by the entry heading, phrases by text search; the crops
-are whole text lines of the book's column. Output: OUTPUT_DIR/slides/bio_links_1946.{png,pdf}
+Real crops of Camp (2011), Mexican Political Biographies 1935-2009: two 1946 contenders, Miguel Aleman and
+Ezequiel Padilla, side by side, each above politicians tied to him (the men Aleman appointed in December 1946,
+which the slide does not say: it comes before the outcome is revealed). The phrases that generate each
+position-based tie are highlighted: same school and cohort (yellow), same office and years (blue). Grey marks
+what the biographies state but the design does not use (an acquaintance named in the text). Pages are located
+by the entry heading, phrases by text search; the crops are whole text lines of the book's column.
+Output: OUTPUT_DIR/slides/bio_links_1946.{png,pdf}
 """
 import sys
 from pathlib import Path
@@ -102,10 +103,6 @@ P = [136, 137]
 mark(P, [('law degree from National School of Law, 1925–1926', YEL)])
 BET = stack([piece_for(P, ['Beteta (Quintana), Ramón']),
              piece_for(P, ['law degree from National School of Law, 1925–1926'])])
-# --- Gual Vidal (p. 467): Aleman's professor, a stated tie the design does not use
-P = [467, 468]
-mark(P, [('taught Miguel Alemán at UNAM', GRY)])
-GUAL = stack([piece_for(P, ['Gual Vidal, Manuel']), piece_for(P, ['taught Miguel Alemán at UNAM'])])
 # --- Padilla (p. 758): heading and the Foreign Relations post
 P = [758, 759]
 mark(P, [('secretary of foreign relations, 1940–1945', BLU)])
@@ -122,7 +119,7 @@ TEL = stack([piece_for(P, ['Tello (Baurraud), Manuel']),
 
 ACC, INK, Z5, Z6 = '#940034', '#111111', '#71717a', '#52525b'
 W, H = 13.33, 6.7
-CW = 3.6                 # inches: width of every crop (the same magnification for all)
+CW = 4.7                 # inches: width of every crop (the same magnification for all)
 SCALE = CW / COLW        # inches per point
 fig = plt.figure(figsize=(W, H), dpi=200); fig.patch.set_facecolor('white')
 
@@ -149,20 +146,19 @@ for i, (col, lab) in enumerate([(YEL, 'same school, same cohort'), (BLU, 'same o
 
 TOP = H - 0.6
 halves = [
-    (0.2, 'aleman', 'Miguel Alemán', '▲ Designee\npresident 1946–52', ALE,
-     [(HPM, 'Héctor Pérez Martínez', 'Interior secretary, Dec. 1946'),
-      (BET, 'Ramón Beteta', 'Treasury secretary, Dec. 1946'),
-      (GUAL, 'Manuel Gual Vidal', 'Education secretary, Dec. 1946')]),
-    (6.8, 'padilla', 'Ezequiel Padilla', '▼ Losing contender\nran against Alemán', PAD,
-     [(JTB, 'Jaime Torres Bodet', 'Foreign Affairs secretary, Dec. 1946'),
-      (TEL, 'Manuel Tello', 'Foreign Affairs undersecretary, kept on')]),
+    (0.2, 'aleman', 'Miguel Alemán', 'Interior Secretary\n1940–45', ALE,
+     [(HPM, 'Héctor Pérez Martínez', 'Gobernación, 1945'),
+      (BET, 'Ramón Beteta', 'law school, 1925–26')]),
+    (6.8, 'padilla', 'Ezequiel Padilla', 'Foreign Affairs\nSecretary, 1940–45', PAD,
+     [(JTB, 'Jaime Torres Bodet', 'Foreign Relations, 1940–43'),
+      (TEL, 'Manuel Tello', 'Foreign Relations, 1942–43')]),
 ]
 renderer = fig.canvas.get_renderer()
 for x0, pic, name, role, crop, people in halves:
     h = portrait(pic, x0, TOP)
     fig.text(x0 / W, (TOP - h - 0.16) / H, name, fontsize=12, weight='bold', color=ACC, va='center')
     fig.text(x0 / W, (TOP - h - 0.34) / H, role, fontsize=10.5, color=Z6, va='top', linespacing=1.25)
-    xc = x0 + 1.75
+    xc = x0 + 1.6
     y = TOP - place(crop, xc, TOP) - 0.26
     for img, who, what in people:
         t = fig.text(xc / W, y / H, who, fontsize=12, weight='bold', color=INK, va='center')
@@ -172,4 +168,4 @@ for x0, pic, name, role, crop, people in halves:
 
 fig.savefig(OUT / 'bio_links_1946.png', dpi=200, facecolor='white'); fig.savefig(OUT / 'bio_links_1946.pdf', facecolor='white')
 print('saved; crop heights (in):', {k: round(v.height / DPI * 72 * SCALE, 2) for k, v in
-                                    dict(ALE=ALE, HPM=HPM, BET=BET, GUAL=GUAL, PAD=PAD, JTB=JTB, TEL=TEL).items()})
+                                    dict(ALE=ALE, HPM=HPM, BET=BET, PAD=PAD, JTB=JTB, TEL=TEL).items()})
