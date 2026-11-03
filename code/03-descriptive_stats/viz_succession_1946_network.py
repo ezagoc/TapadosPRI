@@ -9,14 +9,15 @@ Stages, drawn on ONE fixed layout so nodes do not move between clicks:
   3. designation       Aleman's diamond turns red; the politicians tied only to him become red up-triangles with
                        red ties; those tied only to a losing contender become black down-triangles with black
                        ties to their patron; politicians tied to several contenders stay grey.
-  4. election          Aleman becomes a red star (election of 7 July 1946, inauguration 1 December 1946).
-  5. appointments      same picture, node area proportional to the highest post held in 1947-50 (0 = none).
+  4. election          Aleman becomes a red star (election of 7 July 1946, inauguration 1 December 1946) and each
+                       follower's triangle is drawn large, medium or small according to whether his highest post in
+                       1947-50 was above, equal to or below his highest post in 1941-44.
 
 Eligibility, annual ranks and the follower definition copy code/04-analysis/main_direct_tie/estimate_main.R
 (tie types co_work / co_education / co_military / co_revolution, ties dated by e-2, rung = floor(hybrid_rank),
 spells of at most 12 years). The counts are written as LaTeX macros for the slide captions.
 
-Outputs: OUTPUT_DIR/slides/succession_1946_stage{1..5}.{pdf,png}, OUTPUT_DIR/slides/succession_1946_macros.tex
+Outputs: OUTPUT_DIR/slides/succession_1946_stage{1..4}.{pdf,png} (identical frame and layout, so the slide can switch them with \\only), OUTPUT_DIR/slides/succession_1946_macros.tex
 Run:     python code/03-descriptive_stats/viz_succession_1946_network.py
 """
 import sys
@@ -98,7 +99,11 @@ win_followers = sorted(i for i, c in patron.items() if c == winner)
 lose_followers = sorted(i for i, c in patron.items() if c != winner)
 print(f"winner's exclusive followers {len(win_followers)}, losers' {len(lose_followers)}, tied to several {len(shared)}")
 
-post_rank = dict(zip(everyone, highest_rank(sorted(everyone), E + 1, E + 4)))
+ids_sorted = sorted(everyone)
+pre_rank = dict(zip(ids_sorted, highest_rank(ids_sorted, E - 5, T0)))
+post_rank = dict(zip(ids_sorted, highest_rank(ids_sorted, E + 1, E + 4)))
+trend = {i: int(np.sign(post_rank[i] - pre_rank[i])) for i in ids_sorted}      # +1 rose, 0 same, -1 fell
+TRI = {1: 44, 0: 20, -1: 7}                                                      # triangle areas by trend (points^2)
 
 # ----------------------------------------------------------------------------------------------- layout
 rng = np.random.default_rng(1946)
@@ -142,35 +147,37 @@ plain = [n for n in G.nodes if n not in contenders and n not in patron]
 
 
 def legend_handles(stage):
-    h = [Line2D([], [], color=Z3, lw=1.4, marker="o", markerfacecolor=Z4, markeredgewidth=0, markersize=4,
-                label=f"politicians active in {E - 5}\u2013{T0 % 100:02d} and their ties")]
+    h = [Line2D([], [], color=Z3, lw=1.0, marker="o", markerfacecolor=Z4, markeredgewidth=0, markersize=2.6,
+                label="politicians and their ties")]
     if stage >= 2:
-        h.append(Line2D([], [], marker="D", color="w", markerfacecolor=INK, markersize=8, label="contenders"))
+        h.append(Line2D([], [], marker="D", color="w", markerfacecolor=INK, markersize=5.5, label="contenders"))
     if stage >= 3:
         star = stage >= 4
-        h.insert(1, Line2D([], [], marker="*" if star else "D", color="w", markerfacecolor=ACC, markersize=13 if star else 8,
+        h.insert(1, Line2D([], [], marker="*" if star else "D", color="w", markerfacecolor=ACC, markersize=9 if star else 5.5,
                            label="new president" if star else "designee"))
-        h.append(Line2D([], [], marker="^", color="w", markerfacecolor=ACC, markersize=8, label="tied only to the designee"))
-        h.append(Line2D([], [], marker="v", color="w", markerfacecolor=INK, markersize=8, label="tied only to a losing contender"))
-    if stage == 5:
-        h.append(Line2D([], [], marker="o", color="w", markerfacecolor=Z5, markersize=9, label=f"size: highest post held {E + 1}\u2013{(E + 4) % 100:02d}"))
+        h.append(Line2D([], [], marker="^", color="w", markerfacecolor=ACC, markersize=5.5, label="tied only to the designee"))
+        h.append(Line2D([], [], marker="v", color="w", markerfacecolor=INK, markersize=5.5, label="tied only to a loser"))
+    if stage >= 4:                                   # size key: rank in 1947-50 against rank in 1941-44
+        for t, lab in ((1, f"rose in rank after {E}"), (0, "same rank"), (-1, "fell")):
+            h.append(Line2D([], [], marker="^", color="w", markerfacecolor=Z6, markersize=np.sqrt(TRI[t]), label=lab))
     return h
 
 
 def draw(stage):
-    fig, ax = plt.subplots(figsize=(13.33, 6.4), dpi=200)
+    fig = plt.figure(figsize=(5.3, 2.45), dpi=300)      # drawn at the size it takes on the slide
     fig.patch.set_facecolor("white")
-    ax.set_xlim(-7.2, 7.2)
-    ax.set_ylim(-4.35, 3.5)
+    ax = fig.add_axes([0, 0, 1, 1])
+    ax.set_xlim(-7.4, 7.4)
+    ax.set_ylim(-4.6, 3.5)
     ax.set_aspect("equal")
     ax.axis("off")
-    ax.add_collection(LineCollection(segs_all, colors=Z3, linewidths=0.3, alpha=0.22, zorder=0))
+    ax.add_collection(LineCollection(segs_all, colors=Z3, linewidths=0.2, alpha=0.25, zorder=0))
 
     def size(i, base):
-        return base if stage < 5 else base * (0.35 + 0.33 * post_rank.get(i, 0))
+        return base
 
     pts = np.array([pos[n] for n in plain])
-    ax.scatter(pts[:, 0], pts[:, 1], s=[size(n, 7) for n in plain], color=Z4, alpha=0.6, linewidths=0, zorder=1)
+    ax.scatter(pts[:, 0], pts[:, 1], s=[size(n, 2.6) for n in plain], color=Z4, alpha=0.65, linewidths=0, zorder=1)
     # followers
     for c in contenders:
         alters = [i for i, pc in patron.items() if pc == c]
@@ -178,37 +185,35 @@ def draw(stage):
             continue
         a = np.array([pos[i] for i in alters])
         if stage < 3:
-            ax.scatter(a[:, 0], a[:, 1], s=[size(i, 7) for i in alters], color=Z4, alpha=0.6, linewidths=0, zorder=1)
+            ax.scatter(a[:, 0], a[:, 1], s=[size(i, 2.6) for i in alters], color=Z4, alpha=0.65, linewidths=0, zorder=1)
         else:
             win = c == winner
-            ax.add_collection(LineCollection(fol_edges[c], colors=ACC if win else INK, linewidths=1.1 if win else 0.8,
+            ax.add_collection(LineCollection(fol_edges[c], colors=ACC if win else INK, linewidths=0.7 if win else 0.5,
                                              alpha=0.95 if win else 0.8, zorder=3 if win else 2))
-            ax.scatter(a[:, 0], a[:, 1], s=[size(i, 46) for i in alters], marker="^" if win else "v",
+            ax.scatter(a[:, 0], a[:, 1], s=[TRI[trend[i]] if stage >= 4 else 20 for i in alters], marker="^" if win else "v",
                        color=ACC if win else INK, zorder=5 if win else 4, linewidths=0)
     # contenders
     for c in contenders:
         win = c == winner
         if stage == 1:
-            ax.scatter(*pos[c], s=7, color=Z4, alpha=0.6, linewidths=0, zorder=1)
+            ax.scatter(*pos[c], s=2.6, color=Z4, alpha=0.65, linewidths=0, zorder=1)
             continue
         mk = "*" if (win and stage >= 4) else "D"
         col = ACC if (win and stage >= 3) else INK
-        ax.scatter(*pos[c], s=(700 if mk == "*" else 230) * (1.0 if stage < 5 else 0.35 + 0.33 * post_rank.get(c, 0) / 1.0),
-                   marker=mk, color=col, zorder=7, edgecolors="white", linewidths=1.0)
+        ax.scatter(*pos[c], s=240 if mk == "*" else 85, marker=mk, color=col, zorder=7, edgecolors="white", linewidths=0.6)
         n_f = sum(1 for pc in patron.values() if pc == c)
         dy = -(0.45 + 0.2 * np.sqrt(n_f) + 0.22)
-        ax.text(pos[c][0], pos[c][1] + dy, DISPLAY[c], ha="center", va="top", fontsize=14 if win else 12.5,
+        ax.text(pos[c][0], pos[c][1] + dy, DISPLAY[c], ha="center", va="top", fontsize=8 if win else 7,
                 color=col, weight="bold" if win else "normal", zorder=8,
-                bbox=dict(boxstyle="round,pad=0.15", facecolor="white", edgecolor="none", alpha=0.8))
-    ax.legend(handles=legend_handles(stage), loc="lower center", ncol=3 if stage == 5 else 5, frameon=False, fontsize=11.5,
-              handlelength=1.6, columnspacing=1.4, bbox_to_anchor=(0.5, -0.02))
-    ax.text(7.15, 3.45, f"ties formed by {T0}", ha="right", va="top", fontsize=11, color=Z5, style="italic")
-    for ext in ("pdf", "png"):
-        fig.savefig(OUT / f"succession_{E}_stage{stage}.{ext}", dpi=200, facecolor="white", bbox_inches="tight", pad_inches=0.02)
+                bbox=dict(boxstyle="round,pad=0.12", facecolor="white", edgecolor="none", alpha=0.8))
+    ax.legend(handles=legend_handles(stage), loc="lower center", ncol=4, frameon=False, fontsize=6,
+              handlelength=1.3, columnspacing=0.9, handletextpad=0.4, bbox_to_anchor=(0.5, 0.0))
+    for ext in ("pdf", "png"):                       # fixed frame: every stage has the same size and placement
+        fig.savefig(OUT / f"succession_{E}_stage{stage}.{ext}", dpi=300, facecolor="white")
     plt.close(fig)
 
 
-for st in range(1, 6):
+for st in range(1, 5):
     draw(st)
 
 macros = {"SuccEligible": len(eligible), "SuccNodes": G.number_of_nodes(), "SuccTies": G.number_of_edges(),
@@ -218,4 +223,4 @@ with open(OUT / f"succession_{E}_macros.tex", "w") as f:
     f.write(f"% Generated by code/03-descriptive_stats/viz_succession_{E}_network.py\n")
     for k, v in macros.items():
         f.write(f"\\newcommand{{\\{k}}}{{{v:,}}}\n")
-print("saved stages 1-5 and macros:", macros)
+print("saved stages 1-4 and macros:", macros)
