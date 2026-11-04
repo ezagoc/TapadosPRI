@@ -23,7 +23,7 @@ g1 <- ggplot(es, aes(k, estimate)) +
   geom_vline(xintercept = c(-1.5, 0.5, 6.5), colour = MUT, linetype = "dotted") +
   geom_ribbon(aes(ymin = ci90_lower, ymax = ci90_upper), fill = ACC, alpha = 0.15) +
   geom_line(colour = ACC, linewidth = 0.9) + geom_point(colour = ACC, size = 2.2) +
-  annotate("text", x = -1.5, y = 1.9, label = "designation", hjust = 1.05, size = 4.2, colour = INK, family = FAM) +
+  annotate("text", x = -1.5, y = 1.9, label = "dedazo", hjust = 1.05, size = 4.2, colour = INK, family = FAM) +
   annotate("text", x = 0.5, y = 1.9, label = "takes office", hjust = -0.05, size = 4.2, colour = INK, family = FAM) +
   annotate("text", x = 6.5, y = 1.9, label = "leaves", hjust = -0.05, size = 4.2, colour = INK, family = FAM) +
   annotate("text", x = 2.5, y = -0.75, label = sprintf("+%.2f rungs over the first four years (%s)", sm$estimate, pfmt(sm$p_bootstrap)),
@@ -62,13 +62,13 @@ g3 <- ggplot(pl, aes(s, estimate)) +
   geom_vline(xintercept = 0, colour = MUT, linetype = "dotted") +
   geom_ribbon(aes(ymin = ci90_lower, ymax = ci90_upper), fill = ACC, alpha = 0.15) +
   geom_line(colour = ACC, linewidth = 0.9) + geom_point(colour = ACC, size = 2.2) +
-  annotate("text", x = 0, y = 2.0, label = "the true designation", hjust = -0.05, size = 4.2, colour = INK, family = FAM) +
+  annotate("text", x = 0, y = 2.0, label = "the true dedazo", hjust = -0.05, size = 4.2, colour = INK, family = FAM) +
   annotate("text", x = -7, y = 1.5, label = "both windows before\nthe designation: nothing", hjust = 0, size = 4, colour = MUT, family = FAM, lineheight = 0.9) +
   annotate("text", x = 6, y = -1.15, label = "six years later: the fall-back", hjust = 0.5, size = 4, colour = MUT, family = FAM) +
   annotate("text", x = 0, y = pl[s == 0, estimate] + 0.35, label = sprintf("+%.2f", pl[s == 0, estimate]), size = 4.4, colour = ACC, family = FAM, fontface = "bold") +
   scale_x_continuous(breaks = seq(-8, 8, 2), labels = function(x) ifelse(x > 0, paste0("+", x), as.character(x))) +
   scale_y_continuous(limits = c(-1.5, 2.2), breaks = c(-1, 0, 1, 2)) +
-  labs(x = "Years the event is moved from the real designation", y = "Estimated edge (rungs)") + th()
+  labs(x = "Years the event is moved from the real dedazo", y = "Estimated edge (rungs)") + th()
 save("placebo_simple", g3)
 
 # 4. The losers' followers come back: share tied to a contender of the next slate, by group at e.

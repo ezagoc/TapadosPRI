@@ -143,7 +143,7 @@ es_figure <- function(d, ylab, file, scale = 1, out = out_dir, width = 10, heigh
   }
   if (marks) {
     # The designation (the treatment) in near-black; the two handovers in grey.
-    mk <- data.table(x = c(-1.5, 0.5, 6.5), lab = c("Designation", "New president", "Next president"),
+    mk <- data.table(x = c(-1.5, 0.5, 6.5), lab = c("Dedazo", "New president", "Next president"),
                      col = c("#1a1a1a", RULE, RULE), lw = c(0.6, 0.35, 0.35), tcol = c("#1a1a1a", MUTED, MUTED))
     g <- g + geom_vline(data = mk, aes(xintercept = x), colour = mk$col, linewidth = mk$lw, linetype = "dashed") +
       geom_text(data = mk, aes(x = x + 0.12, y = top + 0.10 * span, label = lab), hjust = 0, vjust = 0,

@@ -187,7 +187,7 @@ event_figure <- function(name, ylab, scale, digits, unit, file) {
   lab <- function(row) sprintf("%s%s [%s, %s]", f(row$estimate), unit, f(row$ci_lower), f(row$ci_upper))
   top <- scale * max(d$ci_upper) * 1.18
   bot <- scale * min(d$ci_lower, 0) - 0.25 * (top - scale * min(d$ci_lower, 0))
-  marks <- data.table(x = c(-1.5, 0.5, 4.5, 6.5), lab = c("destape", "new president", "next destape", "next president"),
+  marks <- data.table(x = c(-1.5, 0.5, 4.5, 6.5), lab = c("dedazo", "new president", "next dedazo", "next president"),
                       y = top * c(1, 0.9, 1, 0.9))
   label_y <- bot + 0.07 * (top - bot)
   g <- ggplot(d, aes(k, scale * estimate)) +

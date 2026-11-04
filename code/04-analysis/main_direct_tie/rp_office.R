@@ -62,7 +62,7 @@ writeLines(c(sprintf("%% rp_%s_macros.tex (rp_office.R, threshold %d): reward an
 pd <- copy(es)[, `:=`(x = k + fifelse(group == "D", -0.12, 0.12), estimate = 100 * estimate, ci_lower = 100 * ci_lower,
                       ci_upper = 100 * ci_upper, ci90_lower = 100 * ci90_lower, ci90_upper = 100 * ci90_upper)]
 top <- max(pd$ci_upper); bot <- min(pd$ci_lower); span <- top - bot
-mk <- data.table(x = c(-1.5, 0.5, 6.5), lab = c("Designation", "New president", "Next president"),
+mk <- data.table(x = c(-1.5, 0.5, 6.5), lab = c("Dedazo", "New president", "Next president"),
                  col = c("#1a1a1a", RULE, RULE), lw = c(0.6, 0.35, 0.35), tcol = c("#1a1a1a", MUTED, MUTED))
 lab_g <- c(D = "Designee's followers", P = "Losers' followers")
 g <- ggplot(pd, aes(x, estimate)) +

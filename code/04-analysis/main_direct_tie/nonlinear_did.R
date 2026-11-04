@@ -174,7 +174,7 @@ p2 <- ggplot(plot_d, aes(x = kx, y = est, colour = series, shape = series)) +
   scale_colour_manual(values = c("Linear DiD (main)" = "#18181b", "Poisson QMLE" = "#940034")) +
   scale_shape_manual(values = c("Linear DiD (main)" = 16, "Poisson QMLE" = 21)) +
   scale_x_continuous(breaks = ks) +
-  annotate("text", x = c(-1.6, 0.6, 6.6), y = max(plot_d$hi, na.rm = TRUE), label = c("Designation", "New president", "Next president"),
+  annotate("text", x = c(-1.6, 0.6, 6.6), y = max(plot_d$hi, na.rm = TRUE), label = c("Dedazo", "New president", "Next president"),
            hjust = 0, vjust = 1, size = 3, colour = "#71717a") +
   labs(x = "Years relative to the election", y = "Designee's minus losers' followers,\nrank positions (95% intervals)", colour = NULL, shape = NULL) +
   theme_classic(base_size = 13) + theme(legend.position = c(0.15, 0.9), axis.line = element_line(colour = "#a1a1aa", linewidth = 0.35),
@@ -250,7 +250,7 @@ p3 <- ggplot(pd_rp, aes(x = kx, y = estimate, colour = grp, shape = grp)) +
   scale_colour_manual(values = c("Designee's followers" = "#18181b", "Losers' followers" = "#7a7a7a")) +
   scale_shape_manual(values = c("Designee's followers" = 16, "Losers' followers" = 21)) +
   scale_x_continuous(breaks = ks) +
-  annotate("text", x = c(-1.6, 0.6, 6.6), y = max(pd_rp$ci_upper), label = c("Designation", "New president", "Next president"),
+  annotate("text", x = c(-1.6, 0.6, 6.6), y = max(pd_rp$ci_upper), label = c("Dedazo", "New president", "Next president"),
            hjust = 0, vjust = 1, size = 3, colour = "#71717a") +
   labs(x = "Years relative to the election", y = "Effect on rank position,\neach group minus the reweighted unaligned", colour = NULL, shape = NULL) +
   theme_classic(base_size = 13) + theme(legend.position = c(0.15, 0.9), axis.line = element_line(colour = "#a1a1aa", linewidth = 0.35),
