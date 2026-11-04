@@ -1,6 +1,6 @@
 # Does the linear treatment of an ordinal outcome drive the main result? (seminar comment, 3 November 2026)
 # Three checks on the main sample (designee's vs losing contenders' followers, within succession, covariates of the
-# main design, equal weight per succession):
+# main design, the main estimand's succession weights):
 #   1. Threshold DiDs: for each rung r = 1..9 the outcome is 1[rank >= r], the change post minus pre, estimated with
 #      the main estimator (design_tools.R: regression adjustment, Ferman-Pinto contender-level bootstrap). Each is a
 #      difference in probabilities, a binary DiD whose linear estimand is unambiguous; together they trace where on
@@ -41,7 +41,7 @@ print(thr[, .(column, estimate = round(100 * estimate, 1), lo = round(100 * ci_l
 # ------------------------------------------------------------------ 2. exponential-mean DiD (Poisson QMLE)
 S <- copy(sample)
 S[, grp_n := .N, by = .(election, treated)]
-S[, w := 1 / grp_n]                                   # each succession-group gets the same total weight
+S[, w := if (succession_weights == "equal") 1 / grp_n else 1]   # equal: each succession-group the same total weight; person: each follower
 long <- rbind(S[, .(pid, election, network, treated, y = pre, post = 0L, w, pre_band, earlier_band, age, ldeg, lrec, prior_status)],
               S[, .(pid, election, network, treated, y = post, post = 1L, w, pre_band, earlier_band, age, ldeg, lrec, prior_status)])
 long[, election_factor := factor(election, levels = elections)]
@@ -124,7 +124,7 @@ suppressPackageStartupMessages(library(fixest))
 ks <- -7:8; ref_k <- -2L
 yr <- function(k) { z <- annual[data.table(pid = sample$pid, year = sample$election + k), on = .(pid, year), rank]; z[is.na(z)] <- 0L; z }
 Yk <- sapply(ks, yr); colnames(Yk) <- ks
-S <- copy(sample); S[, grp_n := .N, by = .(election, treated)]; S[, w := 1 / grp_n]
+S <- copy(sample); S[, grp_n := .N, by = .(election, treated)]; S[, w := if (succession_weights == "equal") 1 / grp_n else 1]
 long_k <- rbindlist(lapply(seq_along(ks), function(j) S[, .(pid, election, network, treated, w, pre_band, earlier_band, age, ldeg, lrec, prior_status,
                                                             k = ks[j], y = Yk[, j])]))
 long_k[, kf := relevel(factor(k), ref = as.character(ref_k))]

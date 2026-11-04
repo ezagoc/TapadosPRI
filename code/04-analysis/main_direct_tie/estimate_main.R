@@ -17,12 +17,24 @@ elections <- seq(1940L, 1988L, by = 6L)
 tie_types <- c("co_work", "co_education", "co_military", "co_revolution")
 # Years before the election by which a tie must have formed (main: 2; MAIN_SPEC section 10 (8): 4).
 tie_lag <- as.integer(Sys.getenv("TAPADOS_TIE_CUTOFF", "2"))
+# Pool (main: all; MAIN_SPEC section 13: only politicians with a dictionary-qualifying post started by e-2).
+inclusion_rule <- Sys.getenv("TAPADOS_INCLUSION", "all")
+stopifnot(inclusion_rule %in% c("all", "predetermined"))
 read_data <- function(...) fread(file.path(data_dir, ...), na.strings = c("", "NA"))
 
 nodes <- read_data("networks", "network_nodes.csv")
 edges <- read_data("networks", "network_edges.csv")
 contenders <- read_data("candidates", "corcholatas_matched.csv")
 positions <- read_data("rank", "position_tiers.csv")
+
+# First year of a post that qualifies for Camp's dictionary (MAIN_SPEC section 13): rung 7 or above, the national
+# leadership of an opposition party, or rector of UNAM/IPN or director of UNAM's law, economics or medicine school.
+qualifying_rx <- paste0("rector.*(unam|national autonomous|polytechnic|ipn)|",
+                        "director.*(school|faculty) of (law|economics|medicine).*(unam|national autonomous)")
+first_qualifying <- positions[!is.na(year_start) & (floor(hybrid_rank + 1e-9) >= 7 |
+                                rule %in% "opposition_national_leadership" |
+                                grepl(qualifying_rx, role_text, ignore.case = TRUE)),
+                              .(first_year = min(as.integer(year_start))), by = .(pid = person_id)]
 
 stopifnot(!anyNA(contenders[in_main_slate == 1L, person_id]))
 slates <- lapply(elections, function(e) {
@@ -69,6 +81,7 @@ for (e in elections) {
   t0 <- e - 2L
   ids <- unique(annual[year >= e - 5L & year <= t0, pid])
   ids <- setdiff(ids, unique(contenders[election_year <= e, person_id]))
+  if (inclusion_rule == "predetermined") ids <- intersect(ids, first_qualifying[first_year <= t0, pid])
   d <- data.table(pid = sort(ids), election = e)
   d[, age := e - as.numeric(birth[as.character(pid)])]
   d <- d[!is.na(age) & age >= 25 & age <= 75]
@@ -148,6 +161,15 @@ sample[, predicted_loser_change := pred]
 sample[, residual_change := delta - pred]
 
 E <- length(elections)
+# Succession weights of the pooled estimand (3 November 2026). "person" (main): each succession weighs its share of the
+# designee's followers, so theta is the premium of the average follower. "equal" (robustness): the mean of the nine
+# succession premiums. TAPADOS_SUCCESSION_WEIGHTS selects; design_tools.R, event_study.R and rp_setup.R follow it.
+succession_weights <- match.arg(Sys.getenv("TAPADOS_SUCCESSION_WEIGHTS", "person"), c("person", "equal"))
+omega_for <- function(es, n_treated) {
+  w <- if (succession_weights == "equal") rep(1 / length(es), length(es)) else n_treated / sum(n_treated)
+  setNames(w, es)
+}
+omega <- omega_for(elections, sapply(elections, function(e) sum(sample$election == e & sample$treated == 1L)))
 components <- rbindlist(lapply(elections, function(e) {
   d <- sample[election == e]
   tw <- d[treated == 1L]
@@ -159,17 +181,18 @@ components <- rbindlist(lapply(elections, function(e) {
              adjusted_loser_change = mean(tw$predicted_loser_change),
              relative_premium = mean(tw$residual_change))
 }))
-theta <- mean(components$relative_premium)
+components[, succession_weight := omega[as.character(election)]]
+theta <- sum(components$succession_weight * components$relative_premium)
 
 # Exact linear weights of the full estimator, including estimation of the
 # control-only outcome model.  Their sum in every succession is zero.
 M <- solve(crossprod(X0, X0 * w0))
-b <- Reduce(`+`, lapply(elections, function(e) colMeans(X[sample$election == e & sample$treated == 1L, , drop = FALSE]))) / E
+b <- Reduce(`+`, lapply(elections, function(e) omega[[as.character(e)]] * colMeans(X[sample$election == e & sample$treated == 1L, , drop = FALSE])))
 a <- numeric(nrow(sample))
 a[controls] <- -w0 * as.vector(X0 %*% (M %*% b))
 for (e in elections) {
   ix <- which(sample$election == e & sample$treated == 1L)
-  a[ix] <- 1 / (E * length(ix))
+  a[ix] <- omega[[as.character(e)]] / length(ix)
 }
 stopifnot(abs(sum(a * y) - theta) < 1e-8)
 weights_by_e <- sample[, .(weight_sum = sum(a)), by = election]
@@ -246,7 +269,7 @@ p <- mean(abs(err) >= abs(theta))
 
 loo <- rbindlist(lapply(elections, function(e) data.table(
   omitted_election = e,
-  relative_premium = mean(components[election != e, relative_premium])
+  relative_premium = components[election != e, sum(succession_weight * relative_premium) / sum(succession_weight)]
 )))
 
 # Covariate support audit. Counts, not outcome-based specification selection.
@@ -280,8 +303,8 @@ fwrite(data.table(term = names(beta), coefficient = as.vector(beta)),
        file.path(out_dir, "control_model.csv"))
 
 summary <- data.table(
-  design_version = "2026-10-17-primary-v2", tie_cutoff_years = tie_lag,
-  estimate = theta, ci_lower = ci[1], ci_upper = ci[2], p_bootstrap = p,
+  design_version = "2026-10-17-primary-v2", tie_cutoff_years = tie_lag, inclusion = inclusion_rule,
+  succession_weights = succession_weights, estimate = theta, ci_lower = ci[1], ci_upper = ci[2], p_bootstrap = p,
   bootstrap_draws = B, seed = seed,
   A_network = AB[1], B_person = AB[2], control_donor_networks = K,
   treated_networks = sum(network_info$treated == 1L),

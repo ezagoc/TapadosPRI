@@ -30,7 +30,8 @@ traj <- function(SS, keep, lab) {
   rbindlist(lapply(seq_along(ks), function(j) {
     d <- data.table(e = SS$election[keep], w = SS$wt[keep], y = YY[keep, j])
     by_e <- d[, .(rank = sum(w * y) / sum(w), office = sum(w * (y > 0)) / sum(w), top = sum(w * (y >= 7)) / sum(w)), by = e]
-    data.table(group = lab, k = ks[j], rank = mean(by_e$rank), office = mean(by_e$office), top = mean(by_e$top), n = sum(keep))
+    om <- omega[as.character(by_e$e)]; om <- om / sum(om)   # the main estimand's succession weights
+    data.table(group = lab, k = ks[j], rank = sum(om * by_e$rank), office = sum(om * by_e$office), top = sum(om * by_e$top), n = sum(keep))
   }))
 }
 tr <- rbind(traj(S, S$group == "D", "Designee's followers"),

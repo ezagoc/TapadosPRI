@@ -105,8 +105,10 @@ thr <- list(list(1L, "Holds any ranked post (score 1 or above)"),
             list(8L, "Major-state governor / PRI president or above (score 8)"),
             list(9L, "Cabinet rank or above (score 9)"))
 rob <- rbindlist(list(
-  estimate_columns(build_design(), cbind(y = sample$delta))$table[, spec := "Main: equal succession weights, all covariates"],
-  estimate_columns(build_design(weights = "person"), cbind(y = sample$delta))$table[, spec := "Successions weighted by designee's followers"],
+  estimate_columns(build_design(), cbind(y = sample$delta))$table[, spec := if (succession_weights == "person")
+    "Main: successions weighted by the designee's followers, all covariates" else "Main: equal succession weights, all covariates"],
+  estimate_columns(build_design(weights = if (succession_weights == "person") "equal" else "person"), cbind(y = sample$delta))$table[
+    , spec := if (succession_weights == "person") "Equal weight per succession" else "Successions weighted by designee's followers"],
   estimate_columns(build_design(formula = ~ election_factor), cbind(y = sample$delta))$table[, spec := "Succession indicators only"],
   estimate_columns(build_design(formula = formula_es), cbind(y = sample$delta))$table[, spec := "Without the baseline-rank bands"],
   estimate_columns(build_design(formula = ~ election_factor + factor(pmax(pre, 2L)) + earlier_band + age + ldeg + lrec + prior_status),
@@ -256,7 +258,7 @@ lines_mac <- c("% main_direct_tie_macros.tex -- every number on the empirical sl
   mac("MDbudgetP", f2(bw$p_bootstrap[1], 2)),
   mac("MDbalMaxStd", f2(max(abs(bt$std_diff)))), mac("MDbalMinP", f2(min(bt$p_bootstrap))),
   mac("MDcampsP", f2(p_camps)),
-  mac("MDpersonEst", neg(rob[spec == "Successions weighted by designee's followers", estimate])),
+  mac("MDpersonEst", neg(rob[2, estimate])),   # the alternative succession weighting (row 2): equal weights when the main is person, and vice versa
   mac("MDtiesFourEst", if (file.exists(e4_file)) neg(e4$estimate) else "--"),
   mac("MDtiesFourLo", if (file.exists(e4_file)) neg(e4$ci_lower) else "--"),
   mac("MDtiesFourHi", if (file.exists(e4_file)) neg(e4$ci_upper) else "--"),

@@ -101,6 +101,145 @@ Rank with zeros mixes two things: whether a politician still holds a recorded ra
 
 **Diagnostics and robustness (fixed now).** Balance before and after weighting; effective sample size of the weights; number of unaligned dropped. Robustness: (a) without the baseline-rank bands in the weights and the regression (regression to the mean when groups differ in levels; Daw and Hatfield 2018); (b) standard trimming of all groups at propensities in $[0.1, 0.9]$ (Crump et al. 2009); (c) without unaligned politicians who are two steps from the designee by $e-2$ (tied to someone directly tied to him). *Amended before seeing any estimate:* with every tie, nearly all comparable unaligned politicians are two steps away and the rest cannot be balanced, so both steps use strong ties only (formed in an office or school cohort of at most 10 people); (d) within politician: stacked $D$, $P$ and $N$ observations with politician and succession fixed effects and the §4 covariates, identified by politicians whose status changes across successions (as in Xu 2018).
 
+## 12. The patron's chair (written 19 October 2026, before the formal estimate)
+
+**Question.** Is the losers' followers' penalty (§11) the loss of their patron's chair, or a penalty aimed at them whatever their patron keeps? A first look in an exploration on 19 October (no weighting, no design inference) split the losers' followers by their patron's post after the succession and motivated this section; the definitions below are those of the first look and are fixed now, before the formal estimate.
+
+**Patron's chair.** A losing contender *keeps a top chair* if his highest whole rung in $e+1,\ldots,e+2$ (the new president's first two years) is at least 8: cabinet secretary, head of a large parastatal, attorney general, Federal District regent, ambassador to the United States (rung 9); governor of a major state, PRI national president, leader of a chamber, major embassy, military zone (rung 8). Otherwise he *loses* it.
+
+**Groups and estimands.** $D$ and $N$ as in §11; $P$ split into $P^{k}$ (patron kept a top chair) and $P^{l}$ (patron lost it). $\theta^{Pk}$ and $\theta^{Pl}$ as $\theta^P$ in §11, with the same reweighted $N$ (balanced to all followers pooled) and the same outcome regression, window and event-study covariates. The headline contrast is within succession, over the successions $E_2$ in which both groups exist: $\theta^{k-l}=\frac{1}{|E_2|}\sum_{e\in E_2}\big(\overline{\Delta Y-\hat m^{N}}^{Pk}_e-\overline{\Delta Y-\hat m^{N}}^{Pl}_e\big)$.
+
+**Reading.** The new president decides which losers keep a chair, so $\theta^{k-l}$ is not the causal effect of a patron keeping his chair. It is the moment the structural model must match conditional on the observed chair assignment, and the reduced-form test of "the penalty is the chair": $\theta^{Pk}\approx 0$ or above, $\theta^{Pl}<0$. Selection checks, fixed now: (i) leads $k=-7,\ldots,-3$ of $P^k$ and $P^l$ in the event study; (ii) standardized differences of the followers' predetermined traits, $P^k$ vs $P^l$; (iii) the patrons' traits at $e-2$ (rung, exclusive followers, age, documented runner-up), kept vs lost.
+
+**Inference.** Cluster-robust variance of each linear estimator, clusters = losing contender groups and each unaligned politician (§11), and a wild score bootstrap with Webb weights over the same clusters (few groups keep a chair). $\theta^D$ as in §11.
+
+**Robustness (fixed now).** (a) Top chair = rung 9 only (cabinet level); (b) the patron's chair over $e+1,\ldots,e+3$; (c) each succession of $E_2$ left out in turn.
+
+## 13. Predetermined inclusion in the dictionary (written 19 October 2026, before computing)
+
+**Question.** Camp (2011) includes a politician who reached one of Brandenburg's top six prestige levels at some point up to
+2009. For many pool members that post came after $e-2$, and more often for the designee's followers: 49.5% of them, against
+39.9% of the losers' followers and 38.3% of the unaligned, first reached rung 7 or above after $e-2$ (measured 19 October).
+Their presence in the data is then partly an outcome of the succession. Does the premium survive in the pool whose presence
+does not depend on careers after $e-2$?
+
+**Restriction.** Pool members (§1) who held a qualifying post that started by $e-2$: rung 7 or above (assistant secretary,
+*oficial mayor*, senator, PRI national executive and every higher post); national leadership of an opposition party (rule
+`opposition_national_leadership`); rector of UNAM or IPN, or director of UNAM's schools of law, economics or medicine (role
+text). This follows Camp's stated inclusion rule (front matter of the 1935–2009 edition), which does not admit federal deputies
+on their own. The restriction applies to every group alike; everything else in the design is unchanged (eligibility, ties,
+covariates, weights, inference). Implementation: `TAPADOS_INCLUSION=predetermined`, outputs in
+`output/main_direct_tie/robust_predetermined_inclusion/`.
+
+**Estimates.** §4 with §5 inference; the §7 event study; the §8 margins; the §11 reward and penalty; the §12 chair split. These
+are also the moments of the co-main structural estimate (`research/structural_2026-10-19/MODEL_SPEC.md` §2).
+
+**Reading, fixed now.** The restricted pool is more senior by construction (everyone reached rung 7 by $e-2$), so a different
+estimate can reflect selection into the dictionary or a different premium for senior politicians; the two cannot be fully
+separated. A premium of similar size says selection into the dictionary does not drive it. A much smaller one says the
+headline estimate partly reflects who is in the dictionary, and both are reported with equal prominence.
+
+## 14. Generalized event study (reserved)
+
+Specified in `research/structural_2026-10-19/MODEL_SPEC.md` §8, family 4; to be written here before it is computed.
+
+## 15. Co-optation and the threat of a break (written 19 October 2026, before testing)
+
+**Model behind it.** The new president decides which losing aspirants keep a top chair. A chair given to a rival is a chair
+taken from his own camp (its price is the capacity price of rungs 8–9), but a co-opted aspirant has less reason to break with
+the party and take his followers with him. The president should therefore co-opt the aspirants whose break would cost him
+most, and less so when leaving the party is hard (opposition-entry rules, `structural/exit_rules.csv`, from Orozco Henríquez
+and Vargas Baca 2006: easy 1940, 1982, 1988; intermediate 1946, 1952; hard 1958–1976).
+
+**Data.** `aspirants_table.R` → `structural/aspirants.csv`: the 47 slate losers (main test) and every aspirant of the full
+list plus Almazán (72; breaks). Threat measures dated by $e-2$: camp (politicians of the eligible pool directly tied to the
+aspirant), general's rank, governors in office among those tied to him. Treatment: kept a top chair (rung 8–9 in $e+1..e+2$),
+demoted, or no post.
+
+**What was already known (not tests).** (a) In each of the four successions in which some loser kept a top chair (1952,
+1958, 1976, 1988), the loser with the largest exclusive camp was among those kept (19 October, exploratory); in 1964, 1970 and
+1982 nobody was kept, including the three largest camps of the sample. (b) The breaks (Almazán and Sánchez Tapia 1940, Padilla
+1946, Henríquez 1952, Cárdenas and Muñoz Ledo 1988) all fall in easy or intermediate regimes. (c) The losers' followers'
+penalty is the patron's chair, not an active penalty (§12).
+
+**Pre-registered test (P1).** Within succession, slate losers with a larger threat are more likely to keep a top chair.
+Threat index (one number, fixed now): the standardized log(1 + camp). Statistic: the sum of the threat index over the kept
+losers, against its distribution when the kept labels are permuted within succession (number kept per succession fixed; all
+permutations enumerated); one-sided exact p-value. Only the successions with at least one kept and one not kept loser are
+informative (1952, 1958, 1976, 1988). Secondary, reported but not a gate: the same test with the general's rank and the
+governors in camp; a conditional logit with seniority (cabinet at $e-2$), age and runner-up as controls.
+
+**Pre-registered descriptive check (P2).** Successions with any co-optation by opposition-entry regime. With nine successions
+it is reported, not tested.
+
+**Gate.** The strategic block is built on Block A if P1's exact p-value is below 0.10. Otherwise the co-optation story is
+reported as not supported by retention, and the block is not built on it.
+
+## 16. Whom the succession promotes: credentials (written 19 October 2026, before computing)
+
+**Question.** Does the premium to the designee's followers go to less qualified politicians, so that the succession bargain
+lowers the qualifications of top officials (the cost side of peaceful rotation)?
+
+**Measures, predetermined.** From `clean_positions/education.csv`: (i) a graduate degree (master's or doctorate) completed by
+$e-2$ (degree year $\le e-2$; if the year is missing, counted when the politician was 35 or older at $e-2$); (ii) a foreign
+graduate degree, same rule; (iii) a technical field (economics, business, engineering, science) at any level by $e-2$,
+secondary.
+
+**Already known (descriptive, 19 October).** Graduate degree: 29% of the designee's followers, 24% of the losers' followers;
+foreign graduate degree 15% vs 9%; both rise over time (1976: 44% vs 22%).
+
+**Test 1 (primary).** The §4 design estimated separately on followers with and without a graduate degree (the designee's and
+the losers' followers split by the same measure; §4 covariates, with succession entered as a factor of the successions
+present in each subsample; equal weights over successions in which both groups exist). Contrast: $\theta_{\text{without}}-
+\theta_{\text{with}}$. A selection cost predicts a contrast of zero or above (the premium does not require credentials).
+Inference: each estimate with the §5 bootstrap; the contrast interval from independent draws, which is conservative because
+shared network shocks correlate the two estimates positively. Secondary: the same with the foreign graduate degree and the
+technical field.
+
+**Test 2 (descriptive).** Among politicians holding a top post (rung 8–9) at some point in $e+1..e+4$, the share with a graduate
+degree by $e-2$: the designee's exclusive followers against every other holder, averaged over successions; and the same share
+among top-post holders of $e-5..e-2$.
+
+**Reading, fixed now.** A selection cost needs both: a premium not tilted toward credentialed followers (Test 1) and promoted
+followers less credentialed than the other top officials (Test 2). If the premium favors the credentialed and the promoted
+followers are at least as credentialed, the succession bargain had no selection cost in these measures, and the cost of
+rotation must be looked for elsewhere (turnover of experience at each handover).
+
+## 17. Where the dissident vote concentrated (written 20 October 2026; measures revised the same day, see note)
+
+**Question.** Can a dissident's electoral damage by state be measured before the break? This is the first diagnostic of
+the exit-threat model (damage $D_j$ by state); if it fails, the threat cannot be measured with these data.
+
+**Elections and dissidents.** 1940 Juan Andreu Almazán (158), 1946 Ezequiel Padilla (2024), 1952 Miguel Henríquez Guzmán
+(1298), 1988 Cuauhtémoc Cárdenas (452, FDN). Official state counts (`electoralData/`: 1940 DD, 1946-52 Ramírez Rancaño,
+1988 Colegio Electoral dictamen). Outcome: the dissident's share of all candidates' votes, as a deviation from his mean
+across states (his national level is not what is measured). Official counts: fraud heavier where he was stronger
+compresses the association, so a positive result is conservative and a null is not decisive.
+
+**Measures of an electoral base** (the question is about electoral machines, so the measures are not the §4 tie
+definitions): (i) own base, his birth state and the states of his own posts before $e$; (ii) the share of the state's
+political elite tied to him: people with elected, state or local party, state-government (outside the Federal District)
+or military posts located in the state in $e-6..e-1$, tied to him by any tie type existing by $e-1$ (stated and undated
+ties included); (iii) an allied governor, a governor of the state in $e-6..e-1$ tied to him.
+
+**Evaluation.** Within election (fit by state); leave one dissident out (fit on three, predict the fourth's state pattern);
+placebo aspirants (the $R^2$ of the dissident's own base and elite share against the same $R^2$ with every other aspirant
+of the succession).
+
+**Note on the revision.** The first measure (each dissident's network share by the location of his ties' posts, §4 tie
+definition) located the networks in the federal bureaucracy (83% of Padilla's in the Federal District), which is not an
+electoral base; its pooled placebo $p$ was 0.39. It was replaced by the measures above before they were computed.
+
+**Result (20 October 2026).** The threat is not measurable with these data. Tied local elite: 3, 5, 3 and 21 people
+(Camp records 7 and 6 ties for the two generals). The elite share does not predict (Spearman 0.13, 0.21, −0.38, 0.00).
+Own base predicts only through the Federal District, where every dissident did well, and Cárdenas in Michoacán (63.9%);
+the birth states of Almazán, Padilla and Henríquez are below their means. Allied governor +0.09 (se 0.04), mixed by state.
+Out of sample, own base predicts 1940 and 1988 (r = 0.57, 0.53) but not 1946 or 1952 (0.13, 0.09). Placebos: another
+aspirant's base and elite predict the dissident's vote as well as his own ($p$ = 0.4, 0.5, 0.5, 0.1). Reading: the
+dissident vote follows a general opposition geography (Federal District, Morelos, Baja California, the Bajío), not the
+dissident's own network; Cárdenas 1988 is the one case with a personal base.
+Outputs: `dissident_geography_{states,within,loo,placebos}.csv`.
+
 ## Methodological anchors
 
 - Sant’Anna and Zhao (2020), *Doubly Robust Difference-in-Differences Estimators* (genuine panel DRDiD and its identifying conditions).
@@ -109,3 +248,17 @@ Rank with zeros mixes two things: whether a politician still holds a recorded ra
 - Álvarez and Ferman, *Extensions for Inference in Difference-in-Differences with Few Treated Clusters* (`Alvarez_Ferman_Extensions_for_Inference_in_DiD.pdf`).
 
 All four PDFs are in `TapadosPRI/literature/papers/11_methods_network_inference/`. Their inference results motivate, but do not prove the validity of, the adapted network bootstrap specified here.
+
+## 4a. Succession weights of the pooled estimand (amended 3 November 2026)
+
+§4 and §7 defined the pooled estimate as the equal average of the nine succession contrasts. From 3 November 2026 the main
+estimand weights each succession by its share of the designee's followers (`TAPADOS_SUCCESSION_WEIGHTS=person`, the
+default in `estimate_main.R`): $\hat\theta=\sum_e \omega_e\hat\tau_e$, $\omega_e=n^{D}_e/\sum_{e'}n^{D}_{e'}$, the premium of the
+average follower of a designee. Reason: the equal average gave 1/9 of the weight to successions with 7 to 19 designee
+followers (1940–1958), which set the width of the interval (person-level noise, `A_network` = 0; see
+`inference_checks.R`), while the estimator's variance estimator was already at the independent-person floor. The equal
+average is kept as the robustness row (`appendix_diagnostics.R`). The same $\omega_e$ (designee's followers' shares) are
+used in both the reward and the penalty contrasts of §11, in the indirect-tie contrasts (§ indirect ties, D2 shares),
+in the randomization and designee-placebo reference distributions (each combination weighted by its pseudo-designees'
+followers) and in the raw trajectories figure. Linear weights, the Ferman–Pinto bootstrap and the coverage simulation
+(§5) are recomputed under the new weights; the donor variance fit $A+B/n$ does not depend on $\omega$.

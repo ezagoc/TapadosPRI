@@ -53,8 +53,12 @@ D[, gain_1 := sched$pay[match(pmin(pre + 1L, 9L), sched$rung)] - sched$pay[match
 med_rung <- as.integer(median(D$pre))
 mean_step <- mean(D$step, na.rm = TRUE); med_step <- median(D$step, na.rm = TRUE)
 mean_gain <- mean(D$gain_1)                       # 2025 pesos a month for one rung, at the followers' positions
-# equal weight per succession, as the estimator
-mean_gain_eq <- D[, .(g = mean(gain_1), s = mean(step, na.rm = TRUE)), by = election][, .(g = mean(g), s = mean(s))]
+# succession weights as in the estimator (estimate_main.R succession_weights; this script reads outputs only):
+# person = the designee's followers' shares, equal = 1/9
+sw <- tryCatch(fread(file.path(out_dir, "main_result.csv"))$succession_weights[1], error = function(e) "person")
+nDe <- D[, .N, by = election][order(election)]
+omega <- setNames(if (identical(sw, "equal")) rep(1 / nrow(nDe), nrow(nDe)) else nDe$N / sum(nDe$N), nDe$election)
+mean_gain_eq <- D[, .(g = mean(gain_1), s = mean(step, na.rm = TRUE)), by = election][, .(g = sum(omega[as.character(election)] * g), s = sum(omega[as.character(election)] * s))]
 
 main_est <- fread(file.path(out_dir, "robustness.csv"))[1, estimate]
 es <- fread(file.path(out_dir, "event_study_summary.csv"))
@@ -93,7 +97,7 @@ ggsave(file.path(out_dir, "pay_ladder.png"), g, width = 10, height = 4.1, dpi = 
 # Complete the election x rung grid with zeros before averaging, so a rung absent from a succession counts as 0% there.
 foll <- D[, .N, by = .(election, pre)][CJ(election = unique(D$election), pre = 1:9), on = .(election, pre)]
 foll[is.na(N), N := 0L][, share := N / sum(N), by = election]
-foll <- foll[, .(share = mean(share)), by = pre]
+foll <- foll[, .(share = sum(omega[as.character(election)] * share)), by = pre]
 worth <- merge(sched[, .(rung, pay)], foll[, .(rung = pre, share)], by = "rung", all.x = TRUE)[is.na(share), share := 0]
 worth[, office := offices[as.character(rung)]][, filled := rung %in% c(1L, 2L, 8L)]
 worth[, office := factor(office, levels = offices[as.character(9:1)][9:1])]

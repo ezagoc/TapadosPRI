@@ -7,8 +7,15 @@ formula_es <- ~ election_factor + age + ldeg + lrec + prior_status   # section 7
 
 # Linear weights a_i of the estimator: mean residual of the designee's followers by succession (loser-only
 # outcome model, weights 1/n0e), averaged with equal or person (designee's followers) succession weights.
-build_design <- function(keep = rep(TRUE, nrow(sample)), formula = formula_x, weights = c("equal", "person")) {
-  weights <- match.arg(weights)
+# The pooled estimand's succession weights (estimate_main.R defines them; this fallback serves scripts that source only
+# this file, e.g. the benchmarks' prepare.R and pay_envelope.R): person = the designee's followers' shares, equal = 1/9.
+if (!exists("succession_weights")) succession_weights <- match.arg(Sys.getenv("TAPADOS_SUCCESSION_WEIGHTS", "person"), c("person", "equal"))
+if (!exists("omega_for")) omega_for <- function(es, n_treated) {
+  w <- if (succession_weights == "equal") rep(1 / length(es), length(es)) else n_treated / sum(n_treated)
+  setNames(w, es)
+}
+build_design <- function(keep = rep(TRUE, nrow(sample)), formula = formula_x, weights = succession_weights) {
+  weights <- match.arg(weights, c("equal", "person"))   # default: the main estimand's (estimate_main.R)
   S <- sample[keep]
   tr <- S$treated == 1L
   el <- S$election

@@ -24,8 +24,8 @@ decompose <- function(S, fit, label, B = 50000L) {
   dg[, rc := r - weighted.mean(r, n), by = e]
   ab <- pmax(0, coef(lm(I(rc^2) ~ I(1 / n), data = dg))); if (sum(ab) <= 0) ab <- c(0, mean(dg$rc^2 * dg$n))
   z <- dg$rc / sqrt(pmax(ab[1] + ab[2] / dg$n, 1e-12)); z <- (z - mean(z)) / sd(z)
-  nD <- D$by_e$n; E9 <- length(nD)
-  eD_groups <- colSums(matrix(base::sample(z, E9 * B, replace = TRUE), nrow = E9) * sqrt(ab[1] + ab[2] / nD)) / E9
+  nD <- D$by_e$n; E9 <- length(nD); omD <- rp_omega(S, D$by_e$election)[as.character(D$by_e$election)]
+  eD_groups <- colSums(matrix(base::sample(z, E9 * B, replace = TRUE), nrow = E9) * (omD * sqrt(ab[1] + ab[2] / nD)))
   pi <- S$group == "P"; sP <- tapply((P$a * P$u)[pi], S$cluster[pi], sum)
   eP_groups <- rnorm(B, 0, sqrt(length(sP) / (length(sP) - 1) * sum(sP^2)))
   ni <- S$group == "N"
@@ -151,10 +151,10 @@ for (i in seq_len(nrow(rows))) tl <- c(tl, sprintf("%s & %s & %s & %s\\%% \\\\",
 tl <- c(tl, "\\bottomrule", "\\end{tabular}")
 writeLines(tl, file.path(tab_dir, "rp_decomposition.tex"))
 bl <- c("% rp_balance.tex (reward_punishment.R). Standardized: difference over the average of the two groups' s.d.",
-        "\begin{tabular}{lrrrrr}", "\toprule",
-        " & \multicolumn{3}{c}{Mean} & \multicolumn{2}{c}{Standardized difference} \\",
-        "\cmidrule(lr){2-4}\cmidrule(lr){5-6}", " & Followers & Unaligned & Unaligned, & Raw & Weighted \\",
-        " & & & weighted & & \\", "\midrule")
+        "\\begin{tabular}{lrrrrr}", "\\toprule",
+        " & \\multicolumn{3}{c}{Mean} & \\multicolumn{2}{c}{Standardized difference} \\\\",
+        "\\cmidrule(lr){2-4}\\cmidrule(lr){5-6}", " & Followers & Unaligned & Unaligned, & Raw & Weighted \\\\",
+        " & & & weighted & & \\\\", "\\midrule")
 for (i in seq_len(nrow(balance))) {
   d <- if (grepl("^Age", balance$variable[i])) 1 else 2
   bl <- c(bl, sprintf("%s & %s & %s & %s & %s & %s \\\\", balance$variable[i],

@@ -33,7 +33,7 @@ max_enumerate <- 1e7
 # ------------------------------------------------------------------ statistic
 Yk <- sapply(c(-2L, 1:4), function(k) year_value(annual, k)); colnames(Yk) <- c(-2L, 1:4)
 y_avg <- rowMeans(Yk[, as.character(1:4), drop = FALSE]) - Yk[, "-2"]
-d_es <- build_design(formula = formula_es, weights = "equal")
+d_es <- build_design(formula = formula_es)
 stopifnot(identical(d_es$rows, seq_len(nrow(sample))), identical(d_es$elections, elections))
 actual <- sum(d_es$a * y_avg)
 headline <- fread(file.path(out_dir, "event_study_summary.csv"))[outcome == "rank" & contrast == "main_window_average", estimate]
@@ -58,7 +58,7 @@ contrast_for <- function(e, c) {
   sample[, treated := actual_treated]
   sample[election == e, treated := as.integer(patron == c)]
   on.exit(sample[, treated := actual_treated], add = TRUE)
-  d <- build_design(formula = formula_es, weights = "equal")
+  d <- build_design(formula = formula_es)
   stopifnot(identical(d$elections, elections))
   by_succession_d(d, y_avg[d$rows])[election == e, estimate]
 }
@@ -69,7 +69,7 @@ for (i in seq_len(nrow(slate_tab))) {
 }
 stopifnot(identical(sample$treated, actual_treated))
 chk <- merge(slate_tab[is_designee == 1L], actual_by_e, by = "election")
-stopifnot(max(abs(chk$contrast - chk$estimate)) < 1e-8, abs(mean(chk$contrast) - actual) < 1e-8)
+stopifnot(max(abs(chk$contrast - chk$estimate)) < 1e-8, abs(sum(omega[as.character(chk$election)] * chk$contrast) - actual) < 1e-8)
 slate_tab[!is.na(contrast), rank_in_slate := frank(-contrast, ties.method = "min"), by = election]
 n_rank_first <- sum(slate_tab[is_designee == 1L, rank_in_slate] == 1L)   # slates where the actual designee's contrast is the largest
 fwrite(slate_tab[, .(election, person_id, person_name, is_designee, n_followers, contrast, rank_in_slate)],
@@ -80,14 +80,22 @@ slate_sizes <- sapply(by_e, nrow)
 n_total <- prod(slate_sizes)
 enumerated <- n_total <= max_enumerate
 set.seed(seed_ri)
+# Pooled statistic of a combination: the main estimand's succession weights applied to the relabelled groups (person:
+# each pseudo-designee's followers' share of the combination's followers; equal: 1/9). For the actual labels it is the
+# headline estimate. Numerator and denominator are enumerated with iterated outer sums.
 if (enumerated) {
-  sums <- 0
-  for (j in seq_along(by_e)) sums <- as.vector(outer(sums, by_e[[j]]$contrast, "+"))
-  pooled_a <- sums / length(by_e); rm(sums)
+  num <- 0; den <- 0
+  for (j in seq_along(by_e)) {
+    nj <- if (succession_weights == "equal") rep(1, nrow(by_e[[j]])) else by_e[[j]]$n_followers
+    num <- as.vector(outer(num, nj * by_e[[j]]$contrast, "+")); den <- as.vector(outer(den, nj, "+"))
+  }
+  pooled_a <- num / den; rm(num, den)
   stopifnot(length(pooled_a) == n_total)
 } else {
   grid <- sapply(slate_sizes, function(m) sample.int(m, 20000L, replace = TRUE))
-  pooled_a <- rowMeans(sapply(seq_along(by_e), function(j) by_e[[j]]$contrast[grid[, j]]))
+  cm <- sapply(seq_along(by_e), function(j) by_e[[j]]$contrast[grid[, j]])
+  nm <- sapply(seq_along(by_e), function(j) if (succession_weights == "equal") rep(1, nrow(grid)) else by_e[[j]]$n_followers[grid[, j]])
+  pooled_a <- rowSums(cm * nm) / rowSums(nm)
 }
 tol <- 1e-9
 p_a_one <- mean(pooled_a >= actual - tol)
@@ -104,7 +112,7 @@ for (b in seq_len(B_followers)) {
     nT_e <- n_treated$nT[n_treated$election == e]
     sample[ix[sample.int(length(ix), nT_e)], treated := 1L]
   }
-  d <- build_design(formula = formula_es, weights = "equal")
+  d <- build_design(formula = formula_es)
   stopifnot(identical(d$elections, elections))
   pooled_b[b] <- sum(d$a * y_avg[d$rows])
 }

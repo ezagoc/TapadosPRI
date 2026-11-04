@@ -43,12 +43,12 @@ design <- function(Xm) {
   if (qr(X0m * sqrt(w0))$rank != ncol(X0m)) stop("Event-study control model is rank-deficient.")
   Mm <- solve(crossprod(X0m, X0m * w0))
   bm <- Reduce(`+`, lapply(elections, function(e)
-    colMeans(Xm[sample$election == e & sample$treated == 1L, , drop = FALSE]))) / E
+    omega[[as.character(e)]] * colMeans(Xm[sample$election == e & sample$treated == 1L, , drop = FALSE])))
   am <- numeric(nrow(sample))
   am[controls] <- -w0 * as.vector(X0m %*% (Mm %*% bm))
   for (e in elections) {
     ix <- which(sample$election == e & sample$treated == 1L)
-    am[ix] <- 1 / (E * length(ix))
+    am[ix] <- omega[[as.character(e)]] / length(ix)
   }
   Qm <- Cmat - sweep((Cmat %*% X0m) %*% Mm %*% t(X0m), 2L, w0, "*")
   net <- data.table(network = sample$network, a = am)[, .(g = sum(a), weight_squares = sum(a^2)), by = network]
@@ -149,7 +149,7 @@ run_outcome <- function(name, dY) {
   }
   by_succession <- rbindlist(lapply(colnames(Ym), function(j)
     succession_contrast(Ym[, j], es_design)[, `:=`(outcome = name, k = j)]))
-  stopifnot(max(abs(by_succession[, .(m = mean(estimate)), by = k][match(names(est), k), m] - est)) < 1e-8)
+  stopifnot(max(abs(by_succession[, .(m = sum(omega[as.character(election)] * estimate)), by = k][match(names(est), k), m] - est)) < 1e-8)
   list(yearly = yearly, summary = summary_rows, by_succession = by_succession,
        sup_t_critical = crit)
 }
@@ -210,7 +210,8 @@ event_figure <- function(name, ylab, scale, digits, unit, file) {
     coord_cartesian(ylim = c(bot, top), clip = "off") +
     labs(x = "Years relative to the election", y = ylab,
          caption = paste("Designee's vs losing contenders' exclusive direct followers, change from e-2, adjusted for",
-                         "predetermined traits; equal weight per succession.\nThick bars 90%, thin bars 95%,",
+                         if (succession_weights == "equal") "predetermined traits; equal weight per succession.\nThick bars 90%, thin bars 95%," else
+                         "predetermined traits; successions weighted by the designee's followers.\nThick bars 90%, thin bars 95%,",
                          "Ferman-Pinto bootstrap at the contender level.")) +
     theme_deck()
   ggsave(file.path(out_dir, paste0(file, ".pdf")), g, width = 10, height = 5.2, bg = "white", device = "pdf")
