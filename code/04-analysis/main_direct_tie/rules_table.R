@@ -8,9 +8,12 @@
 #   sharing          every year's posts split across camps in proportion to their population shares (capped quotas),
 #                    within camp by predetermined priority
 #   career           every post goes by predetermined priority alone (prior rank, experience, credential), camp ignored
-# Columns: premium D - P, reward D - N, penalty P - N (years 1-4 average, rank positions, 95% intervals from the same
-# Ferman-Pinto machinery as the observed row: benchmarks' inference.R), the premium in official pay (US$ a month, one
-# rung = PAYgainOneUSD of pay_envelope.R, 1999 scale in 2025 prices) and the observed premium as a share of each rule's.
+# Columns: premium D - P (years 1-4 average, rank positions, 95% intervals from the same Ferman-Pinto machinery as the
+# observed row: benchmarks' inference.R), the reward D - N and the penalty P - N as shares of their gap (D - N) - (P - N),
+# the convention of the deck's reward/penalty slide (shown only where the premium is positive: under sharing both groups
+# lose to the unaligned and under career neither moves, so the split has no meaning), the premium in official pay (US$ a
+# month, one rung = PAYgainOneUSD of pay_envelope.R, 1999 scale in 2025 prices) and the observed premium as a share of each
+# rule's. The point estimates of reward and penalty stay in rules_table.csv and the RUL*Reward/PenaltyAbs macros.
 # Writes tables/rules_table.tex and tables/rules_macros.tex. Reads the benchmarks under TAPADOSPRI_DB_ROOT/research/
 # succession_benchmarks (the staging environment). Run: Rscript code/04-analysis/main_direct_tie/rules_table.R
 suppressPackageStartupMessages(library(data.table))
@@ -32,18 +35,23 @@ order_rules <- names(labels)
 W <- dcast(all, rule ~ contrast, value.var = c("estimate", "ci_lower", "ci_upper"))[match(order_rules, rule)]
 W[, `:=`(usd = estimate_DP * usd_rung, share_of_purge = 100 * estimate_DP / W[rule == "purge", estimate_DP],
          observed_share = 100 * W[rule == "observed", estimate_DP] / estimate_DP)]
+W[, gap := estimate_DN - estimate_PN]
+W[, `:=`(reward_pct = fifelse(estimate_DP > 0, 100 * estimate_DN / gap, NA_real_),
+         penalty_pct = fifelse(estimate_DP > 0, -100 * estimate_PN / gap, NA_real_))]
 fwrite(W, file.path(out_dir, "rules_table.csv"))
 f2 <- function(x) sub("^-", "$-$", formatC(x, format = "f", digits = 2))
 fu <- function(x) { s <- formatC(abs(round(x, -1)), format = "d", big.mark = ","); if (x < 0) paste0("$-$", s) else s }
 ci <- function(lo, hi) sprintf("{\\scriptsize[%s, %s]}", f2(lo), f2(hi))
-lines <- c("% rules_table.tex (rules_table.R). Years 1-4 average, rank positions; 95% intervals; pay at one rung = US$ PAYgainOneUSD a month.",
+pct <- function(x) if (is.na(x)) "--" else paste0(formatC(x, format = "f", digits = 0), "\\%")
+lines <- c("% rules_table.tex (rules_table.R). Years 1-4 average, rank positions; 95% intervals; reward and penalty as shares of their gap,",
+  "% shown where the premium is positive; pay at one rung = US$ PAYgainOneUSD a month.",
   "\\begin{tabular}{lccccc}", "\\toprule",
-  " & \\multicolumn{2}{c}{Premium, designee's $-$ losers'} & Reward & Penalty & Premium in pay \\\\", "\\cmidrule(lr){2-3}",
-  "Allocation of the same posts & rank positions & 95\\% interval & designee's $-$ unaligned & losers' $-$ unaligned & US\\$ a month \\\\", "\\midrule")
+  " & \\multicolumn{2}{c}{Premium, designee's $-$ losers'} & \\multicolumn{2}{c}{Share of the premium} & Premium in pay \\\\", "\\cmidrule(lr){2-3}\\cmidrule(lr){4-5}",
+  "Allocation of the same posts & rank positions & 95\\% interval & reward & penalty & US\\$ a month \\\\", "\\midrule")
 for (r in order_rules) {
   x <- W[rule == r]
   lines <- c(lines, sprintf("%s & %s & [%s, %s] & %s & %s & %s \\\\", labels[[r]], f2(x$estimate_DP), f2(x$ci_lower_DP), f2(x$ci_upper_DP),
-                            f2(x$estimate_DN), f2(x$estimate_PN), fu(x$usd)))
+                            pct(x$reward_pct), pct(x$penalty_pct), fu(x$usd)))
   if (r == "observed") lines <- c(lines, "\\addlinespace[3pt]")
 }
 lines <- c(lines, "\\bottomrule", "\\end{tabular}")
@@ -55,10 +63,13 @@ writeLines(c("% rules_macros.tex (rules_table.R). Do not edit by hand.",
   mac("RULshare", f2(g("sharing", "estimate_DP"))), mac("RULcareer", f2(g("career", "estimate_DP"))),
   mac("RULpurgeReward", f2(g("purge", "estimate_DN"))), mac("RULpurgePenaltyAbs", f2(abs(g("purge", "estimate_PN")))),
   mac("RULshareReward", f2(g("sharing", "estimate_DN"))), mac("RULsharePenaltyAbs", f2(abs(g("sharing", "estimate_PN")))),
+  mac("RULobsRewardPct", formatC(g("observed", "reward_pct"), format = "f", digits = 0)), mac("RULobsPenaltyPct", formatC(g("observed", "penalty_pct"), format = "f", digits = 0)),
+  mac("RULpurgeRewardPct", formatC(g("purge", "reward_pct"), format = "f", digits = 0)), mac("RULpurgePenaltyPct", formatC(g("purge", "penalty_pct"), format = "f", digits = 0)),
+  mac("RULpromoRewardPct", formatC(g("promotions_only", "reward_pct"), format = "f", digits = 0)), mac("RULpromoPenaltyPct", formatC(g("promotions_only", "penalty_pct"), format = "f", digits = 0)),
   mac("RULobsPctPurge", formatC(g("observed", "share_of_purge"), format = "f", digits = 0)),
   mac("RULobsPctPromo", formatC(100 * g("observed", "estimate_DP") / g("promotions_only", "estimate_DP"), format = "f", digits = 0)),
   mac("RULpurgeUSD", fu(g("purge", "usd"))), mac("RULpromoUSD", fu(g("promotions_only", "usd"))), mac("RULobsUSD", fu(g("observed", "usd"))),
   mac("RULusdRung", formatC(usd_rung, format = "d", big.mark = ","))),
   file.path(tab_dir, "rules_macros.tex"))
-print(W[, .(rule, DP = round(estimate_DP, 2), DN = round(estimate_DN, 2), PN = round(estimate_PN, 2), usd = round(usd), pct_of_purge = round(share_of_purge))])
+print(W[, .(rule, DP = round(estimate_DP, 2), DN = round(estimate_DN, 2), PN = round(estimate_PN, 2), reward_pct = round(reward_pct), penalty_pct = round(penalty_pct), usd = round(usd), pct_of_purge = round(share_of_purge))])
 cat("rules_table done\n")
