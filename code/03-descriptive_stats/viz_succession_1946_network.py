@@ -104,7 +104,7 @@ ids_sorted = sorted(everyone)
 pre_rank = dict(zip(ids_sorted, highest_rank(ids_sorted, E - 5, T0)))
 post_rank = dict(zip(ids_sorted, highest_rank(ids_sorted, E + 1, E + 4)))
 trend = {i: int(np.sign(post_rank[i] - pre_rank[i])) for i in ids_sorted}      # +1 rose, 0 same, -1 fell
-MARK = {1: ("^", 44), 0: ("o", 20), -1: ("v", 16)}                           # post-succession marker by trend
+MARK = {1: ("^", 54), 0: ("o", 20), -1: ("v", 12)}                           # post-succession marker by trend
 
 # ----------------------------------------------------------------------------------------------- layout
 rng = np.random.default_rng(1946)
@@ -161,8 +161,8 @@ def legend_handles(stage):
                 Line2D([], [], marker="D", color="w", markerfacecolor=ACC, markersize=5.5, label="designee"),
                 Line2D([], [], marker="o", color="w", markerfacecolor=ACC, markersize=5, label="tied only to the designee")], 2
     return [Line2D([], [], marker="*", color="w", markerfacecolor=ACC, markersize=9, label="new president"),
-            Line2D([], [], marker="^", color="w", markerfacecolor=Z6, markersize=7.2, label=f"rose in rank after {E}"),
-            Line2D([], [], marker="v", color="w", markerfacecolor=Z6, markersize=4.6, label="fell in rank"),
+            Line2D([], [], marker="^", color="w", markerfacecolor=Z6, markersize=7.8, label=f"rose in rank after {E}"),
+            Line2D([], [], marker="v", color="w", markerfacecolor=Z6, markersize=4.0, label="fell in rank"),
             Line2D([], [], marker="o", color="w", markerfacecolor=Z6, markersize=5, label="same rank")], 4
 
 
