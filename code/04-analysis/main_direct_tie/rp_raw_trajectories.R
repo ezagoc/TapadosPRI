@@ -66,3 +66,15 @@ g <- ggplot(pd, aes(k, rank, colour = group, shape = group, linetype = group)) +
 ggsave(file.path(out_dir, "rp_raw_trajectories.pdf"), g, width = 10, height = 4.6, bg = "white", device = "pdf")
 ggsave(file.path(out_dir, "rp_raw_trajectories.png"), g, width = 10, height = 4.6, dpi = 250, bg = "white")
 cat("Wrote:", file.path(out_dir, "rp_raw_trajectories.{csv,pdf,png}"), "\n")
+
+# Raw DiDs read off the figure, same weights: years 1-4 against e-2, designee's minus losers' followers (DP), designee's
+# minus the reweighted unaligned (DN) and the reweighted unaligned minus losers' followers (NP). Macros for the deck.
+wide <- dcast(tr[group %in% lv], k ~ group, value.var = "rank")
+setnames(wide, lv, c("D", "P", "N"))
+gap14 <- function(a, b) mean((wide[k %in% 1:4, get(a)] - wide[k %in% 1:4, get(b)])) - (wide[k == -2L, get(a)] - wide[k == -2L, get(b)])
+mac <- function(n, v) sprintf("\\newcommand{\\%s}{%s}", n, formatC(v, format = "f", digits = 2))
+tab_dir <- file.path(out_dir, "tables"); dir.create(tab_dir, showWarnings = FALSE)
+writeLines(c("% raw_trajectories_macros.tex (rp_raw_trajectories.R): raw DiDs, years 1-4 against e-2, the estimator's succession weights. Do not edit by hand.",
+             mac("RAWdidDP", gap14("D", "P")), mac("RAWdidDN", gap14("D", "N")), mac("RAWdidNP", gap14("N", "P"))),
+           file.path(tab_dir, "raw_trajectories_macros.tex"))
+cat(sprintf("raw DiD years 1-4 vs e-2: D-P %.3f, D-N %.3f, N-P %.3f\n", gap14("D", "P"), gap14("D", "N"), gap14("N", "P")))
