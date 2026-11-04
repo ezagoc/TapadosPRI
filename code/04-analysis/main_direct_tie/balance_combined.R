@@ -60,7 +60,6 @@ traits <- rbindlist(list(
   list("prev_designee","Tied to the previous designee",                     "in",  2L),
   list("prev_loser",   "Tied to a losing contender of the previous succession", "in", 2L),
   list("fed_exec",     "Federal executive post, $e-5$ to $e-2$",            "in",  2L),
-  list("pretrend",     "Change in highest rank, $e-9$/$e-6$ to $e-5$/$e-2$", "out", 1L),
   list("holds_e2",     "Holds a ranked post in $e-2$",                      "out", 2L),
   list("cabinet",      "Cabinet-level post (rank $\\geq 8$) by $e-2$",      "out", 2L),
   list("elected",      "Elected office by $e-2$",                           "out", 2L),
@@ -119,7 +118,7 @@ lines <- c("% balance_combined.tex -- balance of predetermined traits (balance_c
            " & Designee's & Losers' & Norm. diff. & $p$ & Unaligned, & Norm. diff. \\\\",
            " & followers & followers & & & reweighted & \\\\", "\\midrule")
 for (i in which(out$block == "in")) lines <- c(lines, row(out[i]))
-lines <- c(lines, "\\midrule")
+lines <- c(lines, "\\addlinespace[2pt]")          # a slight gap, no rule, between the estimation's covariates and the rest
 for (i in which(out$block == "out")) lines <- c(lines, row(out[i]))
 lines <- c(lines, "\\midrule", sprintf("Politicians & %s & %s & & & %s & \\\\", format(nD, big.mark = ","), format(nP, big.mark = ","), format(nN, big.mark = ",")),
            "\\bottomrule", "\\end{tabular}")
