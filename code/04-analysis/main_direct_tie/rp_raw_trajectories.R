@@ -59,7 +59,7 @@ g <- ggplot(pd, aes(k, rank, colour = group, shape = group, linetype = group)) +
   scale_x_continuous(breaks = ks, labels = k_numbers) +
   coord_cartesian(ylim = c(bot - 0.05 * span, top + 0.22 * span), clip = "off") +
   labs(x = x_label_k, y = "Mean rank position\n(0 if no recorded post)") + theme_paper(17) +
-  theme(legend.position = "inside", legend.position.inside = c(0.01, 0.02), legend.justification = c(0, 0),
+  theme(legend.position = "inside", legend.position.inside = c(0.12, 0.02), legend.justification = c(0, 0),
         legend.text = element_text(size = 12, colour = INK), legend.key = element_blank(), legend.background = element_blank(),
         legend.key.width = unit(1.6, "lines"), axis.title.y = element_text(size = 14, lineheight = 0.95))
 ggsave(file.path(out_dir, "rp_raw_trajectories.pdf"), g, width = 10, height = 4.6, bg = "white", device = "pdf")
