@@ -6,12 +6,13 @@ Stages, drawn on ONE fixed layout so nodes do not move between clicks:
                        slate, and every position-based tie among them formed by 1944 (e-2, as in estimate_main.R).
                        All grey.
   2. contenders        the six contenders become black diamonds, labelled.
-  3. designation       Aleman's diamond turns red; the politicians tied only to him become red up-triangles with
-                       red ties; those tied only to a losing contender become black down-triangles with black
-                       ties to their patron; politicians tied to several contenders stay grey.
+  3. designation       Aleman's diamond turns red; the politicians tied only to him become red circles with red
+                       ties; those tied only to a losing contender become black circles with black ties to their
+                       patron; politicians tied to several contenders stay grey.
   4. election          Aleman becomes a red star (election of 7 July 1946, inauguration 1 December 1946) and each
-                       follower's triangle is drawn large, medium or small according to whether his highest post in
-                       1947-50 was above, equal to or below his highest post in 1941-44.
+                       follower is redrawn by his career after the succession: an up-triangle, slightly larger, if
+                       his highest post in 1947-50 was above his highest post in 1941-44, a down-triangle if below,
+                       the circle if equal. Colours keep the camp.
 
 Eligibility, annual ranks and the follower definition copy code/04-analysis/main_direct_tie/estimate_main.R
 (tie types co_work / co_education / co_military / co_revolution, ties dated by e-2, rung = floor(hybrid_rank),
@@ -103,7 +104,7 @@ ids_sorted = sorted(everyone)
 pre_rank = dict(zip(ids_sorted, highest_rank(ids_sorted, E - 5, T0)))
 post_rank = dict(zip(ids_sorted, highest_rank(ids_sorted, E + 1, E + 4)))
 trend = {i: int(np.sign(post_rank[i] - pre_rank[i])) for i in ids_sorted}      # +1 rose, 0 same, -1 fell
-TRI = {1: 44, 0: 20, -1: 7}                                                      # triangle areas by trend (points^2)
+MARK = {1: ("^", 34), 0: ("o", 20), -1: ("v", 22)}                           # post-succession marker by trend
 
 # ----------------------------------------------------------------------------------------------- layout
 rng = np.random.default_rng(1946)
@@ -155,11 +156,12 @@ def legend_handles(stage):
         star = stage >= 4
         h.insert(1, Line2D([], [], marker="*" if star else "D", color="w", markerfacecolor=ACC, markersize=9 if star else 5.5,
                            label="new president" if star else "designee"))
-        h.append(Line2D([], [], marker="^", color="w", markerfacecolor=ACC, markersize=5.5, label="tied only to the designee"))
-        h.append(Line2D([], [], marker="v", color="w", markerfacecolor=INK, markersize=5.5, label="tied only to a loser"))
-    if stage >= 4:                                   # size key: rank in 1947-50 against rank in 1941-44
-        for t, lab in ((1, f"rose in rank after {E}"), (0, "same rank"), (-1, "fell")):
-            h.append(Line2D([], [], marker="^", color="w", markerfacecolor=Z6, markersize=np.sqrt(TRI[t]), label=lab))
+        h.append(Line2D([], [], marker="o", color="w", markerfacecolor=ACC, markersize=5, label="tied only to the designee"))
+        h.append(Line2D([], [], marker="o", color="w", markerfacecolor=INK, markersize=5, label="tied only to a loser"))
+    if stage >= 4:                                   # career after the succession: rank in 1947-50 vs 1941-44
+        h.append(Line2D([], [], marker="^", color="w", markerfacecolor=Z6, markersize=6.5, label=f"rose in rank after {E}"))
+        h.append(Line2D([], [], marker="v", color="w", markerfacecolor=Z6, markersize=5.5, label="fell in rank"))
+        h.append(Line2D([], [], marker="o", color="w", markerfacecolor=Z6, markersize=5, label="same rank"))
     return h
 
 
@@ -190,8 +192,14 @@ def draw(stage):
             win = c == winner
             ax.add_collection(LineCollection(fol_edges[c], colors=ACC if win else INK, linewidths=0.7 if win else 0.5,
                                              alpha=0.95 if win else 0.8, zorder=3 if win else 2))
-            ax.scatter(a[:, 0], a[:, 1], s=[TRI[trend[i]] if stage >= 4 else 20 for i in alters], marker="^" if win else "v",
-                       color=ACC if win else INK, zorder=5 if win else 4, linewidths=0)
+            col = ACC if win else INK
+            if stage == 3:
+                ax.scatter(a[:, 0], a[:, 1], s=20, marker="o", color=col, zorder=5 if win else 4, linewidths=0)
+            else:
+                for t, (mk, area) in MARK.items():
+                    grp = np.array([pos[i] for i in alters if trend[i] == t])
+                    if len(grp):
+                        ax.scatter(grp[:, 0], grp[:, 1], s=area, marker=mk, color=col, zorder=5 if win else 4, linewidths=0)
     # contenders
     for c in contenders:
         win = c == winner
