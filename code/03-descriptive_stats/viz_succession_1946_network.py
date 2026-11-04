@@ -148,20 +148,22 @@ plain = [n for n in G.nodes if n not in contenders and n not in patron]
 
 
 def legend_handles(stage):
-    if stage >= 4:                                   # the camps are known from the previous click: only what is new
-        return [Line2D([], [], marker="*", color="w", markerfacecolor=ACC, markersize=9, label="new president"),
-                Line2D([], [], marker="^", color="w", markerfacecolor=Z6, markersize=6.5, label=f"rose in rank after {E}"),
-                Line2D([], [], marker="v", color="w", markerfacecolor=Z6, markersize=5.5, label="fell in rank"),
-                Line2D([], [], marker="o", color="w", markerfacecolor=Z6, markersize=5, label="same rank")]
-    h = [Line2D([], [], color=Z3, lw=1.0, marker="o", markerfacecolor=Z4, markeredgewidth=0, markersize=2.6,
-                label="politicians and their ties")]
-    if stage >= 2:
-        h.append(Line2D([], [], marker="D", color="w", markerfacecolor=INK, markersize=5.5, label="contenders"))
-    if stage >= 3:
-        h.insert(1, Line2D([], [], marker="D", color="w", markerfacecolor=ACC, markersize=5.5, label="designee"))
-        h.append(Line2D([], [], marker="o", color="w", markerfacecolor=ACC, markersize=5, label="tied only to the designee"))
-        h.append(Line2D([], [], marker="o", color="w", markerfacecolor=INK, markersize=5, label="tied only to a loser"))
-    return h
+    """Handles and the number of legend columns for each stage (matplotlib fills legends column by column)."""
+    grey = Line2D([], [], color=Z3, lw=1.0, marker="o", markerfacecolor=Z4, markeredgewidth=0, markersize=2.6,
+                  label="politicians and their ties")
+    if stage == 1:
+        return [grey], 1
+    if stage == 2:
+        return [grey, Line2D([], [], marker="D", color="w", markerfacecolor=INK, markersize=5.5, label="contenders")], 2
+    if stage == 3:                                   # row 1: the diamonds, row 2: their followers
+        return [Line2D([], [], marker="D", color="w", markerfacecolor=INK, markersize=5.5, label="losing contender"),
+                Line2D([], [], marker="o", color="w", markerfacecolor=INK, markersize=5, label="tied only to a loser"),
+                Line2D([], [], marker="D", color="w", markerfacecolor=ACC, markersize=5.5, label="designee"),
+                Line2D([], [], marker="o", color="w", markerfacecolor=ACC, markersize=5, label="tied only to the designee")], 2
+    return [Line2D([], [], marker="*", color="w", markerfacecolor=ACC, markersize=9, label="new president"),
+            Line2D([], [], marker="^", color="w", markerfacecolor=Z6, markersize=6.5, label=f"rose in rank after {E}"),
+            Line2D([], [], marker="v", color="w", markerfacecolor=Z6, markersize=5.5, label="fell in rank"),
+            Line2D([], [], marker="o", color="w", markerfacecolor=Z6, markersize=5, label="same rank")], 4
 
 
 def draw(stage):
@@ -213,8 +215,9 @@ def draw(stage):
         ax.text(pos[c][0], pos[c][1] + dy, DISPLAY[c], ha="center", va="top", fontsize=8 if win else 7,
                 color=col, weight="bold" if win else "normal", zorder=8,
                 bbox=dict(boxstyle="round,pad=0.12", facecolor="white", edgecolor="none", alpha=0.8))
-    ax.legend(handles=legend_handles(stage), loc="lower center", ncol=4, frameon=False, fontsize=6,
-              handlelength=1.3, columnspacing=0.9, handletextpad=0.4, bbox_to_anchor=(0.5, 0.0))
+    handles, ncol = legend_handles(stage)
+    ax.legend(handles=handles, loc="lower center", ncol=ncol, frameon=False, fontsize=6,
+              handlelength=1.3, columnspacing=1.6, handletextpad=0.4, bbox_to_anchor=(0.5, 0.0))
     for ext in ("pdf", "png"):                       # fixed frame: every stage has the same size and placement
         fig.savefig(OUT / f"succession_{E}_stage{stage}.{ext}", dpi=300, facecolor="white")
     plt.close(fig)
