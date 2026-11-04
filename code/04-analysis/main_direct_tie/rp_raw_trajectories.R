@@ -45,6 +45,10 @@ cat(sprintf("unaligned in support: %d; within two steps of the designee: %.1f%%;
 # figure: levels by group; the designation (the treatment) in near-black, the handovers in grey
 # the two distance groups stay in the CSV for reference; the figure shows the three groups of the design
 pd <- tr[group %in% c("Designee's followers", "Losers' followers", "Unaligned, reweighted")]
+# The figure starts at e-6 (deck decision, 4 November 2026): e-7 shows the jump of the previous handover, common to the
+# three groups and a distraction on a slide of levels. The CSV keeps e-7; the event study keeps its leads -7..-3.
+k_plot <- ks[ks >= -6L]
+pd <- pd[k >= -6L]
 lv <- c("Designee's followers", "Losers' followers", "Unaligned, reweighted")
 pd[, group := factor(group, levels = lv)]
 mk <- data.table(x = c(-1.5, 0.5, 6.5), lab = c("Designation", "New president", "Next president"), col = c(INK, RULE, RULE), lw = c(0.6, 0.35, 0.35))
@@ -57,7 +61,7 @@ g <- ggplot(pd, aes(k, rank, colour = group, shape = group, linetype = group)) +
   scale_colour_manual(values = c(INK, "#7a7a7a", "#940034"), name = NULL) +
   scale_shape_manual(values = c(16, 21, 17), name = NULL) +
   scale_linetype_manual(values = c("solid", "solid", "solid"), name = NULL) +
-  scale_x_continuous(breaks = ks, labels = k_numbers) +
+  scale_x_continuous(breaks = k_plot, labels = k_numbers) +
   coord_cartesian(ylim = c(bot - 0.05 * span, top + 0.22 * span), clip = "off") +
   labs(x = x_label_k, y = "Mean rank position\n(0 if no recorded post)") + theme_paper(17) +
   theme(legend.position = "inside", legend.position.inside = c(0.12, 0.02), legend.justification = c(0, 0),
