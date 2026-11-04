@@ -20,7 +20,7 @@ first_ranked <- annual[rank >= 1L, .(first = min(year)), by = pid]
 status_levels <- c("D", "P", "N", "multi", "contender", "entrant", "other")
 labels <- c(D = "Designee's followers", P = "Losers' followers", N = "Unaligned, in the pool",
             multi = "Tied to two or more contenders, excluded", contender = "The contenders",
-            entrant = "Entrants, first ranked post after $e-2$", other = "Others outside the pool")
+            entrant = "Entrants, first ranked post after $e-2$", other = "Outside the pool by its rules")
 # politicians tied to two or more contenders of succession e by e-2 (the design keeps only those tied to exactly one)
 multi_tied <- function(e) {
   cand <- slates[[as.character(e)]]$candidates
@@ -90,31 +90,40 @@ mac <- c(mac, sprintf("\\newcommand{\\PHtopPoolBefore}{%s}", pct(pool_share(7L, 
          sprintf("\\newcommand{\\PHtopPostsGrowth}{%s}", formatC(100 * (posts[threshold == 7L, after] / posts[threshold == 7L, before] - 1), format = "f", digits = 0)))
 writeLines(mac, file.path(tab_dir, "post_holders_macros.tex"))
 
-# Why are senior-post holders at e-2 outside the pool? (diagnostic) ages from the nodes file, contenders of any succession
-all_cand <- unique(unlist(lapply(slates, `[[`, "candidates")))
-diag <- rbindlist(lapply(elections, function(e) {
-  h <- annual[year == e - 2L & rank >= 7L]
-  st <- classify(e, h$pid)
-  o <- h[st == "other"]
-  by <- nodes$birth_year[match(o$pid, nodes$person_id)]
-  age <- e - by
-  reason <- fifelse(is.na(by), "no birth year",
-            fifelse(age < 25L | age > 75L, "age outside 25-75",
-            fifelse(o$pid %in% all_cand, "contender in another succession", "other")))
-  data.table(election = e, n_other = nrow(o), reason = reason)[, .N, by = .(election, n_other, reason)]
+# Why are senior-post holders in e-5..e-1 outside the pool? Every case falls under one of the pool's rules: a contender of
+# this or an earlier succession, age at e outside 25-75 or unknown, dead before e-1 (the death rule), or no ranked post
+# in e-5..e-2 (only possible at e-1). Shares of those person-years by reason, pooled over successions and years.
+all_contenders <- unique(contenders[, .(person_id, election_year)])
+reasons <- rbindlist(lapply(elections, function(e) {
+  pool <- A[election == e]; mt <- multi_tied(e)
+  rbindlist(lapply((e - 5L):(e - 1L), function(y) {
+    o <- annual[year == y & rank >= 7L, pid]; o <- o[!(o %in% pool$pid) & !(o %in% mt)]
+    by <- birth[as.character(o)]; age <- e - as.numeric(by); dy <- death_lookup[as.character(o)]
+    reason <- fifelse(o %in% all_contenders[election_year <= e, person_id], "contender",
+              fifelse(is.na(by), "no_birth_year", fifelse(age < 25 | age > 75, "age",
+              fifelse(!is.na(dy) & dy < e - 1L, "dead", fifelse(!(o %in% unique(annual[year >= e - 5L & year <= e - 2L, pid])), "no_post_in_window", "unexplained")))))
+    data.table(election = e, k = y - e, reason = reason)
+  }))
 }))
-fwrite(diag, file.path(out_dir, "post_holders_other_reasons.csv"))
-print(diag[, .(N = sum(N)), by = reason][, share := round(100 * N / sum(N))][])
-print(wide[, .(threshold, status, before = round(100 * before, 1), after = round(100 * after, 1), change_pp = round(change_pp, 1))])
-print(posts)
+stopifnot(!any(reasons$reason == "unexplained"))
+rs <- reasons[, .N, by = reason][, share := N / sum(N)]
+fwrite(rs, file.path(out_dir, "post_holders_outside_reasons.csv"))
+mac <- readLines(file.path(tab_dir, "post_holders_macros.tex"))
+for (r in c("contender", "no_birth_year", "age", "dead", "no_post_in_window")) {
+  v <- rs[reason == r, share]; if (length(v) == 0L) v <- 0
+  mac <- c(mac, sprintf("\\newcommand{\\PHoutside%s}{%s}", gsub("_", "", r), pct(v)))
+}
+mac <- c(mac, sprintf("\\newcommand{\\PHoutsideAgeOrUnknown}{%s}", pct(sum(rs[reason %in% c("age", "no_birth_year"), share]))))
+writeLines(mac, file.path(tab_dir, "post_holders_macros.tex"))
+print(rs[order(-N)])
 
 # ------------------------------------------------------------------ figure: who holds the senior posts, year by year
 # Stacked shares of the senior post-years (rung 7 and above) in years e-6..e+8, by the holder's status at e-2, with
 # the pool collapsed to three slices and the outsiders split into newcomers (first ranked post after e-2) and others.
 suppressPackageStartupMessages(library(ggplot2))
 slice_of <- c(D = "Designee's followers", P = "Losers' followers", N = "Rest of the pool", multi = "Rest of the pool",
-              contender = "Rest of the pool", entrant = "Newcomers, first ranked post after e-2", other = "Others outside the pool at e-2")
-slice_levels <- c("Designee's followers", "Losers' followers", "Rest of the pool", "Newcomers, first ranked post after e-2", "Others outside the pool at e-2")
+              contender = "Rest of the pool", entrant = "Newcomers, first ranked post after e-2", other = "Outside the pool by its rules")
+slice_levels <- c("Designee's followers", "Losers' followers", "Rest of the pool", "Newcomers, first ranked post after e-2", "Outside the pool by its rules")
 yearly <- rbindlist(lapply(elections, function(e) {
   rbindlist(lapply(-6:8, function(k) {
     h <- annual[year == e + k & rank >= 7L]
@@ -126,7 +135,7 @@ fig <- yearly[, .(share = mean(share), posts = mean(posts)), by = .(k, slice)]  
 fig[, slice := factor(slice, levels = rev(slice_levels))]
 fwrite(fig, file.path(out_dir, "post_holders_yearly.csv"))
 fills <- c("Designee's followers" = INK, "Losers' followers" = MUTED, "Rest of the pool" = "#d9d9d9",
-           "Newcomers, first ranked post after e-2" = "#b2182b", "Others outside the pool at e-2" = "#f4a582")
+           "Newcomers, first ranked post after e-2" = "#b2182b", "Outside the pool by its rules" = "#f4a582")
 mk <- data.table(x = c(-1.5, 0.5, 6.5), lab = c("Dedazo", "New president", "Next president"))
 gph <- ggplot(fig, aes(k, 100 * share, fill = slice)) +
   geom_col(width = 0.82, colour = "white", linewidth = 0.3) +
