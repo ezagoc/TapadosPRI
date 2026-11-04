@@ -120,7 +120,7 @@ lines <- c("% balance_combined.tex -- balance of predetermined traits (balance_c
 for (i in which(out$block == "in")) lines <- c(lines, row(out[i]))
 lines <- c(lines, "\\addlinespace[2pt]")          # a slight gap, no rule, between the estimation's covariates and the rest
 for (i in which(out$block == "out")) lines <- c(lines, row(out[i]))
-lines <- c(lines, "\\midrule", sprintf("Politicians & %s & %s & & & %s & \\\\", format(nD, big.mark = ","), format(nP, big.mark = ","), format(nN, big.mark = ",")),
+lines <- c(lines, "\\midrule", sprintf("Politician-successions & %s & %s & & & %s & \\\\", format(nD, big.mark = ","), format(nP, big.mark = ","), format(nN, big.mark = ",")),
            "\\bottomrule", "\\end{tabular}")
 writeLines(lines, file.path(tab_dir, "balance_combined.tex"))
 mx <- function(v) max(abs(v), na.rm = TRUE)
