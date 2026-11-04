@@ -18,6 +18,8 @@ Eligibility, annual ranks and the follower definition copy code/04-analysis/main
 (tie types co_work / co_education / co_military / co_revolution, ties dated by e-2, rung = floor(hybrid_rank),
 spells of at most 12 years). The counts are written as LaTeX macros for the slide captions.
 
+Run it with the staging environment that produced the deck's numbers (research/eligibility_refresh_2026_10_27:
+title-corrected ranks and verified deaths excluded), i.e. TAPADOSPRI_DB_ROOT and TAPADOSPRI_DATA_DIR pointing there.
 Outputs: OUTPUT_DIR/slides/succession_1946_stage{1..4}.{pdf,png} (identical frame and layout, so the slide can switch them with \\only), OUTPUT_DIR/slides/succession_1946_macros.tex
 Run:     python code/03-descriptive_stats/viz_succession_1946_network.py
 """
@@ -79,7 +81,13 @@ ids -= set(cont[cont.election_year <= E].person_id.dropna().astype(int))
 birth = nodes.set_index("person_id").birth_year
 age = pd.Series({i: E - birth.get(i, np.nan) for i in ids})
 eligible = sorted(int(i) for i in age[(age >= 25) & (age <= 75)].index)
-print(f"eligible politicians for {E}: {len(eligible)} (sample.tex says 519)")
+# the deck's eligibility refresh (research/eligibility_refresh_2026_10_27) drops politicians whose verified death
+# precedes the designation year; apply the same rule when its file is in DATA_DIR
+death_file = DATA_DIR / "verified_death_years.csv"
+if death_file.exists():
+    dy = pd.read_csv(death_file).set_index("person_id").death_year
+    eligible = [i for i in eligible if not (i in dy.index and dy[i] < E - 1)]
+print(f"eligible politicians for {E}: {len(eligible)} (the deck's sample table says 519)")
 
 dated = edges[edges.year_start.notna() & edges.edge_type.isin(TIE_TYPES) & (edges.year_start <= T0)]
 everyone = set(eligible) | set(contenders)

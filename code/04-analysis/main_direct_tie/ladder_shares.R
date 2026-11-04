@@ -4,6 +4,9 @@
 # builds (eligible, slates), nothing is re-estimated here. Writes tables/ladder_shares.{tex,csv} and
 # tables/ladder_macros.tex to the output directory.
 #   Rscript code/04-analysis/main_direct_tie/ladder_shares.R
+# The deck's numbers come from the staging environment research/eligibility_refresh_2026_10_27 (title-corrected ranks,
+# verified deaths excluded): copy this script into its code/04-analysis/main_direct_tie/ and run it with that bundle's
+# TAPADOSPRI_DB_ROOT / TAPADOSPRI_DATA_DIR / TAPADOS_MAIN_OUTPUT_DIR, as run.py there does.
 args <- commandArgs(FALSE)
 script_dir <- dirname(normalizePath(sub("^--file=", "", args[grepl("^--file=", args)][1])))
 invisible(capture.output(source(file.path(script_dir, "estimate_main.R"))))
@@ -40,7 +43,7 @@ shares <- rbindlist(lapply(names(groups), function(g) {
 }))
 fwrite(shares, file.path(tab_dir, "ladder_shares.csv"))
 
-cell <- function(g, s) { x <- shares[group == g & score == s, share]; if (x == 0) "--" else formatC(x, format = "f", digits = 1) }
+cell <- function(g, s) formatC(shares[group == g & score == s, share], format = "f", digits = 1)
 lines <- c("% ladder_shares.tex -- the office ladder and where politicians sit on it before the succession (ladder_shares.R).",
            "% Shares of politician-successions whose highest score in e-5..e-2 is the row's score; pooled over the nine successions.",
            "\\begin{tabular}{c >{\\raggedright\\arraybackslash}p{6.4cm} rrr}", "\\toprule",
