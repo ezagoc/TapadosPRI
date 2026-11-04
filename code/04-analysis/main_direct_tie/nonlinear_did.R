@@ -263,3 +263,11 @@ mac3 <- c(sprintf("\\newcommand{\\NLrpReward}{%s}", formatC(rew, format = "f", d
           sprintf("\\newcommand{\\NLrpDiff}{%s}", formatC(rew - pen, format = "f", digits = 2)))
 cat(mac3, file = file.path(tab_dir, "nonlinear_macros.tex"), sep = "\n", append = TRUE)
 cat("reward-penalty Poisson figure saved\n")
+
+# ------------------------------------------------------------------ 6. the Poisson event study alone, house style
+# Same figure function, geometry and labels as the main (linear) event-study figure, so the two can be compared one
+# against the other: output/main_direct_tie/poisson_alone/es_rank.{pdf,png}.
+dir.create(file.path(out_dir, "poisson_alone"), showWarnings = FALSE)
+es_figure(pes[, .(k, estimate = att, ci_lower, ci_upper, ci90_lower, ci90_upper)],
+          "Effect on rank position,\ndesignee's minus losers' followers", "es_rank", out = file.path(out_dir, "poisson_alone"))
+cat("Poisson event study alone saved (poisson_alone/es_rank)\n")
