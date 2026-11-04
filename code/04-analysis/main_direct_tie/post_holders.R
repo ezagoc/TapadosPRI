@@ -20,7 +20,7 @@ first_ranked <- annual[rank >= 1L, .(first = min(year)), by = pid]
 status_levels <- c("D", "P", "N", "multi", "contender", "entrant", "other")
 labels <- c(D = "Designee's followers", P = "Losers' followers", N = "Unaligned, in the pool",
             multi = "Tied to two or more contenders, excluded", contender = "The contenders",
-            entrant = "Entrants, first ranked post after $e-2$", other = "Outside the pool by its rules")
+            entrant = "Entrants, first ranked post after $e-2$", other = "Not eligible at $e-2$")
 # politicians tied to two or more contenders of succession e by e-2 (the design keeps only those tied to exactly one)
 multi_tied <- function(e) {
   cand <- slates[[as.character(e)]]$candidates
@@ -122,8 +122,8 @@ print(rs[order(-N)])
 # the pool collapsed to three slices and the outsiders split into newcomers (first ranked post after e-2) and others.
 suppressPackageStartupMessages(library(ggplot2))
 slice_of <- c(D = "Designee's followers", P = "Losers' followers", N = "Rest of the pool", multi = "Rest of the pool",
-              contender = "Rest of the pool", entrant = "Newcomers, first ranked post after e-2", other = "Outside the pool by its rules")
-slice_levels <- c("Designee's followers", "Losers' followers", "Rest of the pool", "Newcomers, first ranked post after e-2", "Outside the pool by its rules")
+              contender = "Rest of the pool", entrant = "Newcomers, first ranked post after e-2", other = "Not eligible at e-2")
+slice_levels <- c("Designee's followers", "Losers' followers", "Rest of the pool", "Newcomers, first ranked post after e-2", "Not eligible at e-2")
 yearly <- rbindlist(lapply(elections, function(e) {
   rbindlist(lapply(-6:8, function(k) {
     h <- annual[year == e + k & rank >= 7L]
@@ -135,7 +135,7 @@ fig <- yearly[, .(share = mean(share), posts = mean(posts)), by = .(k, slice)]  
 fig[, slice := factor(slice, levels = rev(slice_levels))]
 fwrite(fig, file.path(out_dir, "post_holders_yearly.csv"))
 fills <- c("Designee's followers" = INK, "Losers' followers" = MUTED, "Rest of the pool" = "#d9d9d9",
-           "Newcomers, first ranked post after e-2" = "#b2182b", "Outside the pool by its rules" = "#f4a582")
+           "Newcomers, first ranked post after e-2" = "#b2182b", "Not eligible at e-2" = "#f4a582")
 mk <- data.table(x = c(-1.5, 0.5, 6.5), lab = c("Dedazo", "New president", "Next president"))
 gph <- ggplot(fig, aes(k, 100 * share, fill = slice)) +
   geom_col(width = 0.82, colour = "white", linewidth = 0.3) +
