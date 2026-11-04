@@ -107,3 +107,41 @@ fwrite(diag, file.path(out_dir, "post_holders_other_reasons.csv"))
 print(diag[, .(N = sum(N)), by = reason][, share := round(100 * N / sum(N))][])
 print(wide[, .(threshold, status, before = round(100 * before, 1), after = round(100 * after, 1), change_pp = round(change_pp, 1))])
 print(posts)
+
+# ------------------------------------------------------------------ figure: who holds the senior posts, year by year
+# Stacked shares of the senior post-years (rung 7 and above) in years e-6..e+8, by the holder's status at e-2, with
+# the pool collapsed to three slices and the outsiders split into newcomers (first ranked post after e-2) and others.
+suppressPackageStartupMessages(library(ggplot2))
+slice_of <- c(D = "Designee's followers", P = "Losers' followers", N = "Rest of the pool", multi = "Rest of the pool",
+              contender = "Rest of the pool", entrant = "Newcomers, first ranked post after e-2", other = "Others outside the pool at e-2")
+slice_levels <- c("Designee's followers", "Losers' followers", "Rest of the pool", "Newcomers, first ranked post after e-2", "Others outside the pool at e-2")
+yearly <- rbindlist(lapply(elections, function(e) {
+  rbindlist(lapply(-6:8, function(k) {
+    h <- annual[year == e + k & rank >= 7L]
+    sl <- factor(slice_of[as.character(classify(e, h$pid))], levels = slice_levels)
+    data.table(election = e, k = k, posts = nrow(h), slice = slice_levels, share = as.numeric(table(sl)[slice_levels]) / nrow(h))
+  }))
+}))
+fig <- yearly[, .(share = mean(share), posts = mean(posts)), by = .(k, slice)]    # equal weight per succession
+fig[, slice := factor(slice, levels = rev(slice_levels))]
+fwrite(fig, file.path(out_dir, "post_holders_yearly.csv"))
+fills <- c("Designee's followers" = INK, "Losers' followers" = MUTED, "Rest of the pool" = "#d9d9d9",
+           "Newcomers, first ranked post after e-2" = "#b2182b", "Others outside the pool at e-2" = "#f4a582")
+mk <- data.table(x = c(-1.5, 0.5, 6.5), lab = c("Dedazo", "New president", "Next president"))
+gph <- ggplot(fig, aes(k, 100 * share, fill = slice)) +
+  geom_col(width = 0.82, colour = "white", linewidth = 0.3) +
+  geom_vline(data = mk, aes(xintercept = x), colour = INK, linewidth = c(0.6, 0.35, 0.35), linetype = "dashed") +
+  geom_text(data = mk, aes(x = x + 0.12, y = 104, label = lab), inherit.aes = FALSE, hjust = 0, vjust = 0, colour = INK, size = 4.2, family = FAM) +
+  scale_fill_manual(values = fills, breaks = slice_levels, name = NULL) +
+  scale_x_continuous(breaks = -6:8, labels = function(x) ifelse(x == 0, "e", sprintf("%+d", x))) +
+  scale_y_continuous(breaks = seq(0, 100, 25), expand = expansion(mult = c(0, 0.12))) +
+  labs(x = "Years relative to the election", y = "Share of the senior posts (%)") +
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE)) +
+  theme_minimal(base_size = 16, base_family = FAM) +
+  theme(panel.grid.minor = element_blank(), panel.grid.major.x = element_blank(), legend.position = "bottom",
+        legend.text = element_text(size = 12, colour = INK), axis.title = element_text(size = 14, colour = INK),
+        axis.text = element_text(colour = INK), plot.margin = margin(4, 8, 4, 4))
+ggsave(file.path(out_dir, "post_holders.pdf"), gph, width = 10, height = 4.8, bg = "white", device = "pdf")
+ggsave(file.path(out_dir, "post_holders.png"), gph, width = 10, height = 4.8, dpi = 250, bg = "white")
+cat("post_holders figure written\n")
+print(dcast(fig[k %in% c(-2, 0, 2, 4, 8)], slice ~ k, value.var = "share")[, lapply(.SD, function(x) if (is.numeric(x)) round(100 * x) else x)])
