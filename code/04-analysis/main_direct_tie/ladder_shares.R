@@ -39,7 +39,7 @@ shares <- rbindlist(lapply(names(groups), function(g) {
   data.table(group = g, score = 10:1,
              n = sapply(10:1, function(s) sum(d$pre == s)),
              share = sapply(10:1, function(s) 100 * mean(d$pre == s)),
-             politicians = nrow(d), mean_pre = mean(d$pre), mean_post = mean(d$post))
+             politicians = nrow(d), mean_pre = mean(d$pre), median_pre = median(d$pre), sd_pre = sd(d$pre), mean_post = mean(d$post))
 }))
 fwrite(shares, file.path(tab_dir, "ladder_shares.csv"))
 
@@ -52,15 +52,20 @@ lines <- c("% ladder_shares.tex -- the office ladder and where politicians sit o
 for (s in 10:1) lines <- c(lines, sprintf("%d & %s & %s & %s & %s \\\\", s, offices[[as.character(s)]], cell("pool", s), cell("designee", s), cell("losers", s)))
 np <- function(g) format(shares[group == g, politicians][1], big.mark = ",")
 mp <- function(g) formatC(shares[group == g, mean_pre][1], format = "f", digits = 1)
+md <- function(g) formatC(shares[group == g, median_pre][1], format = "f", digits = 0)
+sdp <- function(g) formatC(shares[group == g, sd_pre][1], format = "f", digits = 1)
 lines <- c(lines, "\\midrule",
            sprintf("\\multicolumn{2}{l}{Politician-successions} & %s & %s & %s \\\\", np("pool"), np("designee"), np("losers")),
            sprintf("\\multicolumn{2}{l}{Mean score} & %s & %s & %s \\\\", mp("pool"), mp("designee"), mp("losers")),
+           sprintf("\\multicolumn{2}{l}{Median score} & %s & %s & %s \\\\", md("pool"), md("designee"), md("losers")),
+           sprintf("\\multicolumn{2}{l}{Standard deviation} & %s & %s & %s \\\\", sdp("pool"), sdp("designee"), sdp("losers")),
            "\\bottomrule", "\\end{tabular}")
 writeLines(lines, file.path(tab_dir, "ladder_shares.tex"))
 mac <- c("% ladder_macros.tex -- numbers of the office-ladder slide (ladder_shares.R). Do not edit by hand.",
          sprintf("\\newcommand{\\LadderPoolN}{%s}", np("pool")), sprintf("\\newcommand{\\LadderDesigneeN}{%s}", np("designee")),
          sprintf("\\newcommand{\\LadderLosersN}{%s}", np("losers")), sprintf("\\newcommand{\\LadderPoolMean}{%s}", mp("pool")),
-         sprintf("\\newcommand{\\LadderDesigneeMean}{%s}", mp("designee")), sprintf("\\newcommand{\\LadderLosersMean}{%s}", mp("losers")))
+         sprintf("\\newcommand{\\LadderDesigneeMean}{%s}", mp("designee")), sprintf("\\newcommand{\\LadderLosersMean}{%s}", mp("losers")),
+         sprintf("\\newcommand{\\LadderPoolMedian}{%s}", md("pool")), sprintf("\\newcommand{\\LadderPoolSD}{%s}", sdp("pool")))
 writeLines(mac, file.path(tab_dir, "ladder_macros.tex"))
 cat("ladder_shares: pool", np("pool"), "designee", np("designee"), "losers", np("losers"), "\n")
 print(dcast(shares, score ~ group, value.var = "share")[order(-score)])
