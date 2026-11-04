@@ -11,7 +11,7 @@ tab_dir <- file.path(out_dir, "tables"); dir.create(tab_dir, showWarnings = FALS
 
 offices <- c("10" = "President of the Republic",
              "9" = "Cabinet secretaries; heads of large state firms",
-             "8" = "Major-state governors; PRI president; prestige ambassadors",
+             "8" = "Major-state governors; PRI president; top ambassadors",
              "7" = "Undersecretaries; senators; Supreme Court justices",
              "6" = "Directors general; other governors; other ambassadors",
              "5" = "Deputy directors general; big-city mayors",
