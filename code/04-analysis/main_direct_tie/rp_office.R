@@ -79,7 +79,7 @@ g <- ggplot(pd, aes(x, estimate)) +
   labs(x = x_label_k, y = if (THR == 1L) "Effect on holding a post (pp),\neach group minus the unconnected" else
          "Effect on holding a top post (pp),\neach group minus the unconnected") + theme_paper(17) +
   theme(axis.title.y = element_text(size = 14, lineheight = 0.95),
-        legend.position = "inside", legend.position.inside = c(0.01, 0.80), legend.justification = c(0, 1),
+        legend.position = "inside", legend.position.inside = c(0.01, 0.99), legend.justification = c(0, 1),
         legend.text = element_text(size = 14, colour = INK), legend.key = element_blank(), legend.background = element_blank())
 ggsave(file.path(out_dir, sprintf("es_reward_punishment_%s.pdf", SFX)), g, width = 10, height = 4.1, bg = "white", device = "pdf")
 ggsave(file.path(out_dir, sprintf("es_reward_punishment_%s.png", SFX)), g, width = 10, height = 4.1, dpi = 250, bg = "white")
