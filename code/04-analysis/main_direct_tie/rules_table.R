@@ -28,12 +28,17 @@ stopifnot(abs(obs[contrast == "DP", estimate] - es_obs$estimate) < 1e-6)   # sam
 pay <- readLines(file.path(tab_dir, "pay_macros.tex"))
 usd_rung <- as.numeric(gsub(",", "", sub(".*\\{\\\\PAYgainOneUSD\\}\\{([^}]*)\\}.*", "\\1", pay[grepl("PAYgainOneUSD}", pay)])))
 stopifnot(is.finite(usd_rung))
+# the premium as a percentage change in official pay, the convention of pay_envelope.R (pct(): one rung = the 1999
+# ladder's geometric step from department head to cabinet, compounded over the rungs of the premium; pay_ladder.csv)
+lad <- fread(file.path(out_dir, "pay_ladder.csv"))
+per_rung <- (lad[rung == 9L, pay_1999] / lad[rung == 3L, pay_1999])^(1 / 6) - 1
+pay_pct <- function(rungs) 100 * ((1 + per_rung)^rungs - 1)
 all <- rbind(obs[, .(rule, contrast, estimate, ci_lower, ci_upper)], rules[, .(rule, contrast, estimate, ci_lower, ci_upper)])
 labels <- c(observed = "Observed", purge = "Winner-takes-all purge", promotions_only = "Winner promotions only",
             sharing = "Proportional sharing", career = "Promotion by prior career")
 order_rules <- names(labels)
 W <- dcast(all, rule ~ contrast, value.var = c("estimate", "ci_lower", "ci_upper"))[match(order_rules, rule)]
-W[, `:=`(usd = estimate_DP * usd_rung, share_of_purge = 100 * estimate_DP / W[rule == "purge", estimate_DP],
+W[, `:=`(usd = estimate_DP * usd_rung, pay_pct = pay_pct(estimate_DP), share_of_purge = 100 * estimate_DP / W[rule == "purge", estimate_DP],
          observed_share = 100 * W[rule == "observed", estimate_DP] / estimate_DP)]
 W[, gap := estimate_DN - estimate_PN]
 W[, `:=`(reward_pct = fifelse(estimate_DP > 0, 100 * estimate_DN / gap, NA_real_),
@@ -43,15 +48,16 @@ f2 <- function(x) sub("^-", "$-$", formatC(x, format = "f", digits = 2))
 fu <- function(x) { s <- formatC(abs(round(x, -1)), format = "d", big.mark = ","); if (x < 0) paste0("$-$", s) else s }
 ci <- function(lo, hi) sprintf("{\\scriptsize[%s, %s]}", f2(lo), f2(hi))
 pct <- function(x) if (is.na(x)) "--" else paste0(formatC(x, format = "f", digits = 0), "\\%")
+fp <- function(x) { s <- formatC(abs(round(x)), format = "d", big.mark = ","); paste0(if (x < 0) "$-$" else "$+$", s, "\\%") }
 lines <- c("% rules_table.tex (rules_table.R). Years 1-4 average, rank positions; 95% intervals; reward and penalty as shares of their gap,",
-  "% shown where the premium is positive; pay at one rung = US$ PAYgainOneUSD a month.",
+  "% shown where the premium is positive; the premium as a percentage change in official pay (1999 ladder, 34% a rung, compounded).",
   "\\begin{tabular}{lccccc}", "\\toprule",
-  " & \\multicolumn{2}{c}{Premium, designee's $-$ losers'} & \\multicolumn{2}{c}{Share of the premium} & Premium in pay \\\\", "\\cmidrule(lr){2-3}\\cmidrule(lr){4-5}",
-  "Allocation of the same posts & rank positions & 95\\% interval & reward & penalty & US\\$ a month \\\\", "\\midrule")
+  " & \\multicolumn{2}{c}{Premium, designee's $-$ losers'} & \\multicolumn{2}{c}{Share of the premium} & Premium \\\\", "\\cmidrule(lr){2-3}\\cmidrule(lr){4-5}",
+  "Allocation of the same posts & rank positions & 95\\% interval & reward & penalty & in pay \\\\", "\\midrule")
 for (r in order_rules) {
   x <- W[rule == r]
   lines <- c(lines, sprintf("%s & %s & [%s, %s] & %s & %s & %s \\\\", labels[[r]], f2(x$estimate_DP), f2(x$ci_lower_DP), f2(x$ci_upper_DP),
-                            pct(x$reward_pct), pct(x$penalty_pct), fu(x$usd)))
+                            pct(x$reward_pct), pct(x$penalty_pct), fp(x$pay_pct)))
   if (r == "observed") lines <- c(lines, "\\addlinespace[3pt]")
 }
 lines <- c(lines, "\\bottomrule", "\\end{tabular}")
@@ -69,7 +75,10 @@ writeLines(c("% rules_macros.tex (rules_table.R). Do not edit by hand.",
   mac("RULobsPctPurge", formatC(g("observed", "share_of_purge"), format = "f", digits = 0)),
   mac("RULobsPctPromo", formatC(100 * g("observed", "estimate_DP") / g("promotions_only", "estimate_DP"), format = "f", digits = 0)),
   mac("RULpurgeUSD", fu(g("purge", "usd"))), mac("RULpromoUSD", fu(g("promotions_only", "usd"))), mac("RULobsUSD", fu(g("observed", "usd"))),
-  mac("RULusdRung", formatC(usd_rung, format = "d", big.mark = ","))),
+  mac("RULusdRung", formatC(usd_rung, format = "d", big.mark = ",")),
+  mac("RULobsPct", fp(g("observed", "pay_pct"))), mac("RULpurgePct", fp(g("purge", "pay_pct"))), mac("RULpromoPct", fp(g("promotions_only", "pay_pct"))),
+  mac("RULsharePct", fp(g("sharing", "pay_pct"))), mac("RULcareerPct", fp(g("career", "pay_pct"))),
+  mac("RULpurgeTimes", formatC(1 + g("purge", "pay_pct") / 100, format = "f", digits = 1)), mac("RULpayStep", formatC(100 * per_rung, format = "f", digits = 0))),
   file.path(tab_dir, "rules_macros.tex"))
-print(W[, .(rule, DP = round(estimate_DP, 2), DN = round(estimate_DN, 2), PN = round(estimate_PN, 2), reward_pct = round(reward_pct), penalty_pct = round(penalty_pct), usd = round(usd), pct_of_purge = round(share_of_purge))])
+print(W[, .(rule, DP = round(estimate_DP, 2), DN = round(estimate_DN, 2), PN = round(estimate_PN, 2), reward_pct = round(reward_pct), penalty_pct = round(penalty_pct), usd = round(usd), pay_pct = round(pay_pct), pct_of_purge = round(share_of_purge))])
 cat("rules_table done\n")
