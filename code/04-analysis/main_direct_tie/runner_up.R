@@ -27,6 +27,12 @@ camps <- sample[treated == 0L, .(n = .N), by = .(election, patron)]
 ru <- contenders[in_main_slate == 1L & role == "runner_up", .(election = election_year, patron = person_id)]
 ru <- merge(ru, camps, by = c("election", "patron"), all.x = TRUE)
 largest <- camps[camps[, .I[which.max(n)], by = election]$V1]
+# (d) the Interior secretary's followers where he was a losing contender, else the documented runner-up (4 Nov 2026,
+#     the user's rule: Gobernaci\'on was the designee's post in 1946, 1952, 1964 and 1970 and a loser's in 1958, 1976,
+#     1982 and 1988; in 1940 the secretary was not a contender)
+interior <- contenders[in_main_slate == 1L & role != "winner" & grepl("Gobernaci", position_at_time), .(election = election_year, patron = person_id)]
+ru_int <- rbind(interior, ru[!(election %in% interior$election), .(election, patron)])
+ru_int <- merge(ru_int, camps, by = c("election", "patron"), all.x = TRUE)
 name_of <- unique(contenders[, .(person_id, person_name)])
 nm <- function(id) name_of$person_name[match(id, name_of$person_id)]
 
@@ -56,7 +62,8 @@ fit_subset <- function(keep_patron, label, main = FALSE) {
 res <- rbindlist(list(
   fit_subset(camps, "All losing contenders' followers (main)", main = TRUE),
   fit_subset(ru[!is.na(n)], "Documented runner-up's followers"),
-  fit_subset(largest, "Largest losing camp's followers")))
+  fit_subset(largest, "Largest losing camp's followers"),
+  fit_subset(ru_int[!is.na(n)], "Interior secretary's, else runner-up's")))
 
 # (c) every losing contender in turn
 per <- rbindlist(lapply(names(outcomes), function(o) rbindlist(lapply(seq_len(nrow(camps)), function(i) {
@@ -93,17 +100,20 @@ lines <- c("% runner_up.tex (runner_up.R). Designee's followers against one comp
   " & \\multicolumn{2}{c}{Years 1--4 average} & \\multicolumn{2}{c}{Window $e+1$..$e+4$} & Comparison & \\\\",
   "\\cmidrule(lr){2-3}\\cmidrule(lr){4-5}",
   "Comparison group & Estimate & 95\\% interval & Estimate & 95\\% interval & followers & Successions \\\\", "\\midrule",
-  row("All losing contenders' followers (main)"), row("Documented runner-up's followers"), row("Largest losing camp's followers"),
+  row("All losing contenders' followers (main)"), row("Documented runner-up's followers"), row("Interior secretary's, else runner-up's"), row("Largest losing camp's followers"),
   sprintf("Each losing contender in turn, median & %s & %s & %s & %s & & 9 \\\\", f2(ca$median), sprintf("range [%s, %s]", f2(ca$minimum), f2(ca$maximum)), f2(cw$median), sprintf("range [%s, %s]", f2(cw$minimum), f2(cw$maximum))),
   "\\bottomrule", "\\end{tabular}")
 writeLines(lines, file.path(tab_dir, "runner_up.tex"))
 mac <- function(n, v) sprintf("\\newcommand{\\%s}{%s}", n, v)
 a_ru <- res[spec == "Documented runner-up's followers" & outcome == "annual"]; a_lg <- res[spec == "Largest losing camp's followers" & outcome == "annual"]
+a_in <- res[spec == "Interior secretary's, else runner-up's" & outcome == "annual"]
 writeLines(c("% runner_up_macros.tex (runner_up.R). Do not edit by hand.",
   mac("RUest", f2(a_ru$estimate)), mac("RUlo", f2(a_ru$ci_lower)), mac("RUhi", f2(a_ru$ci_upper)), mac("RUn", a_ru$n_comparison), mac("RUsucc", a_ru$successions),
   mac("RUdropped", ifelse(a_ru$dropped == "", "none", a_ru$dropped)),
   mac("RUlargestEst", f2(a_lg$estimate)), mac("RUlargestLo", f2(a_lg$ci_lower)), mac("RUlargestHi", f2(a_lg$ci_upper)),
   mac("RUeachMedian", f2(ca$median)), mac("RUeachMin", f2(ca$minimum)), mac("RUeachMax", f2(ca$maximum)), mac("RUeachPositive", formatC(100 * ca$share_positive, format = "f", digits = 0)),
-  mac("RUeachN", format(ca$n_combinations, big.mark = ","))),
+  mac("RUeachN", format(ca$n_combinations, big.mark = ",")),
+  mac("RUinteriorEst", f2(a_in$estimate)), mac("RUinteriorLo", f2(a_in$ci_lower)), mac("RUinteriorHi", f2(a_in$ci_upper)),
+  mac("RUinteriorYears", paste(sort(interior$election), collapse = ", ")), mac("RUinteriorWonYears", paste(sort(contenders[in_main_slate == 1L & role == "winner" & grepl("Gobernaci", position_at_time) & election_year <= 1988L, election_year]), collapse = ", "))),
   file.path(tab_dir, "runner_up_macros.tex"))
 cat("runner_up done\n")

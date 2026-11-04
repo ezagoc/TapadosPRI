@@ -20,6 +20,12 @@ tie_lag <- as.integer(Sys.getenv("TAPADOS_TIE_CUTOFF", "2"))
 # Pool (main: all; MAIN_SPEC section 13: only politicians with a dictionary-qualifying post started by e-2).
 inclusion_rule <- Sys.getenv("TAPADOS_INCLUSION", "all")
 stopifnot(inclusion_rule %in% c("all", "predetermined"))
+# Robustness switches (4 November 2026): the pool restricted to politicians whose rank in e-5..e-2 is at least
+# TAPADOS_PRE_MIN (main: 1, everyone with a ranked post); the slate restricted to contenders holding a cabinet-level post
+# (rung 9) in e-2 or e-1 with TAPADOS_SLATE=cabinet (main: all, the audited slate).
+pre_min <- as.integer(Sys.getenv("TAPADOS_PRE_MIN", "1"))
+slate_rule <- Sys.getenv("TAPADOS_SLATE", "all")
+stopifnot(slate_rule %in% c("all", "cabinet"), pre_min >= 1L)
 read_data <- function(...) fread(file.path(data_dir, ...), na.strings = c("", "NA"))
 
 nodes <- read_data("networks", "network_nodes.csv")
@@ -68,6 +74,12 @@ highest_rank <- function(ids, from, through) {
 }
 
 birth <- setNames(nodes$birth_year, nodes$person_id)
+if (slate_rule == "cabinet") for (e in elections) {
+  sl <- slates[[as.character(e)]]
+  keep <- sl$candidates == sl$winner | highest_rank(sl$candidates, e - 2L, e - 1L) >= 9L   # a cabinet-level post in e-2 or e-1
+  stopifnot(sum(keep) >= 2L)
+  slates[[as.character(e)]]$candidates <- sl$candidates[keep]
+}
 dated <- edges[!is.na(year_start)]
 long_ties <- rbindlist(list(
   dated[, .(pid = person_a, candidate = person_b, edge_type, year_start)],
@@ -87,6 +99,7 @@ for (e in elections) {
   d <- d[!is.na(age) & age >= 25 & age <= 75]
   d[, pre := highest_rank(pid, e - 5L, t0)]
   stopifnot(all(d$pre > 0L))
+  if (pre_min > 1L) d <- d[pre >= pre_min]
   d[, earlier := highest_rank(pid, e - 9L, e - 6L)]
   d[, post := highest_rank(pid, e + 1L, e + 4L)]
   d[, delta := post - pre]
@@ -303,7 +316,7 @@ fwrite(data.table(term = names(beta), coefficient = as.vector(beta)),
        file.path(out_dir, "control_model.csv"))
 
 summary <- data.table(
-  design_version = "2026-10-17-primary-v2", tie_cutoff_years = tie_lag, inclusion = inclusion_rule,
+  design_version = "2026-10-17-primary-v2", tie_cutoff_years = tie_lag, inclusion = inclusion_rule, pre_min = pre_min, slate = slate_rule,
   succession_weights = succession_weights, estimate = theta, ci_lower = ci[1], ci_upper = ci[2], p_bootstrap = p,
   bootstrap_draws = B, seed = seed,
   A_network = AB[1], B_person = AB[2], control_donor_networks = K,

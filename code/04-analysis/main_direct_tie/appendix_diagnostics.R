@@ -114,14 +114,23 @@ rob <- rbindlist(list(
   estimate_columns(build_design(formula = ~ election_factor + factor(pmax(pre, 2L)) + earlier_band + age + ldeg + lrec + prior_status),
                    cbind(y = sample$delta))$table[, spec := "Exact baseline rank instead of bands"]))
 # (exact rung: the 2 politicians at the lowest rung, with no loser follower there, are pooled with the next rung)
-e4_file <- file.path(out_dir, "robust_ties_e4", "main_result.csv")
-if (file.exists(e4_file)) {
-  e4 <- fread(e4_file)
-  rob <- rbind(rob, data.table(column = "y", estimate = e4$estimate, ci_lower = e4$ci_lower, ci_upper = e4$ci_upper,
-                               p_bootstrap = e4$p_bootstrap, n = e4$total_person_successions,
-                               spec = "Ties formed by $e-4$ (late recruits excluded)"), fill = TRUE)
+e4_file <- file.path(out_dir, "robust_ties_e4", "main_result.csv")   # also used by the MDtiesFour* macros below
+e4 <- if (file.exists(e4_file)) fread(e4_file) else NULL
+# rows from the variant runs of estimate_main.R (each in its own output folder), when present
+variants <- list(c("robust_ties_e4", "Ties formed by $e-4$ (late recruits excluded)"),
+                 c("robust_predetermined_inclusion", "Inclusion in Camp's dictionary settled by $e-2$"),
+                 c("robust_cabinet_slate", "Contenders holding a cabinet-level post only"))
+for (v in variants) {
+  vf <- file.path(out_dir, v[1], "main_result.csv")
+  if (file.exists(vf)) {
+    vr <- fread(vf)
+    rob <- rbind(rob, data.table(column = "y", estimate = vr$estimate, ci_lower = vr$ci_lower, ci_upper = vr$ci_upper,
+                                 p_bootstrap = vr$p_bootstrap, n = vr$total_person_successions, spec = v[2]), fill = TRUE)
+  } else cat("variant run missing:", vf, "\n")
 }
 rob <- rbind(rob,
+  estimate_columns(build_design(keep = sample$pre >= 7L, formula = formula_es), cbind(y = sample$delta[sample$pre >= 7L]))$table[
+    , spec := "Only politicians ranked 7 or above before the succession, no rank bands"],
   estimate_columns(build_design(keep = !(sample$election %in% c(1976L, 1988L))), cbind(y = sample$delta[!(sample$election %in% c(1976L, 1988L))]))$table[
     , spec := "Without 1976 and 1988 (president leaned early)"],
   estimate_columns(build_design(keep = sample$network != "1982_771"), cbind(y = sample$delta[sample$network != "1982_771"]))$table[
