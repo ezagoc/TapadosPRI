@@ -64,7 +64,9 @@ def initials(name: str) -> str:
     surname, given = name.split(",", 1)
     parts = []
     for w in given.replace(",", " ").split():
-        parts.append("Jr." if w.lower().startswith("jr") else w[0].upper() + ".")
+        if w.lower().startswith("jr"):
+            continue                                   # no room for "Jr." on the slide
+        parts.append(w[0].upper() + ".")
     return surname.strip() + ", " + " ".join(parts)
 
 
@@ -96,7 +98,7 @@ sample["follower"] = sample.pid.map(display)
 sample["contender"] = sample.patron.map(lambda p: nodes[p])
 sample["change"] = sample.post - sample.pre
 sample["sort_key"] = sample.follower.map(letters)
-sample = sample.sort_values(["treated", "contender", "sort_key"], ascending=[False, True, True])
+sample = sample.sort_values(["treated", "contender", "pre", "sort_key"], ascending=[False, True, False, True])
 sample[["pid", "follower", "patron", "contender", "treated", "pre", "post", "change"]].to_csv(
     out_dir / "followers_1946.csv", index=False)
 
@@ -113,8 +115,13 @@ groups = {c: g for c, g in sample.groupby("contender", sort=False)}
 keys = {c: SHORT.get(c, (re.sub(r"[^a-z]", "_", c.lower()), c.split(",")[0])) for c in groups}
 
 
-def rows(g: pd.DataFrame, mean: bool = True) -> list[str]:
-    out = ["%s & %d & %d & %s \\\\" % (tex(initials(r.follower)), r.pre, r.post, signed(r.change)) for r in g.itertuples()]
+def rows(g: pd.DataFrame, mean: bool = True, max_rows: int | None = None) -> list[str]:
+    """One row per follower; with max_rows, the followers below the cap (ranked by pre) collapse into one row."""
+    shown, rest = (g, g.iloc[0:0]) if max_rows is None or len(g) <= max_rows else (g.iloc[:max_rows], g.iloc[max_rows:])
+    out = ["%s & %d & %d & %s \\\\" % (tex(initials(r.follower)), r.pre, r.post, signed(r.change)) for r in shown.itertuples()]
+    if len(rest):
+        out.append("%d others, ranks %d--%d in 1941--44 & %.1f & %.1f & %s \\\\" % (
+            len(rest), rest.pre.min(), rest.pre.max(), rest.pre.mean(), rest.post.mean(), signed(rest.change.mean(), 1)))
     if mean:
         out += ["\\midrule", "Mean & %.1f & %.1f & %s \\\\" % (g.pre.mean(), g.post.mean(), signed(g.change.mean(), 1))]
     return out
@@ -123,14 +130,14 @@ def rows(g: pd.DataFrame, mean: bool = True) -> list[str]:
 HEAD = ["\\begin{tabular}{lccc}", "\\toprule", " & Rank & Rank & \\\\", " & 1941--44 & 1947--50 & Change \\\\", "\\midrule"]
 
 
-def write(name: str, panels: list[tuple[str, pd.DataFrame]], mean: bool = True) -> None:
+def write(name: str, panels: list[tuple[str, pd.DataFrame]], mean: bool = True, max_rows: int | None = None) -> None:
     lines = ["%% %s.tex (followers_table_1946.py). Do not edit by hand." % name] + HEAD
     for i, (title, g) in enumerate(panels):
         if len(panels) > 1:
             if i > 0:
                 lines.append("\\addlinespace[3pt]")
             lines.append("\\multicolumn{4}{l}{\\textit{%s, $n = %d$}} \\\\" % (title, len(g)))
-        lines += rows(g, mean)
+        lines += rows(g, mean, max_rows)
     lines += ["\\bottomrule", "\\end{tabular}"]
     (tab_dir / f"{name}.tex").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -145,6 +152,10 @@ for contender, g in groups.items():
                "\\newcommand{\\Fol%sDown}{%d}" % (mkey, (g.change < 0).sum()),
                "\\newcommand{\\Fol%sNone}{%d}" % (mkey, (g.post == 0).sum())]
     print(f"{short}: n={len(g)} mean change {g.change.mean():+.2f}, up {(g.change > 0).sum()}, down {(g.change < 0).sum()}, no post {(g.post == 0).sum()}")
+# the largest losing camp capped at 14 rows, the rest in one row (the deck shows it next to the designee's 13)
+for contender, (key, short) in keys.items():
+    if len(groups[contender]) > 16:
+        write(f"followers_1946_{key}_top14", [("", groups[contender])], max_rows=14)
 # the largest losing camp in two halves, to sit side by side on a slide (no mean row; the mean is a macro)
 for contender, (key, short) in keys.items():
     g = groups[contender]
@@ -158,7 +169,9 @@ if len(small) == 2:
     write("followers_1946_baz_rojo_gomez", [(f"{keys[c][1]}'s followers", groups[c]) for c in small])
 d = sample[sample.treated == 1].change.mean()
 p = sample[sample.treated == 0].change.mean()
+ru = sample[sample.contender == "Padilla Penalosa, Ezequiel"].change.mean()      # the runner-up's followers
 macros += ["\\newcommand{\\FolDesigneeMean}{%s}" % signed(d, 1), "\\newcommand{\\FolLosersMean}{%s}" % signed(p, 1),
-           "\\newcommand{\\FolRawDiD}{%s}" % signed(d - p, 1)]
+           "\\newcommand{\\FolRawDiD}{%s}" % signed(d - p, 1),
+           "\\newcommand{\\FolDesigneeVsRunnerUp}{%s}" % signed(d - ru, 1)]
 (tab_dir / "followers_1946_macros.tex").write_text("\n".join(macros) + "\n", encoding="utf-8")
 print(f"designee's followers mean change {d:+.2f}, losers' {p:+.2f}, raw DiD {d - p:+.2f}")
