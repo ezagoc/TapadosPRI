@@ -120,8 +120,7 @@ def rows(g: pd.DataFrame, mean: bool = True, max_rows: int | None = None) -> lis
     shown, rest = (g, g.iloc[0:0]) if max_rows is None or len(g) <= max_rows else (g.iloc[:max_rows], g.iloc[max_rows:])
     out = ["%s & %d & %d & %s \\\\" % (tex(initials(r.follower)), r.pre, r.post, signed(r.change)) for r in shown.itertuples()]
     if len(rest):
-        out.append("%d others, ranks %d--%d in 1941--44 & %.1f & %.1f & %s \\\\" % (
-            len(rest), rest.pre.min(), rest.pre.max(), rest.pre.mean(), rest.post.mean(), signed(rest.change.mean(), 1)))
+        out.append("%d others & %.1f & %.1f & %s \\\\" % (len(rest), rest.pre.mean(), rest.post.mean(), signed(rest.change.mean(), 1)))
     if mean:
         out += ["\\midrule", "Mean & %.1f & %.1f & %s \\\\" % (g.pre.mean(), g.post.mean(), signed(g.change.mean(), 1))]
     return out
@@ -152,10 +151,10 @@ for contender, g in groups.items():
                "\\newcommand{\\Fol%sDown}{%d}" % (mkey, (g.change < 0).sum()),
                "\\newcommand{\\Fol%sNone}{%d}" % (mkey, (g.post == 0).sum())]
     print(f"{short}: n={len(g)} mean change {g.change.mean():+.2f}, up {(g.change > 0).sum()}, down {(g.change < 0).sum()}, no post {(g.post == 0).sum()}")
-# the largest losing camp capped at 14 rows, the rest in one row (the deck shows it next to the designee's 13)
+# the largest losing camp capped at 12 rows plus one "others" row: 13 rows, the same as the designee's table
 for contender, (key, short) in keys.items():
-    if len(groups[contender]) > 16:
-        write(f"followers_1946_{key}_top14", [("", groups[contender])], max_rows=14)
+    if len(groups[contender]) > 13:
+        write(f"followers_1946_{key}_top12", [("", groups[contender])], max_rows=12)
 # the largest losing camp in two halves, to sit side by side on a slide (no mean row; the mean is a macro)
 for contender, (key, short) in keys.items():
     g = groups[contender]
