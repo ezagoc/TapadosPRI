@@ -114,3 +114,71 @@ p <- ggplot(tf, aes(x = rung, y = est)) +
 ggsave(file.path(out_dir, "nonlinear_threshold.pdf"), p, width = 9, height = 4.2)
 ggsave(file.path(out_dir, "nonlinear_threshold.png"), p, width = 9, height = 4.2, dpi = 200)
 cat("figure saved\n")
+
+# ------------------------------------------------------------------ 4. Poisson event study (exponential-mean ETWFE)
+# Yearly ranks k = -7..8 around the election (0 if no post), reference year e-2 as in event_study.R. Mean
+# exp(succession x year + covariates x year + treated + treated x year); the yearly effect on the original scale is the
+# average over the designee's followers of exp(.) with and without the treated x year term. Equal weight per
+# succession-group; cluster bootstrap by contender group.
+suppressPackageStartupMessages(library(fixest))
+ks <- -7:8; ref_k <- -2L
+yr <- function(k) { z <- annual[data.table(pid = sample$pid, year = sample$election + k), on = .(pid, year), rank]; z[is.na(z)] <- 0L; z }
+Yk <- sapply(ks, yr); colnames(Yk) <- ks
+S <- copy(sample); S[, grp_n := .N, by = .(election, treated)]; S[, w := 1 / grp_n]
+long_k <- rbindlist(lapply(seq_along(ks), function(j) S[, .(pid, election, network, treated, w, pre_band, earlier_band, age, ldeg, lrec, prior_status,
+                                                            k = ks[j], y = Yk[, j])]))
+long_k[, kf := relevel(factor(k), ref = as.character(ref_k))]
+long_k[, election_factor := factor(election, levels = elections)]
+f_es <- y ~ treated + treated:kf + (pre_band + earlier_band + age + ldeg + lrec + prior_status) * kf | election_factor^kf
+es_att <- function(dat) {
+  m <- fepois(f_es, data = dat, weights = ~w, notes = FALSE, warn = FALSE)
+  cf <- coef(m); tau_names <- grep("^treated:kf", names(cf), value = TRUE)
+  tr <- dat[treated == 1L]
+  eta1 <- predict(m, newdata = tr, type = "link")
+  tau_k <- setNames(rep(0, length(ks)), ks); for (nm in tau_names) tau_k[sub("^treated:kf", "", nm)] <- cf[nm]
+  eta0 <- eta1 - tau_k[as.character(tr$k)]
+  tr[, `:=`(m1 = exp(eta1), m0 = exp(eta0))]
+  tr[, .(att = weighted.mean(m1 - m0, w)), by = k][order(k), att]
+}
+obs_es <- es_att(long_k)
+set.seed(seed)
+Bes <- 300L
+nets <- unique(long_k[, .(election, network)])
+boot_es <- t(replicate(Bes, {
+  draw <- nets[, .SD[sample(.N, .N, replace = TRUE)], by = election]
+  draw[, rep := seq_len(.N), by = .(election, network)]
+  dd <- merge(long_k, draw, by = c("election", "network"), allow.cartesian = TRUE)
+  tryCatch(es_att(dd), error = function(e) rep(NA_real_, length(ks)))
+}))
+pes <- data.table(k = ks, att = obs_es, se_boot = apply(boot_es, 2, sd, na.rm = TRUE),
+                  ci_lower = apply(boot_es, 2, quantile, 0.025, na.rm = TRUE), ci_upper = apply(boot_es, 2, quantile, 0.975, na.rm = TRUE),
+                  ci90_lower = apply(boot_es, 2, quantile, 0.05, na.rm = TRUE), ci90_upper = apply(boot_es, 2, quantile, 0.95, na.rm = TRUE))
+pes[k == ref_k, `:=`(att = 0, se_boot = 0, ci_lower = 0, ci_upper = 0, ci90_lower = 0, ci90_upper = 0)]
+fwrite(pes, file.path(out_dir, "nonlinear_poisson_es.csv"))
+lin <- fread(file.path(out_dir, "event_study.csv"))[outcome == "rank"]
+cmp <- merge(lin[, .(k, linear = estimate, lin_lo = ci_lower, lin_hi = ci_upper)], pes[, .(k, poisson = att, poi_lo = ci_lower, poi_hi = ci_upper)], by = "k")
+cat("\nEvent study, linear (main) vs Poisson ATT by year:\n"); print(cmp[, lapply(.SD, round, 2)])
+avg14 <- c(linear = mean(cmp[k %in% 1:4, linear]), poisson = mean(cmp[k %in% 1:4, poisson]))
+cat("\nYears 1-4 average: linear", round(avg14["linear"], 3), " Poisson", round(avg14["poisson"], 3), "\n")
+# figure: both series
+plot_d <- rbind(cmp[, .(k, est = linear, lo = lin_lo, hi = lin_hi, series = "Linear DiD (main)")],
+                cmp[, .(k, est = poisson, lo = poi_lo, hi = poi_hi, series = "Poisson QMLE")])
+plot_d[, kx := k + ifelse(series == "Poisson QMLE", 0.18, -0.18)]
+p2 <- ggplot(plot_d, aes(x = kx, y = est, colour = series, shape = series)) +
+  geom_hline(yintercept = 0, colour = "#a1a1aa", linewidth = 0.4) +
+  geom_vline(xintercept = c(-1.5, 0.5, 6.5), colour = "#d4d4d8", linetype = "dashed", linewidth = 0.4) +
+  geom_linerange(aes(ymin = lo, ymax = hi), linewidth = 0.5) + geom_point(size = 2.2, fill = "white") +
+  scale_colour_manual(values = c("Linear DiD (main)" = "#18181b", "Poisson QMLE" = "#940034")) +
+  scale_shape_manual(values = c("Linear DiD (main)" = 16, "Poisson QMLE" = 21)) +
+  scale_x_continuous(breaks = ks) +
+  annotate("text", x = c(-1.6, 0.6, 6.6), y = max(plot_d$hi, na.rm = TRUE), label = c("Designation", "New president", "Next president"),
+           hjust = 0, vjust = 1, size = 3, colour = "#71717a") +
+  labs(x = "Years relative to the election", y = "Designee's minus losers' followers,\nrank positions (95% intervals)", colour = NULL, shape = NULL) +
+  theme_classic(base_size = 13) + theme(legend.position = c(0.15, 0.9), axis.line = element_line(colour = "#a1a1aa", linewidth = 0.35),
+                                        plot.background = element_rect(fill = "white", colour = NA))
+ggsave(file.path(out_dir, "nonlinear_es.pdf"), p2, width = 9, height = 4.2)
+ggsave(file.path(out_dir, "nonlinear_es.png"), p2, width = 9, height = 4.2, dpi = 200)
+mac2 <- c(sprintf("\\newcommand{\\NLpoissonAnnual}{%s}", formatC(avg14["poisson"], format = "f", digits = 2)),
+          sprintf("\\newcommand{\\NLlinearAnnual}{%s}", formatC(avg14["linear"], format = "f", digits = 2)))
+cat(mac2, file = file.path(tab_dir, "nonlinear_macros.tex"), sep = "\n", append = TRUE)
+cat("event-study figure saved\n")
