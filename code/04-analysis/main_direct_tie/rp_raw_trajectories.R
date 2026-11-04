@@ -74,7 +74,18 @@ setnames(wide, lv, c("D", "P", "N"))
 gap14 <- function(a, b) mean((wide[k %in% 1:4, get(a)] - wide[k %in% 1:4, get(b)])) - (wide[k == -2L, get(a)] - wide[k == -2L, get(b)])
 mac <- function(n, v) sprintf("\\newcommand{\\%s}{%s}", n, formatC(v, format = "f", digits = 2))
 tab_dir <- file.path(out_dir, "tables"); dir.create(tab_dir, showWarnings = FALSE)
-writeLines(c("% raw_trajectories_macros.tex (rp_raw_trajectories.R): raw DiDs, years 1-4 against e-2, the estimator's succession weights. Do not edit by hand.",
-             mac("RAWdidDP", gap14("D", "P")), mac("RAWdidDN", gap14("D", "N")), mac("RAWdidNP", gap14("N", "P"))),
+# Raw shares holding a ranked post (the extensive margin), in percent: at e-2 and the years 1-4 average, by group, and the
+# drop between the two. The no-purge slide reads these off: every group loses about the same share of post-holders.
+wo <- dcast(tr[group %in% lv], k ~ group, value.var = "office")
+setnames(wo, lv, c("D", "P", "N"))
+lvl <- function(g, kk) 100 * mean(wo[k %in% kk, get(g)])
+mac0 <- function(n, v) sprintf("\\newcommand{\\%s}{%s}", n, formatC(v, format = "f", digits = 0))
+office_mac <- unlist(lapply(c("D", "P", "N"), function(g) c(mac0(paste0("RAWofficePre", g), lvl(g, -2L)), mac0(paste0("RAWofficePost", g), lvl(g, 1:4)),
+                                                           mac0(paste0("RAWofficeDrop", g), lvl(g, -2L) - lvl(g, 1:4)))))
+writeLines(c("% raw_trajectories_macros.tex (rp_raw_trajectories.R): raw DiDs, years 1-4 against e-2, the estimator's succession weights;",
+             "% RAWoffice*: raw shares holding a ranked post (%), e-2 and years 1-4, by group (D designee's, P losers', N reweighted unaligned). Do not edit by hand.",
+             mac("RAWdidDP", gap14("D", "P")), mac("RAWdidDN", gap14("D", "N")), mac("RAWdidNP", gap14("N", "P")), office_mac),
            file.path(tab_dir, "raw_trajectories_macros.tex"))
+cat(sprintf("raw share in office, e-2 -> years 1-4: D %.0f -> %.0f, P %.0f -> %.0f, N %.0f -> %.0f\n",
+            lvl("D", -2L), lvl("D", 1:4), lvl("P", -2L), lvl("P", 1:4), lvl("N", -2L), lvl("N", 1:4)))
 cat(sprintf("raw DiD years 1-4 vs e-2: D-P %.3f, D-N %.3f, N-P %.3f\n", gap14("D", "P"), gap14("D", "N"), gap14("N", "P")))

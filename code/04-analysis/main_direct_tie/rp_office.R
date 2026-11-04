@@ -29,8 +29,13 @@ setorder(es, group, k)
 es[, outcome := if (THR == 1L) "holds a ranked post" else sprintf("holds a post of score %d or above", THR)]
 fwrite(es, file.path(out_dir, sprintf("rp_event_study_%s.csv", SFX)))
 
-# years 1-4 averages (the headline window of the deck), in percentage points, and the shares of the gap
+# years 1-4 averages (the headline window of the deck), in percentage points, and the shares of the gap; the same
+# average as one fit (the regression is linear in y, so the point estimate is the mean of the yearly ones) for its interval
+y14 <- rowMeans(ES[, as.character(1:4), drop = FALSE]) - ES[, as.character(ref)]
+w14 <- rp_inference(S_es, rp_fit(S_es, y14, f_es), B = 20000L)
+fwrite(w14, file.path(out_dir, sprintf("rp_window_%s.csv", SFX)))
 m14 <- es[k %in% 1:4, .(estimate = mean(estimate)), by = group]
+stopifnot(max(abs(w14$estimate[match(m14$group, w14$group)] - m14$estimate)) < 1e-6)
 D14 <- m14[group == "D", estimate]; P14 <- m14[group == "P", estimate]; gap <- D14 - P14
 share_D <- D14 / gap
 last_P <- es[group == "P" & k >= 1 & estimate < 0 & ci90_upper < 0, k]   # years the penalty is below zero at 90%
@@ -47,6 +52,8 @@ mac <- function(n, v) sprintf("\\newcommand{\\%s}{%s}", n, v)
 PFX <- if (THR == 1L) "RPO" else "RPT"
 writeLines(c(sprintf("%% rp_%s_macros.tex (rp_office.R, threshold %d): reward and penalty on the office indicator, years 1-4 averages in pp. Do not edit by hand.", SFX, THR),
              mac(paste0(PFX, "reward"), f1(100 * D14)), mac(paste0(PFX, "penaltyAbs"), f1(abs(100 * P14))), mac(paste0(PFX, "penalty"), f1(100 * P14)),
+             mac(paste0(PFX, "rewardLo"), f1(100 * w14[group == "D", ci_lower])), mac(paste0(PFX, "rewardHi"), f1(100 * w14[group == "D", ci_upper])),
+             mac(paste0(PFX, "penaltyLo"), f1(100 * w14[group == "P", ci_lower])), mac(paste0(PFX, "penaltyHi"), f1(100 * w14[group == "P", ci_upper])),
              mac(paste0(PFX, "gap"), f1(100 * gap)), mac(paste0(PFX, "mainExtensive"), f1(100 * ext)),
              mac(paste0(PFX, "rewardShare"), round(100 * share_D)), mac(paste0(PFX, "penaltyShare"), round(100 * (1 - share_D)))),
            file.path(tab_dir, sprintf("rp_%s_macros.tex", SFX)))
