@@ -69,8 +69,10 @@ boot <- t(replicate(Bp, {
   dd <- merge(long, draw, by = c("election", "network"), allow.cartesian = TRUE)
   tryCatch(fit_att(dd), error = function(e) c(att = NA, ratio = NA, tau = NA))
 }))
+# symmetric intervals around the estimate from the bootstrap s.e. (percentile bounds kept as q025/q975)
 pois <- data.table(statistic = names(obs), estimate = obs, se_boot = apply(boot, 2, sd, na.rm = TRUE),
-                   ci_lower = apply(boot, 2, quantile, 0.025, na.rm = TRUE), ci_upper = apply(boot, 2, quantile, 0.975, na.rm = TRUE))
+                   q025 = apply(boot, 2, quantile, 0.025, na.rm = TRUE), q975 = apply(boot, 2, quantile, 0.975, na.rm = TRUE))
+pois[, `:=`(ci_lower = estimate - qnorm(.975) * se_boot, ci_upper = estimate + qnorm(.975) * se_boot)]
 fwrite(pois, file.path(out_dir, "nonlinear_poisson.csv"))
 cat("\nExponential-mean DiD (Poisson QMLE, cluster bootstrap by contender group, ", Bp, " draws):\n", sep = "")
 print(pois[, .(statistic, estimate = round(estimate, 3), se_boot = round(se_boot, 3), ci_lower = round(ci_lower, 3), ci_upper = round(ci_upper, 3))])
@@ -151,8 +153,9 @@ boot_es <- t(replicate(Bes, {
   tryCatch(es_att(dd), error = function(e) rep(NA_real_, length(ks)))
 }))
 pes <- data.table(k = ks, att = obs_es, se_boot = apply(boot_es, 2, sd, na.rm = TRUE),
-                  ci_lower = apply(boot_es, 2, quantile, 0.025, na.rm = TRUE), ci_upper = apply(boot_es, 2, quantile, 0.975, na.rm = TRUE),
-                  ci90_lower = apply(boot_es, 2, quantile, 0.05, na.rm = TRUE), ci90_upper = apply(boot_es, 2, quantile, 0.95, na.rm = TRUE))
+                  q025 = apply(boot_es, 2, quantile, 0.025, na.rm = TRUE), q975 = apply(boot_es, 2, quantile, 0.975, na.rm = TRUE))
+pes[, `:=`(ci_lower = att - qnorm(.975) * se_boot, ci_upper = att + qnorm(.975) * se_boot,
+           ci90_lower = att - qnorm(.95) * se_boot, ci90_upper = att + qnorm(.95) * se_boot)]   # symmetric, bootstrap s.e.
 pes[k == ref_k, `:=`(att = 0, se_boot = 0, ci_lower = 0, ci_upper = 0, ci90_lower = 0, ci90_upper = 0)]
 fwrite(pes, file.path(out_dir, "nonlinear_poisson_es.csv"))
 lin <- fread(file.path(out_dir, "event_study.csv"))[outcome == "rank"]
@@ -182,3 +185,81 @@ mac2 <- c(sprintf("\\newcommand{\\NLpoissonAnnual}{%s}", formatC(avg14["poisson"
           sprintf("\\newcommand{\\NLlinearAnnual}{%s}", formatC(avg14["linear"], format = "f", digits = 2)))
 cat(mac2, file = file.path(tab_dir, "nonlinear_macros.tex"), sep = "\n", append = TRUE)
 cat("event-study figure saved\n")
+
+# ------------------------------------------------------------------ 5. Poisson reward and penalty event study
+# The section-11 decomposition with the exponential mean: designee's followers (D) and losing contenders' followers (P)
+# against the same entropy-reweighted unaligned politicians (N; rp_setup.R, event-study balancing set), yearly ranks
+# k = -7..8, reference e-2. Mean exp(succession x year + covariates x year + D + D x year + P + P x year); the unaligned
+# carry their balancing weights, followers weight 1 (person weights). reward_k = average over D at year k of exp(eta) -
+# exp(eta - tau^D_k); penalty_k likewise over P (signed). Cluster bootstrap over contender groups and unaligned
+# politicians, resampled within succession; symmetric intervals from the bootstrap s.e.
+invisible(capture.output(source(file.path(script_dir, "rp_setup.R"))))
+S_es <- make_weights(A[support == TRUE], bal_formula_es)
+YS <- YA[A$support == TRUE, , drop = FALSE]
+S_es[, wgt := fifelse(group == "N", w, 1)]
+if (succession_weights == "equal") { S_es[, grp_n := .N, by = .(election, group)]; S_es[group != "N", wgt := 1 / grp_n] }
+S_es[, `:=`(isD = as.integer(group == "D"), isP = as.integer(group == "P"))]
+long_rp <- rbindlist(lapply(seq_along(ks), function(j) S_es[, .(pid, election, cluster, group, isD, isP, wgt, age, ldeg, lrec, prior_status, fed_exec,
+                                                                k = ks[j], y = YS[, j])]))
+long_rp[, kf := relevel(factor(k), ref = as.character(ref_k))]
+long_rp[, election_factor := factor(election, levels = elections)]
+f_rp <- y ~ isD + isP + isD:kf + isP:kf + (age + ldeg + lrec + prior_status + fed_exec) * kf | election_factor^kf
+rp_att <- function(dat) {
+  m <- fepois(f_rp, data = dat, weights = ~wgt, notes = FALSE, warn = FALSE)
+  cf <- coef(m); out <- list()
+  for (G in c("D", "P")) {
+    nm <- grep(paste0("^is", G, ":kf"), names(cf), value = TRUE)
+    tau_k <- setNames(rep(0, length(ks)), ks); for (n in nm) tau_k[sub(paste0("^is", G, ":kf"), "", n)] <- cf[n]
+    tr <- dat[group == G]
+    eta1 <- predict(m, newdata = tr, type = "link"); eta0 <- eta1 - tau_k[as.character(tr$k)]
+    tr[, `:=`(m1 = exp(eta1), m0 = exp(eta0))]
+    out[[G]] <- tr[, .(att = weighted.mean(m1 - m0, wgt)), by = k][order(k), att]
+  }
+  c(out$D, out$P)
+}
+obs_rp <- rp_att(long_rp)
+set.seed(seed)
+cl_rp <- unique(long_rp[, .(election, cluster)])
+Brp <- 300L
+boot_rp <- t(replicate(Brp, {
+  draw <- cl_rp[, .SD[sample(.N, .N, replace = TRUE)], by = election]
+  draw[, rep := seq_len(.N), by = .(election, cluster)]
+  dd <- merge(long_rp, draw, by = c("election", "cluster"), allow.cartesian = TRUE)
+  tryCatch(rp_att(dd), error = function(e) rep(NA_real_, 2 * length(ks)))
+}))
+prp <- data.table(group = rep(c("D", "P"), each = length(ks)), k = rep(ks, 2), estimate = obs_rp, se_boot = apply(boot_rp, 2, sd, na.rm = TRUE))
+prp[, `:=`(ci_lower = estimate - qnorm(.975) * se_boot, ci_upper = estimate + qnorm(.975) * se_boot,
+           ci90_lower = estimate - qnorm(.95) * se_boot, ci90_upper = estimate + qnorm(.95) * se_boot)]
+prp[k == ref_k, `:=`(estimate = 0, se_boot = 0, ci_lower = 0, ci_upper = 0, ci90_lower = 0, ci90_upper = 0)]
+fwrite(prp, file.path(out_dir, "nonlinear_poisson_rp_es.csv"))
+lin_rp <- fread(file.path(out_dir, "rp_event_study.csv"))
+cmp_rp <- merge(prp[, .(group, k, poisson = estimate)], lin_rp[, .(group, k, linear = estimate)], by = c("group", "k"), all.x = TRUE)
+cat("\nPoisson reward (D) and penalty (P) event study vs linear:\n")
+print(dcast(cmp_rp, k ~ group, value.var = c("poisson", "linear"))[, lapply(.SD, round, 2)])
+r14 <- prp[k %in% 1:4, .(att = mean(estimate)), by = group]; rew <- r14[group == "D", att]; pen <- r14[group == "P", att]
+cat(sprintf("years 1-4: reward %.3f, penalty %.3f, difference %.3f, reward share %.0f%%\n", rew, pen, rew - pen, 100 * rew / (rew - pen)))
+pd_rp <- copy(prp)
+pd_rp[, grp := factor(fifelse(group == "D", "Designee's followers", "Losers' followers"), levels = c("Designee's followers", "Losers' followers"))]
+pd_rp[, kx := k + fifelse(group == "D", -0.15, 0.15)]
+p3 <- ggplot(pd_rp, aes(x = kx, y = estimate, colour = grp, shape = grp)) +
+  geom_hline(yintercept = 0, colour = "#a1a1aa", linewidth = 0.4) +
+  geom_vline(xintercept = c(-1.5, 0.5, 6.5), colour = "#d4d4d8", linetype = "dashed", linewidth = 0.4) +
+  geom_linerange(aes(ymin = ci_lower, ymax = ci_upper), linewidth = 0.5) +
+  geom_linerange(aes(ymin = ci90_lower, ymax = ci90_upper), linewidth = 1.3) +
+  geom_point(size = 2.3, fill = "white") +
+  scale_colour_manual(values = c("Designee's followers" = "#18181b", "Losers' followers" = "#7a7a7a")) +
+  scale_shape_manual(values = c("Designee's followers" = 16, "Losers' followers" = 21)) +
+  scale_x_continuous(breaks = ks) +
+  annotate("text", x = c(-1.6, 0.6, 6.6), y = max(pd_rp$ci_upper), label = c("Designation", "New president", "Next president"),
+           hjust = 0, vjust = 1, size = 3, colour = "#71717a") +
+  labs(x = "Years relative to the election", y = "Effect on rank position,\neach group minus the reweighted unaligned", colour = NULL, shape = NULL) +
+  theme_classic(base_size = 13) + theme(legend.position = c(0.15, 0.9), axis.line = element_line(colour = "#a1a1aa", linewidth = 0.35),
+                                        plot.background = element_rect(fill = "white", colour = NA))
+ggsave(file.path(out_dir, "nonlinear_rp_es.pdf"), p3, width = 9, height = 4.2)
+ggsave(file.path(out_dir, "nonlinear_rp_es.png"), p3, width = 9, height = 4.2, dpi = 200)
+mac3 <- c(sprintf("\\newcommand{\\NLrpReward}{%s}", formatC(rew, format = "f", digits = 2)),
+          sprintf("\\newcommand{\\NLrpPenaltyAbs}{%s}", formatC(abs(pen), format = "f", digits = 2)),
+          sprintf("\\newcommand{\\NLrpShare}{%s}", formatC(100 * rew / (rew - pen), format = "f", digits = 0)),
+          sprintf("\\newcommand{\\NLrpDiff}{%s}", formatC(rew - pen, format = "f", digits = 2)))
+cat(mac3, file = file.path(tab_dir, "nonlinear_macros.tex"), sep = "\n", append = TRUE)
+cat("reward-penalty Poisson figure saved\n")
