@@ -148,20 +148,19 @@ plain = [n for n in G.nodes if n not in contenders and n not in patron]
 
 
 def legend_handles(stage):
+    if stage >= 4:                                   # the camps are known from the previous click: only what is new
+        return [Line2D([], [], marker="*", color="w", markerfacecolor=ACC, markersize=9, label="new president"),
+                Line2D([], [], marker="^", color="w", markerfacecolor=Z6, markersize=6.5, label=f"rose in rank after {E}"),
+                Line2D([], [], marker="v", color="w", markerfacecolor=Z6, markersize=5.5, label="fell in rank"),
+                Line2D([], [], marker="o", color="w", markerfacecolor=Z6, markersize=5, label="same rank")]
     h = [Line2D([], [], color=Z3, lw=1.0, marker="o", markerfacecolor=Z4, markeredgewidth=0, markersize=2.6,
                 label="politicians and their ties")]
     if stage >= 2:
         h.append(Line2D([], [], marker="D", color="w", markerfacecolor=INK, markersize=5.5, label="contenders"))
     if stage >= 3:
-        star = stage >= 4
-        h.insert(1, Line2D([], [], marker="*" if star else "D", color="w", markerfacecolor=ACC, markersize=9 if star else 5.5,
-                           label="new president" if star else "designee"))
+        h.insert(1, Line2D([], [], marker="D", color="w", markerfacecolor=ACC, markersize=5.5, label="designee"))
         h.append(Line2D([], [], marker="o", color="w", markerfacecolor=ACC, markersize=5, label="tied only to the designee"))
         h.append(Line2D([], [], marker="o", color="w", markerfacecolor=INK, markersize=5, label="tied only to a loser"))
-    if stage >= 4:                                   # career after the succession: rank in 1947-50 vs 1941-44
-        h.append(Line2D([], [], marker="^", color="w", markerfacecolor=Z6, markersize=6.5, label=f"rose in rank after {E}"))
-        h.append(Line2D([], [], marker="v", color="w", markerfacecolor=Z6, markersize=5.5, label="fell in rank"))
-        h.append(Line2D([], [], marker="o", color="w", markerfacecolor=Z6, markersize=5, label="same rank"))
     return h
 
 
