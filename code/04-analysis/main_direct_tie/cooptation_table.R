@@ -20,7 +20,7 @@ pat[, name := asp$name[match(paste(election, patron), paste(asp$election, asp$pi
 # descriptive: in successions where some losers kept a top chair and some did not, did the largest camp keep one?
 mixed <- pat[, .(kept = sum(kept), losers = .N, largest_kept = kept[which.max(followers)], largest = name[which.max(followers)], largest_n = max(followers)), by = election][kept > 0 & kept < losers]
 kept_all <- pat[kept == 1L][order(election)]
-pk <- cs[grepl("^Pk", estimate)]; pl <- cs[grepl("^Pl", estimate)]
+pk <- cs[grepl("^Pk:", estimate)]; pl <- cs[grepl("^Pl:", estimate)]; stopifnot(nrow(pk) == 1L, nrow(pl) == 1L)
 f2 <- function(x) sub("^-", "$-$", formatC(x, format = "f", digits = 2))
 ci <- function(lo, hi) sprintf("[%s, %s]", f2(lo), f2(hi))
 lines <- c("% cooptation.tex (cooptation_table.R). Do not edit by hand.",

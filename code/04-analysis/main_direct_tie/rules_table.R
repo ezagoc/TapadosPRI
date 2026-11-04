@@ -26,9 +26,8 @@ pay <- readLines(file.path(tab_dir, "pay_macros.tex"))
 usd_rung <- as.numeric(gsub(",", "", sub(".*\\{\\\\PAYgainOneUSD\\}\\{([^}]*)\\}.*", "\\1", pay[grepl("PAYgainOneUSD}", pay)])))
 stopifnot(is.finite(usd_rung))
 all <- rbind(obs[, .(rule, contrast, estimate, ci_lower, ci_upper)], rules[, .(rule, contrast, estimate, ci_lower, ci_upper)])
-labels <- c(observed = "Observed", purge = "Winner-takes-all purge, losers' followers excluded",
-            promotions_only = "Winner promotions, losers' followers unchanged", sharing = "Proportional sharing across camps",
-            career = "Promotion by prior career alone")
+labels <- c(observed = "Observed", purge = "Winner-takes-all purge", promotions_only = "Winner promotions only",
+            sharing = "Proportional sharing", career = "Promotion by prior career")
 order_rules <- names(labels)
 W <- dcast(all, rule ~ contrast, value.var = c("estimate", "ci_lower", "ci_upper"))[match(order_rules, rule)]
 W[, `:=`(usd = estimate_DP * usd_rung, share_of_purge = 100 * estimate_DP / W[rule == "purge", estimate_DP],
@@ -38,13 +37,13 @@ f2 <- function(x) sub("^-", "$-$", formatC(x, format = "f", digits = 2))
 fu <- function(x) { s <- formatC(abs(round(x, -1)), format = "d", big.mark = ","); if (x < 0) paste0("$-$", s) else s }
 ci <- function(lo, hi) sprintf("{\\scriptsize[%s, %s]}", f2(lo), f2(hi))
 lines <- c("% rules_table.tex (rules_table.R). Years 1-4 average, rank positions; 95% intervals; pay at one rung = US$ PAYgainOneUSD a month.",
-  "\\begin{tabular}{lcccc}", "\\toprule",
-  " & Premium & Reward & Penalty & Premium in pay \\\\",
-  "Allocation of the same posts & designee's $-$ losers' & designee's $-$ unaligned & losers' $-$ unaligned & US\\$ a month \\\\", "\\midrule")
+  "\\begin{tabular}{lccccc}", "\\toprule",
+  " & \\multicolumn{2}{c}{Premium, designee's $-$ losers'} & Reward & Penalty & Premium in pay \\\\", "\\cmidrule(lr){2-3}",
+  "Allocation of the same posts & rank positions & 95\\% interval & designee's $-$ unaligned & losers' $-$ unaligned & US\\$ a month \\\\", "\\midrule")
 for (r in order_rules) {
   x <- W[rule == r]
-  lines <- c(lines, sprintf("%s & %s & %s & %s & %s \\\\", labels[[r]], f2(x$estimate_DP), f2(x$estimate_DN), f2(x$estimate_PN), fu(x$usd)),
-             sprintf(" & %s & %s & %s & \\\\", ci(x$ci_lower_DP, x$ci_upper_DP), ci(x$ci_lower_DN, x$ci_upper_DN), ci(x$ci_lower_PN, x$ci_upper_PN)))
+  lines <- c(lines, sprintf("%s & %s & [%s, %s] & %s & %s & %s \\\\", labels[[r]], f2(x$estimate_DP), f2(x$ci_lower_DP), f2(x$ci_upper_DP),
+                            f2(x$estimate_DN), f2(x$estimate_PN), fu(x$usd)))
   if (r == "observed") lines <- c(lines, "\\addlinespace[3pt]")
 }
 lines <- c(lines, "\\bottomrule", "\\end{tabular}")
