@@ -154,3 +154,49 @@ ggsave(file.path(out_dir, "post_holders.pdf"), gph, width = 10, height = 4.8, bg
 ggsave(file.path(out_dir, "post_holders.png"), gph, width = 10, height = 4.8, dpi = 250, bg = "white")
 cat("post_holders figure written\n")
 print(dcast(fig[k %in% c(-2, 0, 2, 4, 8)], slice ~ k, value.var = "share")[, lapply(.SD, function(x) if (is.numeric(x)) round(100 * x) else x)])
+
+# ------------------------------------------------------------------ who the newcomers are (the user's question, 4 Nov)
+# Newcomers with a senior post in years 1-4: ties of any type to the designee (the four design types by e-2, the stated
+# family/mentorship/friendship ties from the biographies, any type at any date), ties to any contender, the designee's
+# school, and the background Camp records before e-2 (military service, private or professional posts, union posts).
+edu_tab <- read_data("education.csv"); oth_tab <- read_data("other_positions.csv")
+lab_tab <- read_data("labor_positions.csv"); mil_tab <- read_data("military_positions.csv")
+stated_types <- c("family", "mentorship", "personal", "family_surname")
+edges_long <- rbindlist(list(edges[, .(pid = person_a, other = person_b, edge_type, year_start)],
+                             edges[, .(pid = person_b, other = person_a, edge_type, year_start)]))
+nc <- rbindlist(lapply(elections, function(e) {
+  pool <- A[election == e]; cand <- slates[[as.character(e)]]$candidates; w <- slates[[as.character(e)]]$winner
+  mt <- multi_tied(e)
+  h <- unique(annual[year >= e + 1L & year <= e + 4L & rank >= 7L, pid])
+  fr <- first_ranked$first[match(h, first_ranked$pid)]
+  ids <- h[!(h %in% pool$pid) & !(h %in% mt) & !is.na(fr) & fr > e - 2L]
+  ew <- edges_long[other == w & pid %in% ids]
+  schools_w <- unique(edu_tab[person_id == w & !is.na(organization), organization])
+  data.table(election = e, pid = ids,
+             tie_designee_any = ids %in% ew$pid, tie_designee_stated = ids %in% ew[edge_type %in% stated_types, pid],
+             tie_any_contender = ids %in% edges_long[other %in% cand, pid],
+             same_school = ids %in% edu_tab[organization %in% schools_w, person_id],
+             military = ids %in% mil_tab[!is.na(year_start) & year_start <= e - 2L, person_id],
+             private = ids %in% oth_tab[!is.na(year_start) & year_start <= e - 2L, person_id],
+             union = ids %in% lab_tab[!is.na(year_start) & year_start <= e - 2L, person_id])
+}))
+fol <- rbindlist(lapply(elections, function(e) {
+  w <- slates[[as.character(e)]]$winner; d <- A[election == e & group == "D", pid]
+  schools_w <- unique(edu_tab[person_id == w & !is.na(organization), organization])
+  data.table(same_school = d %in% edu_tab[organization %in% schools_w, person_id])
+}))
+fwrite(nc, file.path(out_dir, "post_holders_newcomers.csv"))
+mac <- readLines(file.path(tab_dir, "post_holders_macros.tex"))
+mac <- c(mac, sprintf("\\newcommand{\\PHnewcomerN}{%d}", nrow(nc)),
+         sprintf("\\newcommand{\\PHnewcomerTieDesignee}{%s}", pct(mean(nc$tie_designee_any))),
+         sprintf("\\newcommand{\\PHnewcomerTieStated}{%s}", pct(mean(nc$tie_designee_stated))),
+         sprintf("\\newcommand{\\PHnewcomerTieAnyContender}{%s}", pct(mean(nc$tie_any_contender))),
+         sprintf("\\newcommand{\\PHnewcomerSameSchool}{%s}", pct(mean(nc$same_school))),
+         sprintf("\\newcommand{\\PHfollowerSameSchool}{%s}", pct(mean(fol$same_school))),
+         sprintf("\\newcommand{\\PHnewcomerMilitary}{%s}", pct(mean(nc$military))),
+         sprintf("\\newcommand{\\PHnewcomerPrivate}{%s}", pct(mean(nc$private))),
+         sprintf("\\newcommand{\\PHnewcomerUnion}{%s}", pct(mean(nc$union))))
+writeLines(mac, file.path(tab_dir, "post_holders_macros.tex"))
+cat(sprintf("newcomers %d: tie to designee any %s%%, stated %s%%, any contender %s%%, same school %s%% (followers %s%%), military %s%%, private %s%%, union %s%%\n",
+            nrow(nc), pct(mean(nc$tie_designee_any)), pct(mean(nc$tie_designee_stated)), pct(mean(nc$tie_any_contender)),
+            pct(mean(nc$same_school)), pct(mean(fol$same_school)), pct(mean(nc$military)), pct(mean(nc$private)), pct(mean(nc$union))))
