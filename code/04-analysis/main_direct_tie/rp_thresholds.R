@@ -71,7 +71,7 @@ g <- ggplot(pd, aes(x = x, y = est, colour = grp, shape = grp)) +
 ggsave(file.path(out_dir, "rp_thresholds.pdf"), g, width = 9, height = 4.2); ggsave(file.path(out_dir, "rp_thresholds.png"), g, width = 9, height = 4.2, dpi = 200)
 
 # ------------------------------------------------------------------ macros
-f1 <- function(x) formatC(x, format = "f", digits = 1)
+f1 <- function(x) { v <- round(x, 1); s <- formatC(abs(v), format = "f", digits = 1); ifelse(v < 0, paste0("$-$", s), s) }   # typeset minus
 v <- function(G, r, what = "estimate") 100 * res[group == G & rung == r][[what]]
 peakD <- res[group == "D"][which.max(estimate), rung]; peakP <- res[group == "P"][which.min(estimate), rung]
 mac <- function(n, x) sprintf("\\newcommand{\\%s}{%s}", n, x)
@@ -82,7 +82,9 @@ by_rung <- unlist(lapply(rungs, function(r) {
   c(mac(paste0("RPTHgap", lab_m[r]), f1(100 * G$estimate)), mac(paste0("RPTHgap", lab_m[r], "Lo"), f1(100 * G$ci_lower)), mac(paste0("RPTHgap", lab_m[r], "Hi"), f1(100 * G$ci_upper)),
     mac(paste0("RPTHreward", lab_m[r], "Pp"), f1(100 * D$estimate)), mac(paste0("RPTHpenalty", lab_m[r], "Pp"), f1(100 * P$estimate)),
     mac(paste0("RPTHrewardShare", lab_m[r]), f0(100 * D$share_of_gap)), mac(paste0("RPTHpenaltyShare", lab_m[r]), f0(-100 * P$share_of_gap)),
-    mac(paste0("RPTHrateP", lab_m[r]), f0(100 * D$share_post_P)), mac(paste0("RPTHrel", lab_m[r]), f0(100 * G$estimate / D$share_post_P)))
+    mac(paste0("RPTHrateP", lab_m[r]), f0(100 * D$share_post_P)), mac(paste0("RPTHrel", lab_m[r]), f0(100 * G$estimate / D$share_post_P)),
+    mac(paste0("RPTHpenalty", lab_m[r], "Abs"), f1(abs(100 * P$estimate))), mac(paste0("RPTHpenalty", lab_m[r], "Lo"), f1(100 * P$ci_lower)), mac(paste0("RPTHpenalty", lab_m[r], "Hi"), f1(100 * P$ci_upper)),
+    mac(paste0("RPTHreward", lab_m[r], "Lo"), f1(100 * D$ci_lower)), mac(paste0("RPTHreward", lab_m[r], "Hi"), f1(100 * D$ci_upper)))
 }))
 writeLines(c("% rp_thresholds_macros.tex (rp_thresholds.R): reward and exact penalty by rung, pp; the gap (main design) and the shares of it. Do not edit by hand.",
   by_rung,
