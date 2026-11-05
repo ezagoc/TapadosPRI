@@ -24,7 +24,8 @@ Ym <- sapply(rungs, function(r) as.numeric(sample$post >= r) - as.numeric(sample
 res <- rbindlist(lapply(rungs, function(r) {
   y <- as.numeric(S_main$post >= r) - as.numeric(S_main$pre >= r)
   out <- rp_inference(S_main, rp_fit_exact(S_main, y, f_window, d_main, Ym[d_main$rows, r]), B = 20000L)
-  out[, `:=`(rung = r, share_pre_D = mean(S_main[group == "D", pre] >= r), share_pre_P = mean(S_main[group == "P", pre] >= r))]
+  out[, `:=`(rung = r, share_pre_D = mean(S_main[group == "D", pre] >= r), share_pre_P = mean(S_main[group == "P", pre] >= r),
+             share_post_P = mean(S_main[group == "P", post] >= r))]   # the losers' followers' rate after the succession, the base of the relative gap
   out
 }))
 gap <- estimate_columns(d_main, Ym[d_main$rows, , drop = FALSE], B = 20000L, seed = 3112026L)$table[, rung := rungs]
@@ -80,7 +81,8 @@ by_rung <- unlist(lapply(rungs, function(r) {
   G <- res[group == "G" & rung == r]; D <- res[group == "D" & rung == r]; P <- res[group == "P" & rung == r]
   c(mac(paste0("RPTHgap", lab_m[r]), f1(100 * G$estimate)), mac(paste0("RPTHgap", lab_m[r], "Lo"), f1(100 * G$ci_lower)), mac(paste0("RPTHgap", lab_m[r], "Hi"), f1(100 * G$ci_upper)),
     mac(paste0("RPTHreward", lab_m[r], "Pp"), f1(100 * D$estimate)), mac(paste0("RPTHpenalty", lab_m[r], "Pp"), f1(100 * P$estimate)),
-    mac(paste0("RPTHrewardShare", lab_m[r]), f0(100 * D$share_of_gap)), mac(paste0("RPTHpenaltyShare", lab_m[r]), f0(-100 * P$share_of_gap)))
+    mac(paste0("RPTHrewardShare", lab_m[r]), f0(100 * D$share_of_gap)), mac(paste0("RPTHpenaltyShare", lab_m[r]), f0(-100 * P$share_of_gap)),
+    mac(paste0("RPTHrateP", lab_m[r]), f0(100 * D$share_post_P)), mac(paste0("RPTHrel", lab_m[r]), f0(100 * G$estimate / D$share_post_P)))
 }))
 writeLines(c("% rp_thresholds_macros.tex (rp_thresholds.R): reward and exact penalty by rung, pp; the gap (main design) and the shares of it. Do not edit by hand.",
   by_rung,
