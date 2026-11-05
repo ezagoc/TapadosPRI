@@ -152,23 +152,42 @@ for (i in which(rob$unit == "pp")) rl <- c(rl, sprintf("%s & %s & %s \\\\", rob$
                                                          ci_txt(100 * rob$ci_lower[i], 100 * rob$ci_upper[i], 1)))
 rl <- c(rl, "\\bottomrule", "\\end{tabular}")
 write_tab(rl, "robustness.tex")
-# deck version (4 November 2026, the user: nine rows, one unit, one question each): weights, covariates, sample, slate
-deck_specs <- c("Main: successions weighted by the designee's followers, all covariates", "Equal weight per succession",
-                "Succession indicators only", "Exact baseline rung instead of bands", "Ties formed by $e-4$ (late recruits excluded)",
-                "Inclusion in Camp's dictionary settled by $e-2$", "Only politicians ranked 7 or above before the succession, no rank bands",
-                "Contenders holding a cabinet-level post only", "Without 1976 and 1988 (president leaned early)")
-deck_labels <- c("Main, successions weighted by the designee's followers", "Equal weight per succession",
-                 "Succession indicators only, no covariates", "Exact baseline rung instead of rank bands", "Ties formed by $e-4$, late recruits excluded",
-                 "Inclusion in Camp's biographies settled by $e-2$", "Politicians ranked 7 or above before the succession",
-                 "Contenders holding a cabinet-level post only", "Without 1976 and 1988, when the president leaned early")
-stopifnot(all(deck_specs %in% rob$spec))
-rd <- c("% robustness_deck.tex (appendix_diagnostics.R): the deck's selection of robustness rows, rank positions. Do not edit by hand.",
+# deck version (4 November 2026, the user): nine rows, every one the headline estimand, the years 1-4 average of the
+# event study (mean rank in e+1..e+4 minus the rank in e-2, event-study covariates unless the row says otherwise),
+# estimated with estimate_columns on the averaged outcome; the three variants that change the sample come from
+# variant_annual.R (annual_result.csv in their folders). The window table above stays for the paper.
+Yk_avg <- sapply(c(-2L, 1:4), function(k) year_value(annual, k)); colnames(Yk_avg) <- c(-2L, 1:4)
+y_avg <- rowMeans(Yk_avg[, as.character(1:4), drop = FALSE]) - Yk_avg[, "-2"]
+B_deck <- 20000L; seed_deck <- 4112026L
+row_avg <- function(label, keep = rep(TRUE, nrow(sample)), formula = formula_es, weights = NULL) {
+  d <- if (is.null(weights)) build_design(keep = keep, formula = formula) else build_design(keep = keep, formula = formula, weights = weights)
+  t <- estimate_columns(d, cbind(y = y_avg[d$rows]), B = B_deck, seed = seed_deck)$table
+  data.table(spec = label, estimate = t$estimate, ci_lower = t$ci_lower, ci_upper = t$ci_upper, n = length(d$rows))
+}
+row_variant <- function(label, folder) {
+  f <- file.path(out_dir, folder, "annual_result.csv")
+  if (!file.exists(f)) { cat("annual variant missing:", f, "\n"); return(data.table(spec = label, estimate = NA_real_, ci_lower = NA_real_, ci_upper = NA_real_, n = NA_integer_)) }
+  v <- fread(f); data.table(spec = label, estimate = v$estimate, ci_lower = v$ci_lower, ci_upper = v$ci_upper, n = v$n)
+}
+# (the main row and the cabinet-slate variant live on the comparison-group slide, runner_up.R, and are not repeated)
+rob_deck <- rbindlist(list(
+  row_avg("Equal weight per succession", weights = "equal"),
+  row_avg("Succession indicators only, no covariates", formula = ~ election_factor),
+  row_avg("With the baseline-rank bands as covariates", formula = formula_x),
+  row_variant("Ties formed by $e-4$, late recruits excluded", "robust_ties_e4"),
+  row_variant("Inclusion in Camp's biographies settled by $e-2$", "robust_predetermined_inclusion"),
+  row_avg("Politicians ranked 7 or above before the succession", keep = sample$pre >= 7L),
+  row_avg("Without 1976 and 1988, when the president leaned early", keep = !(sample$election %in% c(1976L, 1988L)))))
+fwrite(rob_deck, file.path(out_dir, "robustness_deck.csv"))
+rd <- c("% robustness_deck.tex (appendix_diagnostics.R): the deck's robustness rows, all the years 1-4 average in rank positions. Do not edit by hand.",
         "\\begin{tabular}{lrr}", "\\toprule", " & Estimate & 95\\% interval \\\\", "\\midrule")
-for (j in seq_along(deck_specs)) { i <- which(rob$spec == deck_specs[j])[1]
-  rd <- c(rd, sprintf("%s & %s & %s \\\\", deck_labels[j], f2(rob$estimate[i]), ci_txt(rob$ci_lower[i], rob$ci_upper[i])))
-  if (j == 1L) rd <- c(rd, "\\addlinespace[2pt]") }
+for (j in seq_len(nrow(rob_deck))) {
+  rd <- c(rd, if (is.na(rob_deck$estimate[j])) sprintf("%s & -- & -- \\\\", rob_deck$spec[j]) else
+    sprintf("%s & %s & %s \\\\", rob_deck$spec[j], f2(rob_deck$estimate[j]), ci_txt(rob_deck$ci_lower[j], rob_deck$ci_upper[j])))
+}
 rd <- c(rd, "\\bottomrule", "\\end{tabular}")
 write_tab(rd, "robustness_deck.tex")
+print(rob_deck[, .(spec, estimate = round(estimate, 2), ci_lower = round(ci_lower, 2), ci_upper = round(ci_upper, 2), n)])
 
 # ------------------------------------------------------------------ 5. coverage of the interval in simulations
 cov <- fread(file.path(out_dir, "inference_coverage.csv"))

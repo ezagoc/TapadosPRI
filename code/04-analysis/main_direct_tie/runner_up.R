@@ -33,6 +33,9 @@ largest <- camps[camps[, .I[which.max(n)], by = election]$V1]
 interior <- contenders[in_main_slate == 1L & role != "winner" & grepl("Gobernaci", position_at_time), .(election = election_year, patron = person_id)]
 ru_int <- rbind(interior, ru[!(election %in% interior$election), .(election, patron)])
 ru_int <- merge(ru_int, camps, by = c("election", "patron"), all.x = TRUE)
+# (e) the followers of the losing contenders who held a cabinet-level post (rung 9) in e-2 or e-1, the slate rule of
+#     estimate_main.R's TAPADOS_SLATE=cabinet, applied here to the comparison camps of the main sample
+cab <- camps[, .(patron, n, keep = highest_rank(patron, election[1] - 2L, election[1] - 1L) >= 9L), by = election][keep == TRUE, .(election, patron, n)]
 name_of <- unique(contenders[, .(person_id, person_name)])
 nm <- function(id) name_of$person_name[match(id, name_of$person_id)]
 
@@ -63,7 +66,8 @@ res <- rbindlist(list(
   fit_subset(camps, "All losing contenders' followers (main)", main = TRUE),
   fit_subset(ru[!is.na(n)], "Documented runner-up's followers"),
   fit_subset(largest, "Largest losing camp's followers"),
-  fit_subset(ru_int[!is.na(n)], "Interior secretary's followers")))
+  fit_subset(ru_int[!is.na(n)], "Interior secretary's followers"),
+  fit_subset(cab, "Cabinet-level contenders' followers only")))
 
 # (c) every losing contender in turn
 per <- rbindlist(lapply(names(outcomes), function(o) rbindlist(lapply(seq_len(nrow(camps)), function(i) {
@@ -101,13 +105,14 @@ lines <- c("% runner_up.tex (runner_up.R). Designee's followers against one comp
   " & \\multicolumn{2}{c}{Premium, years 1--4 average} & Comparison & \\\\",
   "\\cmidrule(lr){2-3}",
   "Comparison group & Estimate & 95\\% interval & followers & Successions \\\\", "\\midrule",
-  row("All losing contenders' followers (main)"), row("Documented runner-up's followers"), row("Interior secretary's followers"), row("Largest losing camp's followers"),
+  row("All losing contenders' followers (main)"), row("Documented runner-up's followers"), row("Interior secretary's followers"), row("Cabinet-level contenders' followers only"), row("Largest losing camp's followers"),
   sprintf("Each losing contender in turn, median & %s & %s & & 9 \\\\", f2(ca$median), sprintf("range [%s, %s]", f2(ca$minimum), f2(ca$maximum))),
   "\\bottomrule", "\\end{tabular}")
 writeLines(lines, file.path(tab_dir, "runner_up.tex"))
 mac <- function(n, v) sprintf("\\newcommand{\\%s}{%s}", n, v)
 a_ru <- res[spec == "Documented runner-up's followers" & outcome == "annual"]; a_lg <- res[spec == "Largest losing camp's followers" & outcome == "annual"]
 a_in <- res[spec == "Interior secretary's followers" & outcome == "annual"]
+a_cab <- res[spec == "Cabinet-level contenders' followers only" & outcome == "annual"]
 writeLines(c("% runner_up_macros.tex (runner_up.R). Do not edit by hand.",
   mac("RUest", f2(a_ru$estimate)), mac("RUlo", f2(a_ru$ci_lower)), mac("RUhi", f2(a_ru$ci_upper)), mac("RUn", a_ru$n_comparison), mac("RUsucc", a_ru$successions),
   mac("RUdropped", ifelse(a_ru$dropped == "", "none", a_ru$dropped)),
@@ -115,6 +120,7 @@ writeLines(c("% runner_up_macros.tex (runner_up.R). Do not edit by hand.",
   mac("RUeachMedian", f2(ca$median)), mac("RUeachMin", f2(ca$minimum)), mac("RUeachMax", f2(ca$maximum)), mac("RUeachPositive", formatC(100 * ca$share_positive, format = "f", digits = 0)),
   mac("RUeachN", format(ca$n_combinations, big.mark = ",")),
   mac("RUinteriorEst", f2(a_in$estimate)), mac("RUinteriorLo", f2(a_in$ci_lower)), mac("RUinteriorHi", f2(a_in$ci_upper)),
+  mac("RUcabinetEst", f2(a_cab$estimate)), mac("RUcabinetLo", f2(a_cab$ci_lower)), mac("RUcabinetHi", f2(a_cab$ci_upper)), mac("RUcabinetN", a_cab$n_comparison),
   mac("RUinteriorYears", paste(sort(interior$election), collapse = ", ")), mac("RUinteriorWonYears", paste(sort(contenders[in_main_slate == 1L & role == "winner" & grepl("Gobernaci", position_at_time) & election_year <= 1988L, election_year]), collapse = ", "))),
   file.path(tab_dir, "runner_up_macros.tex"))
 cat("runner_up done\n")
