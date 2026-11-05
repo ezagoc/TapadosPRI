@@ -87,6 +87,8 @@ writeLines(c("% first_stage_macros.tex (first_stage.R). Shares and differences i
   mac("FSanyD", f0(g("any_01", "D"))), mac("FSanyP", f0(g("any_01", "P"))), mac("FSanyN", f0(g("any_01", "N"))),
   mac("FSprevD", f0(g("fed_prev", "D"))), mac("FSprevP", f0(g("fed_prev", "P"))),
   mac("FSfedEst", f1(w("fed_01"))), mac("FSfedLo", f1(w("fed_01", "ci_lower"))), mac("FSfedHi", f1(w("fed_01", "ci_upper"))), mac("FSfedPval", formatC(win[column == "fed_01", p_bootstrap], format = "f", digits = 3)),
+  # the gap relative to the losers' followers' share (percent increase over the baseline), 5 Nov 2026
+  mac("FSfedRel", f0(100 * w("fed_01") / g("fed_01", "P"))), mac("FStopRel", f0(100 * w("top_01") / g("top_01", "P"))), mac("FScabRel", f0(100 * w("cab_01") / g("cab_01", "P"))),
   mac("FStopEst", f1(w("top_01"))), mac("FStopLo", f1(w("top_01", "ci_lower"))), mac("FStopHi", f1(w("top_01", "ci_upper"))),
   mac("FScabEst", f1(w("cab_01"))), mac("FScabLo", f1(w("cab_01", "ci_lower"))), mac("FScabHi", f1(w("cab_01", "ci_upper"))),
   mac("FSanyEst", f1(w("any_01"))), mac("FSanyLo", f1(w("any_01", "ci_lower"))), mac("FSanyHi", f1(w("any_01", "ci_upper"))),
