@@ -56,8 +56,11 @@ lines <- c("% rules_table.tex (rules_table.R). Years 1-4 average, rank positions
   "Allocation of the same posts & rank positions & 95\\% interval & reward & penalty & in pay \\\\", "\\midrule")
 for (r in order_rules) {
   x <- W[rule == r]
-  lines <- c(lines, sprintf("%s & %s & [%s, %s] & %s & %s & %s \\\\", labels[[r]], f2(x$estimate_DP), f2(x$ci_lower_DP), f2(x$ci_upper_DP),
-                            pct(x$reward_pct), pct(x$penalty_pct), fp(x$pay_pct)))
+  # no split where the premium is negative: the two cells say in words what the components do instead
+  split_cells <- if (!is.na(x$reward_pct)) sprintf("%s & %s", pct(x$reward_pct), pct(x$penalty_pct)) else
+    if (x$estimate_DN < -0.5 && x$estimate_PN < -0.5) "\\multicolumn{2}{c}{\\textit{both groups fall}}" else "\\multicolumn{2}{c}{\\textit{neither group moves}}"
+  lines <- c(lines, sprintf("%s & %s & [%s, %s] & %s & %s \\\\", labels[[r]], f2(x$estimate_DP), f2(x$ci_lower_DP), f2(x$ci_upper_DP),
+                            split_cells, fp(x$pay_pct)))
   if (r == "observed") lines <- c(lines, "\\addlinespace[3pt]")
 }
 lines <- c(lines, "\\bottomrule", "\\end{tabular}")
