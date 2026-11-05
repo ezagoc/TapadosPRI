@@ -92,16 +92,17 @@ cat("\nRunner-ups and their followers:\n"); print(ru[, .(election, name = nm(pat
 # ------------------------------------------------------------------ table and macros
 f2 <- function(x) formatC(x, format = "f", digits = 2)
 ci <- function(lo, hi) sprintf("[%s, %s]", f2(lo), f2(hi))
-row <- function(sp) { a <- res[spec == sp & outcome == "annual"]; w <- res[spec == sp & outcome == "window"]
-  sprintf("%s & %s & %s & %s & %s & %d & %d \\\\", sp, f2(a$estimate), ci(a$ci_lower, a$ci_upper), f2(w$estimate), ci(w$ci_lower, w$ci_upper), a$n_comparison, a$successions) }
+# The table shows the years 1-4 average only (the deck's headline estimand); the window contrast stays in runner_up.csv.
+row <- function(sp) { a <- res[spec == sp & outcome == "annual"]
+  sprintf("%s & %s & %s & %d & %d \\\\", sp, f2(a$estimate), ci(a$ci_lower, a$ci_upper), a$n_comparison, a$successions) }
 ca <- comb[outcome == "annual"]; cw <- comb[outcome == "window"]
-lines <- c("% runner_up.tex (runner_up.R). Designee's followers against one comparison camp. Do not edit by hand.",
-  "\\begin{tabular}{lcccccc}", "\\toprule",
-  " & \\multicolumn{2}{c}{Years 1--4 average} & \\multicolumn{2}{c}{Window $e+1$..$e+4$} & Comparison & \\\\",
-  "\\cmidrule(lr){2-3}\\cmidrule(lr){4-5}",
-  "Comparison group & Estimate & 95\\% interval & Estimate & 95\\% interval & followers & Successions \\\\", "\\midrule",
+lines <- c("% runner_up.tex (runner_up.R). Designee's followers against one comparison camp, years 1-4 average. Do not edit by hand.",
+  "\\begin{tabular}{lcccc}", "\\toprule",
+  " & \\multicolumn{2}{c}{Premium, years 1--4 average} & Comparison & \\\\",
+  "\\cmidrule(lr){2-3}",
+  "Comparison group & Estimate & 95\\% interval & followers & Successions \\\\", "\\midrule",
   row("All losing contenders' followers (main)"), row("Documented runner-up's followers"), row("Interior secretary's followers"), row("Largest losing camp's followers"),
-  sprintf("Each losing contender in turn, median & %s & %s & %s & %s & & 9 \\\\", f2(ca$median), sprintf("range [%s, %s]", f2(ca$minimum), f2(ca$maximum)), f2(cw$median), sprintf("range [%s, %s]", f2(cw$minimum), f2(cw$maximum))),
+  sprintf("Each losing contender in turn, median & %s & %s & & 9 \\\\", f2(ca$median), sprintf("range [%s, %s]", f2(ca$minimum), f2(ca$maximum))),
   "\\bottomrule", "\\end{tabular}")
 writeLines(lines, file.path(tab_dir, "runner_up.tex"))
 mac <- function(n, v) sprintf("\\newcommand{\\%s}{%s}", n, v)
