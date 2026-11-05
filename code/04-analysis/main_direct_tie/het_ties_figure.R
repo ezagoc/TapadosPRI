@@ -46,7 +46,7 @@ ggsave(file.path(out_dir, "het_ties.png"), g, width = 10, height = 4.4, dpi = 25
 
 f2 <- function(x) { s <- formatC(abs(x), format = "f", digits = 2); ifelse(x < 0, paste0("$-$", s), s) }
 mac <- function(n, v) sprintf("\\newcommand{\\%s}{%s}", n, v)
-row_of <- function(sp, grp) sub[split == sp & group == grp]
+row_of <- function(sp, grp) ht[row_type == "subgroup" & split == sp & group == grp]   # any split of heterogeneity.csv
 con_of <- function(sp) ht[split == sp & row_type == "contrast"][1]
 w <- row_of("tie_work_any", "Any co-work tie"); s_ <- row_of("tie_work_any", "School ties only"); cw <- con_of("tie_work_any")
 cwk <- row_of("tie_type", "Co-work"); ced <- row_of("tie_type", "Co-education"); ct <- con_of("tie_type")
