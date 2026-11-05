@@ -57,7 +57,11 @@ writeLines(c("% het_ties_macros.tex (het_ties_figure.R, from heterogeneity.csv).
   mac("HETschoolEst", f2(s_$estimate)), mac("HETschoolLo", f2(s_$ci_lower)), mac("HETschoolHi", f2(s_$ci_upper)), mac("HETschoolN", format(s_$n, big.mark = ",")),
   mac("HETworkSchoolDiff", f2(cw$estimate)), mac("HETworkSchoolDiffLo", f2(cw$ci_lower)), mac("HETworkSchoolDiffHi", f2(cw$ci_upper)),
   mac("HETearliestWorkEst", f2(cwk$estimate)), mac("HETearliestEduEst", f2(ced$estimate)), mac("HETearliestEduLo", f2(ced$ci_lower)), mac("HETearliestEduHi", f2(ced$ci_upper)),
-  mac("HETrecentEst", f2(rec$estimate)), mac("HEToldEst", f2(old$estimate)), mac("HETsmallEst", f2(sm$estimate)), mac("HETlargeEst", f2(lg$estimate))),
+  mac("HETrecentEst", f2(rec$estimate)), mac("HEToldEst", f2(old$estimate)), mac("HETsmallEst", f2(sm$estimate)), mac("HETlargeEst", f2(lg$estimate)),
+  mac("HETsplits", uniqueN(ht$split)),
+  mac("HETbelowSevenEst", f2(row_of("rung7", "Below rank 7")$estimate)), mac("HETbelowSevenLo", f2(row_of("rung7", "Below rank 7")$ci_lower)), mac("HETbelowSevenHi", f2(row_of("rung7", "Below rank 7")$ci_upper)),
+  mac("HETsevenPlusEst", f2(row_of("rung7", "Rank 7 or above")$estimate)), mac("HETsevenPlusLo", f2(row_of("rung7", "Rank 7 or above")$ci_lower)), mac("HETsevenPlusHi", f2(row_of("rung7", "Rank 7 or above")$ci_upper)),
+  mac("HETsevenDiff", f2(con_of("rung7")$estimate)), mac("HETsevenDiffLo", f2(con_of("rung7")$ci_lower)), mac("HETsevenDiffHi", f2(con_of("rung7")$ci_upper))),
   file.path(tab_dir, "het_ties_macros.tex"))
 print(sub[, .(split, group, estimate = round(estimate, 2), ci_lower = round(ci_lower, 2), ci_upper = round(ci_upper, 2), n)])
 cat("het_ties figure and macros written\n")

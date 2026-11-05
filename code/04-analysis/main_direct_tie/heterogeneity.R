@@ -27,6 +27,8 @@ seed_het <- 20102026L
 sample[, period := fifelse(election <= 1958L, "1940-1958", fifelse(election <= 1976L, "1964-1976", "1982-1988"))]
 # (b) baseline rung (the highest rung in e-5..e-2; 9 = cabinet secretary, 6 = director general, 4 = area director)
 sample[, rung_group := fifelse(pre <= 4L, "Rung 4 or below", fifelse(pre <= 7L, "Rungs 5-7", "Rungs 8-9"))]
+# (b') Camp's inclusion threshold (4 Nov 2026, the user): baseline rung 7 or above against below
+sample[, rung7_group := fifelse(pre >= 7L, "Rank 7 or above", "Below rank 7")]
 # (c) age in the election year
 sample[, age_group := fifelse(age < 45, "Under 45", fifelse(age <= 55, "45-55", "Over 55"))]
 # (d) education by e-2. Degree dated by its year; when the year is missing, counted if the politician was 35 or older at
@@ -143,6 +145,8 @@ splits <- list(
        contrast = c("1982-1988", "1940-1958"), unit = "succession"),
   list(id = "rung", short = "8--9 minus 4 or below", dimension = "Baseline rung", var = "rung_group", levels = c("Rung 4 or below", "Rungs 5-7", "Rungs 8-9"),
        contrast = c("Rungs 8-9", "Rung 4 or below")),
+  list(id = "rung7", short = "7 or above minus below", dimension = "Camp's threshold", var = "rung7_group", levels = c("Below rank 7", "Rank 7 or above"),
+       contrast = c("Rank 7 or above", "Below rank 7")),
   list(id = "age", short = "over 55 minus under 45", dimension = "Age at the election", var = "age_group", levels = c("Under 45", "45-55", "Over 55"),
        contrast = c("Over 55", "Under 45")),
   list(id = "field", short = "economics minus law", dimension = "Field of degree", var = "field_group",
