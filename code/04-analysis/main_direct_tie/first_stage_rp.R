@@ -51,12 +51,13 @@ cat(sprintf("previous handover e-6..e-5: designee's followers %+.1f pp, losers' 
 print(es[, .(group, k, estimate = round(100 * estimate, 1), ci_lower = round(100 * ci_lower, 1), ci_upper = round(100 * ci_upper, 1))])
 
 f1 <- function(x) { v <- round(x, 1); s <- formatC(abs(v), format = "f", digits = 1); ifelse(v < 0, paste0("$-$", s), s) }
+f0 <- function(x) { v <- round(x); s <- formatC(abs(v), format = "d"); ifelse(v < 0, paste0("$-$", s), s) }
 mac <- function(n, v) sprintf("\\newcommand{\\%s}{%s}", n, v)
 wa <- win[window == "appointment"]; wp <- win[window == "previous_handover"]
 writeLines(c("% first_stage_rp_macros.tex (first_stage_rp.R): the first stage (started a federal executive post in e..e+1) split into a reward and a penalty against the reweighted unaligned, pp. Do not edit by hand.",
              mac("FSRPreward", f1(100 * D01)), mac("FSRPrewardLo", f1(100 * wa[group == "D", ci_lower])), mac("FSRPrewardHi", f1(100 * wa[group == "D", ci_upper])),
              mac("FSRPpenalty", f1(100 * P01)), mac("FSRPpenaltyAbs", f1(abs(100 * P01))), mac("FSRPpenaltyLo", f1(100 * wa[group == "P", ci_lower])), mac("FSRPpenaltyHi", f1(100 * wa[group == "P", ci_upper])),
-             mac("FSRPgap", f1(100 * gap)), mac("FSRPrewardShare", round(100 * D01 / gap)), mac("FSRPpenaltyShare", round(-100 * P01 / gap)),
+             mac("FSRPgap", f1(100 * gap)), mac("FSRPrewardShare", f0(100 * D01 / gap)), mac("FSRPpenaltyShare", f0(-100 * P01 / gap)),
              mac("FSRPprevReward", f1(100 * wp[group == "D", estimate])), mac("FSRPprevPenalty", f1(100 * wp[group == "P", estimate])),
              mac("FSRPpeakReward", f1(100 * max(es[group == "D" & k %in% 0:1, estimate]))), mac("FSRPpeakRewardYear", es[group == "D" & k %in% 0:1][which.max(estimate), k])),
            file.path(tab_dir, "first_stage_rp_macros.tex"))
