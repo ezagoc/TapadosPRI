@@ -9,7 +9,9 @@
 #                    within camp by predetermined priority
 #   career           every post goes by predetermined priority alone (prior rank, experience, credential), camp ignored
 # Columns: premium D - P (years 1-4 average, rank positions, 95% intervals from the same Ferman-Pinto machinery as the
-# observed row: benchmarks' inference.R), the reward D - N and the penalty P - N as shares of their gap (D - N) - (P - N),
+# observed row: benchmarks' inference.R), the reward D - N and the EXACT penalty (5 November 2026: reward minus premium,
+# the penalty of a tie to a loser for the same politicians as the premium, rp_setup.R rp_fit_exact; the own-profile P - N
+# of the benchmarks stays in estimate_PN_own) as shares of the premium,
 # the convention of the deck's reward/penalty slide (shown only where the premium is positive: under sharing both groups
 # lose to the unaligned and under career neither moves, so the split has no meaning), the premium in official pay (US$ a
 # month, one rung = PAYgainOneUSD of pay_envelope.R, 1999 scale in 2025 prices) and the observed premium as a share of each
@@ -40,7 +42,9 @@ order_rules <- names(labels)
 W <- dcast(all, rule ~ contrast, value.var = c("estimate", "ci_lower", "ci_upper"))[match(order_rules, rule)]
 W[, `:=`(usd = estimate_DP * usd_rung, pay_pct = pay_pct(estimate_DP), share_of_purge = 100 * estimate_DP / W[rule == "purge", estimate_DP],
          observed_share = 100 * W[rule == "observed", estimate_DP] / estimate_DP)]
+W[, estimate_PN_own := estimate_PN][, estimate_PN := estimate_DN - estimate_DP]   # exact penalty: reward - premium
 W[, gap := estimate_DN - estimate_PN]
+stopifnot(max(abs(W$gap - W$estimate_DP)) < 1e-10)
 W[, `:=`(reward_pct = fifelse(estimate_DP > 0, 100 * estimate_DN / gap, NA_real_),
          penalty_pct = fifelse(estimate_DP > 0, -100 * estimate_PN / gap, NA_real_))]
 fwrite(W, file.path(out_dir, "rules_table.csv"))
@@ -50,10 +54,10 @@ ci <- function(lo, hi) sprintf("{\\scriptsize[%s, %s]}", f2(lo), f2(hi))
 pct <- function(x) if (is.na(x)) "--" else paste0(formatC(x, format = "f", digits = 0), "\\%")
 fp <- function(x) { s <- formatC(abs(round(x)), format = "d", big.mark = ","); paste0(if (x < 0) "$-$" else "$+$", s, "\\%") }
 lines <- c("% rules_table.tex (rules_table.R). Years 1-4 average, rank positions; 95% intervals; reward and penalty as shares of their gap,",
-  "% the reward D - N and the penalty P - N in rank positions, signed; the premium as a percentage change in official pay (1999 ladder, 34% a rung, compounded).",
+  "% the reward D - N and the exact penalty (reward - premium: a tie to a loser for the same politicians) in rank positions, signed, adding to the premium; the premium as a percentage change in official pay (1999 ladder, 34% a rung, compounded).",
   "\\begin{tabular}{lccccc}", "\\toprule",
-  " & \\multicolumn{2}{c}{Premium, designee's $-$ losers'} & \\multicolumn{2}{c}{Each group against the unaligned} & Premium \\\\", "\\cmidrule(lr){2-3}\\cmidrule(lr){4-5}",
-  "Allocation of the same posts & rank positions & 95\\% interval & designee's & losers' & in pay \\\\", "\\midrule")
+  " & \\multicolumn{2}{c}{Premium, designee's $-$ losers'} & \\multicolumn{2}{c}{Split, against the unaligned} & Premium \\\\", "\\cmidrule(lr){2-3}\\cmidrule(lr){4-5}",
+  "Allocation of the same posts & rank positions & 95\\% interval & reward & penalty & in pay \\\\", "\\midrule")
 for (r in order_rules) {
   x <- W[rule == r]
   # the two components with their sign, rank positions (the reward D - N and the penalty P - N of the deck's decomposition)

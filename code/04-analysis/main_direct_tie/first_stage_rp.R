@@ -2,7 +2,9 @@
 # The outcome of first_stage.R, an indicator that the politician STARTS a new federal executive post in year e+k (and the
 # window e..e+1, started in either year), decomposed as in rp_office.R: the designee's followers (D) and the losing
 # contenders' followers (P), each against one reweighted group of politicians tied to no contender (N, rp_setup.R),
-# the section-7 covariates, Ferman-Pinto inference. Levels, as in first_stage.R (a start indicator has no baseline to
+# the section-7 covariates, Ferman-Pinto inference. The penalty is the exact one (rp_fit_exact, 5 November 2026):
+# measured for the same politicians as first_stage.R's gap, so reward - penalty equals that gap by construction (the
+# event study against the formula_es design, the windows against the formula_x design, as in first_stage.R). Levels, as in first_stage.R (a start indicator has no baseline to
 # difference; the pre-years are the placebo). The previous handover window e-6..e-5 is the placebo window.
 # Writes first_stage_rp_event_study.csv, first_stage_rp_window.csv, the figure first_stage_rp.{pdf,png} and
 # tables/first_stage_rp_macros.tex. Run inside the staging environment:
@@ -27,9 +29,11 @@ f_es <- ~ election_factor + age + ldeg + lrec + prior_status + fed_exec
 S_es <- make_weights(A[support == TRUE], bal_formula_es)
 
 # event study: each group against the reweighted unaligned, year by year
+d_es <- build_design(formula = formula_es); d_x <- build_design()
 es <- rbindlist(lapply(ks, function(k) {
   y <- as.numeric(starts(fed, S_es$pid, S_es$election + k))
-  r <- rp_inference(S_es, rp_fit(S_es, y, f_es), B = B_rp); r[, k := k]
+  ym <- as.numeric(starts(fed, sample$pid, sample$election + k))[d_es$rows]
+  r <- rp_inference(S_es, rp_fit_exact(S_es, y, f_es, d_es, ym), B = B_rp); r[, k := k]
 }))
 setorder(es, group, k)
 fwrite(es, file.path(out_dir, "first_stage_rp_event_study.csv"))
@@ -37,7 +41,8 @@ fwrite(es, file.path(out_dir, "first_stage_rp_event_study.csv"))
 # windows: the appointment window e..e+1 and the previous handover e-6..e-5
 win <- rbindlist(lapply(list(c("appointment", 0L, 1L), c("previous_handover", -6L, -5L)), function(wd) {
   y <- as.numeric(started_in(fed, S_es$pid, S_es$election, as.integer(wd[2]), as.integer(wd[3])))
-  r <- rp_inference(S_es, rp_fit(S_es, y, f_es), B = B_rp); r[, window := wd[1]]
+  ym <- as.numeric(started_in(fed, sample$pid, sample$election, as.integer(wd[2]), as.integer(wd[3])))[d_x$rows]
+  r <- rp_inference(S_es, rp_fit_exact(S_es, y, f_es, d_x, ym), B = B_rp); r[, window := wd[1]]
 }))
 fwrite(win, file.path(out_dir, "first_stage_rp_window.csv"))
 D01 <- win[window == "appointment" & group == "D", estimate]; P01 <- win[window == "appointment" & group == "P", estimate]
@@ -54,7 +59,7 @@ f1 <- function(x) { v <- round(x, 1); s <- formatC(abs(v), format = "f", digits 
 f0 <- function(x) { v <- round(x); s <- formatC(abs(v), format = "d"); ifelse(v < 0, paste0("$-$", s), s) }
 mac <- function(n, v) sprintf("\\newcommand{\\%s}{%s}", n, v)
 wa <- win[window == "appointment"]; wp <- win[window == "previous_handover"]
-writeLines(c("% first_stage_rp_macros.tex (first_stage_rp.R): the first stage (started a federal executive post in e..e+1) split into a reward and a penalty against the reweighted unaligned, pp. Do not edit by hand.",
+writeLines(c("% first_stage_rp_macros.tex (first_stage_rp.R): the first stage (started a federal executive post in e..e+1) split into a reward and the exact penalty (same politicians; reward - penalty = first_stage.R's gap), pp. Do not edit by hand.",
              mac("FSRPreward", f1(100 * D01)), mac("FSRPrewardLo", f1(100 * wa[group == "D", ci_lower])), mac("FSRPrewardHi", f1(100 * wa[group == "D", ci_upper])),
              mac("FSRPpenalty", f1(100 * P01)), mac("FSRPpenaltyAbs", f1(abs(100 * P01))), mac("FSRPpenaltyLo", f1(100 * wa[group == "P", ci_lower])), mac("FSRPpenaltyHi", f1(100 * wa[group == "P", ci_upper])),
              mac("FSRPgap", f1(100 * gap)), mac("FSRPrewardShare", f0(100 * D01 / gap)), mac("FSRPpenaltyShare", f0(-100 * P01 / gap)),

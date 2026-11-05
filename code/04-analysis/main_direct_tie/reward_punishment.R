@@ -1,6 +1,8 @@
 # Reward and punishment against unaligned politicians (MAIN_SPEC section 11, 18 October 2026).
 # Designee's followers (D) and losing contenders' followers (P), each against one reweighted group of
-# politicians tied to no contender (N). Run after estimate_main.R:
+# politicians tied to no contender (N). Since 5 November 2026 the penalty is the EXACT one (rp_setup.R rp_fit_exact):
+# measured for the same politicians as the premium, so that reward - penalty equals the main design's gap by
+# construction; the own-profile penalty P - N stays in rp_fit's P_own (paper robustness). Run after estimate_main.R:
 #   Rscript code/04-analysis/main_direct_tie/reward_punishment.R
 args <- commandArgs(FALSE)
 script_dir <- dirname(normalizePath(sub("^--file=", "", args[grepl("^--file=", args)][1])))
@@ -13,7 +15,7 @@ source(file.path(script_dir, "rp_setup.R"))
 f_window <- ~ election_factor + pre_band + earlier_band + age + ldeg + lrec + prior_status + fed_exec
 f_es <- ~ election_factor + age + ldeg + lrec + prior_status + fed_exec
 S_main <- make_weights(A[support == TRUE], bal_formula_window)
-res_main <- run_window(S_main, f_window, "Main: support trimming, entropy balancing, regression")
+res_main <- run_window_exact(S_main, f_window, "Main: support trimming, entropy balancing, regression")
 
 # ------------------------------------------------------------------ 4b. decomposition: reward, penalty, their difference and shares
 # Joint draws: designee groups (Ferman-Pinto, losing groups as donors), losing groups (cluster-robust normal) and
@@ -31,7 +33,9 @@ decompose <- function(S, fit, label, B = 50000L) {
   ni <- S$group == "N"
   sDn <- tapply((D$a * D$u)[ni], S$cluster[ni], sum); sPn <- tapply((P$a * P$u)[ni], S$cluster[ni], sum)
   G <- length(sDn); V <- G / (G - 1) * matrix(c(sum(sDn^2), sum(sDn * sPn), sum(sDn * sPn), sum(sPn^2)), 2)
-  eN <- matrix(rnorm(2 * B), ncol = 2) %*% chol(V)
+  # symmetric square root: with the exact penalty the unaligned part is the same in both contrasts, so V is singular
+  ev <- eigen(V, symmetric = TRUE); R <- ev$vectors %*% diag(sqrt(pmax(ev$values, 0)), 2) %*% t(ev$vectors)
+  eN <- matrix(rnorm(2 * B), ncol = 2) %*% R
   eD <- eD_groups + eN[, 1]; eP <- eP_groups + eN[, 2]
   thD <- D$est - eD; thP <- P$est - eP        # draws of the estimates (symmetric errors)
   diff <- D$est - P$est; share <- D$est / diff
@@ -69,9 +73,9 @@ fwrite(balance, file.path(out_dir, "rp_balance.csv")); fwrite(support_tab, file.
 # ------------------------------------------------------------------ 6. robustness
 f_window_nob <- ~ election_factor + age + ldeg + lrec + prior_status + fed_exec
 S_a <- make_weights(A[support == TRUE], ~ age + ldeg + lrec + prior_status + fed_exec)
-res_a <- run_window(S_a, f_window_nob, "(a) Without baseline-rank bands")
+res_a <- run_window_exact(S_a, f_window_nob, "(a) Without baseline-rank bands")
 S_b <- make_weights(A[ps >= 0.1 & ps <= 0.9], bal_formula_window)
-res_b <- run_window(S_b, f_window, "(b) Trimming all groups to propensity 0.1-0.9")
+res_b <- run_window_exact(S_b, f_window, "(b) Trimming all groups to propensity 0.1-0.9")
 # Two strong steps: both ties formed in an office or school cohort of at most 10 people (MAIN_SPEC 11 (c), amended).
 strong <- dated[edge_type %in% tie_types & !is.na(focus_size) & focus_size <= 10]
 strong_long <- unique(rbind(strong[, .(pid = person_a, other = person_b, year_start)], strong[, .(pid = person_b, other = person_a, year_start)]))
@@ -88,7 +92,7 @@ two_step <- rbindlist(lapply(elections, function(e) {
 A[, two_step_any := paste(election, pid) %in% paste(two_step_all$election, two_step_all$pid)]
 A[, two_step_designee := paste(election, pid) %in% paste(two_step$election, two_step$pid)]
 S_c <- make_weights(A[support == TRUE & !(group == "N" & two_step_designee)], bal_formula_window)
-res_c <- run_window(S_c, f_window, "(c) Without unaligned two steps from the designee")
+res_c <- run_window_exact(S_c, f_window, "(c) Without unaligned two steps from the designee")
 suppressPackageStartupMessages(library(fixest))
 fe <- feols(delta ~ i(group, ref = "N") + pre_band + earlier_band + age + ldeg + lrec + prior_status + fed_exec | pid + election,
             data = A, cluster = ~cluster)
@@ -99,10 +103,10 @@ res_d[, `:=`(ci_lower = estimate - 1.96 * se, ci_upper = estimate + 1.96 * se, p
              inference = "clustered by contender group / unaligned politician", spec = "(d) Within politician (politician and succession FE)",
              n_D = sum(A$group == "D"), n_P = sum(A$group == "P"), n_N = sum(A$group == "N"))]
 windows <- rbindlist(list(res_main, res_a, res_b, res_c, res_d), fill = TRUE)
-decomp <- rbindlist(list(decompose(S_main, rp_fit(S_main, S_main$delta, f_window), "Main"),
-                         decompose(S_a, rp_fit(S_a, S_a$delta, f_window_nob), "(a) Without baseline-rank bands"),
-                         decompose(S_b, rp_fit(S_b, S_b$delta, f_window), "(b) Trimming all groups to propensity 0.1-0.9"),
-                         decompose(S_c, rp_fit(S_c, S_c$delta, f_window), "(c) Without unaligned two steps from the designee")))
+decomp <- rbindlist(list(decompose(S_main, fit_window_exact(S_main, f_window), "Main"),
+                         decompose(S_a, fit_window_exact(S_a, f_window_nob), "(a) Without baseline-rank bands"),
+                         decompose(S_b, fit_window_exact(S_b, f_window), "(b) Trimming all groups to propensity 0.1-0.9"),
+                         decompose(S_c, fit_window_exact(S_c, f_window), "(c) Without unaligned two steps from the designee")))
 fwrite(decomp, file.path(out_dir, "rp_decomposition.csv"))
 windows[, `:=`(two_step_strong_share = mean(A[group == "N" & support == TRUE, two_step_designee]),
                two_step_any_share = mean(A[group == "N" & support == TRUE, two_step_any]))]
@@ -112,9 +116,12 @@ fwrite(windows, file.path(out_dir, "rp_windows.csv"))
 # ------------------------------------------------------------------ 7. event study (section-7 covariates)
 S_es <- make_weights(A[support == TRUE], bal_formula_es)
 YS <- YA[A$support == TRUE, , drop = FALSE]
+d_es <- build_design(formula = formula_es)                      # the main event study, for the exact penalty
+Yfull <- sapply(ks, function(k) year_value(annual, k)); colnames(Yfull) <- ks
 es <- rbindlist(lapply(setdiff(ks, ref), function(k) {
   y <- YS[, as.character(k)] - YS[, as.character(ref)]
-  r <- rp_inference(S_es, rp_fit(S_es, y, f_es), B = 20000L); r[, k := k]
+  ym <- (Yfull[, as.character(k)] - Yfull[, as.character(ref)])[d_es$rows]
+  r <- rp_inference(S_es, rp_fit_exact(S_es, y, f_es, d_es, ym), B = 20000L); r[, k := k]
 }))
 es <- rbind(es, data.table(group = c("D", "P"), estimate = 0, ci_lower = 0, ci_upper = 0, ci90_lower = 0, ci90_upper = 0, k = ref), fill = TRUE)
 setorder(es, group, k)
@@ -144,7 +151,7 @@ lab_short <- c("Main: support trimming, entropy balancing, regression" = "Main s
                "(c) Without unaligned two steps from the designee" = "Without unaligned two strong steps from the designee",
                "(d) Within politician (politician and succession FE)" = "Within politician (politician and succession effects)")
 tl <- c("% rp_decomposition.tex (reward_punishment.R)", "\\begin{tabular}{lrrr}", "\\toprule",
-        " & Reward & Penalty & Share of \\\\", " & (designee's $-$ unaligned) & (losers' $-$ unaligned) & reward \\\\", "\\midrule")
+        " & Reward & Penalty & Share of \\\\", " & (designee's $-$ unaligned) & (a tie to a loser, same politicians) & reward \\\\", "\\midrule")
 for (i in seq_len(nrow(rows))) tl <- c(tl, sprintf("%s & %s & %s & %s\\%% \\\\", lab_short[[rows$spec[i]]],
   f2(rows$reward[i]), f2(rows$penalty[i]), round(100 * rows$share[i])),
   sprintf(" & {\\scriptsize %s} & {\\scriptsize %s} & \\\\", ci(rows$reward_lo[i], rows$reward_hi[i]), ci(rows$penalty_lo[i], rows$penalty_hi[i])))

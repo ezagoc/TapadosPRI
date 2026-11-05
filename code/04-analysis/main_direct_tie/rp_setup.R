@@ -106,6 +106,34 @@ rp_fit <- function(S, y, formula) {
   }
   out
 }
+# ------------------------------------------------------------------ exact decomposition (5 November 2026)
+# The penalty measured for the same politicians as the premium. The main design's gap is D̄ − P̂(X_D): the designee's
+# followers against the losers' followers' control model evaluated at the designee's followers' profile. The reward is
+# D̄ − N̂(X_D). The exact penalty is P̂(X_D) − N̂(X_D) = reward − gap, so that reward − penalty = gap by construction: "for a
+# politician like the designee's followers, what a tie to a loser cost against no tie". Its linear weights are the reward's
+# on the unaligned and minus the main design's on the losers' followers (the designee's followers cancel: both contrasts
+# give them omega_e / n_e, asserted). Inference as for the own-profile penalty: clustered by contender group (losers'
+# followers, with the residuals of the main design's control model) and by politician (unaligned, residuals of the
+# unaligned model). `d_main` is build_design() on the main sample with the formula of the gap, `y_main` the same outcome
+# aligned with d_main$S (y_full[d_main$rows]); `S`, `y` and `formula` as in rp_fit. The own-profile penalty P̄ − N̂(X_P)
+# stays in `P_own` (the paper's robustness), the gap in `gap`.
+rp_fit_exact <- function(S, y, formula, d_main, y_main) {
+  fit <- rp_fit(S, y, formula)
+  key_S <- paste(S$election, S$pid); key_M <- paste(d_main$S$election, d_main$S$pid)
+  m <- match(key_M, key_S); stopifnot(!anyNA(m), !anyDuplicated(m))
+  stopifnot(max(abs(y[m] - y_main)) < 1e-10)                       # the same outcome for the same people
+  a_main <- numeric(nrow(S)); a_main[m] <- d_main$a
+  iD <- which(S$group == "D"); iP <- which(S$group == "P"); iN <- which(S$group == "N")
+  stopifnot(max(abs(fit$D$a[iD] - a_main[iD])) < 1e-10, all(a_main[iN] == 0), all(fit$D$a[iP] == 0))
+  gap <- sum(d_main$a * y_main)
+  a <- fit$D$a - a_main; a[iD] <- 0
+  u <- fit$D$u; u_main <- numeric(nrow(S)); u_main[m] <- residuals_d(d_main, y_main); u[iP] <- u_main[iP]
+  est <- sum(a * y); stopifnot(abs(est - (fit$D$est - gap)) < 1e-8)
+  fit$P_own <- fit$P
+  fit$P <- list(est = est, a = a, u = u, res = fit$P_own$res, by_e = fit$P_own$by_e)
+  fit$gap <- gap
+  fit
+}
 cr_var <- function(a, u, cl, keep) {
   s <- tapply((a * u)[keep], cl[keep], sum); G <- length(s); G / (G - 1) * sum(s^2)
 }
@@ -133,6 +161,24 @@ rp_inference <- function(S, fit, B = 50000L) {
 }
 run_window <- function(S, formula, label) {
   r <- rp_inference(S, rp_fit(S, S$delta, formula))
+  r[, `:=`(spec = label, n_D = sum(S$group == "D"), n_P = sum(S$group == "P"), n_N = sum(S$group == "N"))]
+}
+# The main design on the followers present in S (balancing variants may trim followers), for rp_fit_exact.
+# On a trimmed sample the control model can be rank-deficient (a covariate level with no losers' follower in a
+# succession); the covariates are then reduced step by step and the formula used is kept in attr(d, "formula").
+main_design_for <- function(S, formula = formula_x) {
+  keep <- paste(sample$election, sample$pid) %in% paste(S$election, S$pid)[S$group != "N"]
+  tries <- list(formula, ~ election_factor + pre_band + earlier_band + age + ldeg + lrec, ~ election_factor + age + ldeg + lrec, ~ election_factor)
+  for (f in tries) {
+    d <- tryCatch(build_design(keep = keep, formula = f), error = function(e) NULL)
+    if (!is.null(d)) { attr(d, "formula") <- f; if (!identical(f, formula)) message("  main design on this sample with ", deparse(f)); return(d) }
+  }
+  stop("no control model fits this sample")
+}
+# The window contrast with the exact penalty (the main design's gap on the same followers, formula_x).
+fit_window_exact <- function(S, formula) { d <- main_design_for(S); rp_fit_exact(S, S$delta, formula, d, sample$delta[d$rows]) }
+run_window_exact <- function(S, formula, label) {
+  r <- rp_inference(S, fit_window_exact(S, formula))
   r[, `:=`(spec = label, n_D = sum(S$group == "D"), n_P = sum(S$group == "P"), n_N = sum(S$group == "N"))]
 }
 

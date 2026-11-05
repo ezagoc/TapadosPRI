@@ -22,6 +22,7 @@ build_design <- function(keep = rep(TRUE, nrow(sample)), formula = formula_x, we
   es <- sort(unique(el))
   es <- es[sapply(es, function(e) any(tr & el == e) && any(!tr & el == e))]
   S <- S[election %in% es]
+  S[, election_factor := droplevels(election_factor)]   # a succession absent from the subsample would leave the intercept collinear
   tr <- S$treated == 1L; el <- S$election
   Xm <- model.matrix(formula, data = S)
   ctrl <- which(!tr)

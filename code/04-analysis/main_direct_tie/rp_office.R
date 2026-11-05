@@ -3,7 +3,9 @@
 # The section-11 decomposition of reward_punishment.R applied to the office indicator 1(rank >= threshold): the designee's
 # followers (D) and the losing contenders' followers (P), each against one reweighted group of politicians tied to
 # no contender (N), as an event study on E_k - E_ref with the section-7 covariates (same support, balancing,
-# regression and inference as the rank version; rp_setup.R). Writes rp_event_study_office.csv, the figure
+# regression and inference as the rank version; rp_setup.R). The penalty is the exact one (rp_fit_exact, 5 November
+# 2026): measured for the same politicians as the main design's gap, so reward - penalty equals the main extensive-margin
+# (or top-post) estimate by construction. Writes rp_event_study_office.csv, the figure
 # es_reward_punishment_office.{pdf,png} (percentage points) and tables/rp_office_macros.tex (years 1-4 averages,
 # shares). Run after estimate_main.R: Rscript code/04-analysis/main_direct_tie/rp_office.R
 args <- commandArgs(FALSE)
@@ -20,9 +22,12 @@ THR <- as.integer(Sys.getenv("TAPADOS_RP_THRESHOLD", "1"))
 SFX <- if (THR == 1L) "office" else "top"
 E <- (YA >= THR) * 1                    # holds a ranked post (or a top post) in year e + k
 ES <- E[A$support == TRUE, , drop = FALSE]
+d_es <- build_design(formula = formula_es)                      # the main design on the same indicator, for the exact penalty
+Efull <- (sapply(ks, function(k) year_value(annual, k)) >= THR) * 1; colnames(Efull) <- ks
 es <- rbindlist(lapply(setdiff(ks, ref), function(k) {
   y <- ES[, as.character(k)] - ES[, as.character(ref)]
-  r <- rp_inference(S_es, rp_fit(S_es, y, f_es), B = 20000L); r[, k := k]
+  ym <- (Efull[, as.character(k)] - Efull[, as.character(ref)])[d_es$rows]
+  r <- rp_inference(S_es, rp_fit_exact(S_es, y, f_es, d_es, ym), B = 20000L); r[, k := k]
 }))
 es <- rbind(es, data.table(group = c("D", "P"), estimate = 0, ci_lower = 0, ci_upper = 0, ci90_lower = 0, ci90_upper = 0, k = ref), fill = TRUE)
 setorder(es, group, k)
@@ -32,7 +37,8 @@ fwrite(es, file.path(out_dir, sprintf("rp_event_study_%s.csv", SFX)))
 # years 1-4 averages (the headline window of the deck), in percentage points, and the shares of the gap; the same
 # average as one fit (the regression is linear in y, so the point estimate is the mean of the yearly ones) for its interval
 y14 <- rowMeans(ES[, as.character(1:4), drop = FALSE]) - ES[, as.character(ref)]
-w14 <- rp_inference(S_es, rp_fit(S_es, y14, f_es), B = 20000L)
+ym14 <- (rowMeans(Efull[, as.character(1:4), drop = FALSE]) - Efull[, as.character(ref)])[d_es$rows]
+w14 <- rp_inference(S_es, rp_fit_exact(S_es, y14, f_es, d_es, ym14), B = 20000L)
 fwrite(w14, file.path(out_dir, sprintf("rp_window_%s.csv", SFX)))
 m14 <- es[k %in% 1:4, .(estimate = mean(estimate)), by = group]
 stopifnot(max(abs(w14$estimate[match(m14$group, w14$group)] - m14$estimate)) < 1e-6)
@@ -43,6 +49,7 @@ ext <- if (THR == 1L) fread(file.path(out_dir, "margins_event_study.csv"))[margi
   fread(file.path(out_dir, "top_event_study.csv"))[k %in% 1:4, mean(estimate)]   # top_post.R runs first
 cat(sprintf("years 1-4: designee's followers %+.1f pp, losers' followers %+.1f pp, gap %.1f pp (main extensive estimate %.1f pp)\n",
             100 * D14, 100 * P14, 100 * gap, 100 * ext))
+if (abs(gap - ext) > 1e-6) warning(sprintf("exact gap %.6f differs from the main estimate %.6f", gap, ext)) else cat("exact: reward - penalty equals the main estimate\n")
 cat(sprintf("shares of the gap: reward %.0f%%, penalty %.0f%%\n", 100 * share_D, 100 * (1 - share_D)))
 print(es[, .(group, k, estimate = round(100 * estimate, 1), ci_lower = round(100 * ci_lower, 1), ci_upper = round(100 * ci_upper, 1))])
 
@@ -50,7 +57,7 @@ tab_dir <- file.path(out_dir, "tables"); dir.create(tab_dir, showWarnings = FALS
 f1 <- function(x) { v <- round(x, 1); s <- formatC(abs(v), format = "f", digits = 1); ifelse(v < 0, paste0("$-$", s), s) }
 mac <- function(n, v) sprintf("\\newcommand{\\%s}{%s}", n, v)
 PFX <- if (THR == 1L) "RPO" else "RPT"
-writeLines(c(sprintf("%% rp_%s_macros.tex (rp_office.R, threshold %d): reward and penalty on the office indicator, years 1-4 averages in pp. Do not edit by hand.", SFX, THR),
+writeLines(c(sprintf("%% rp_%s_macros.tex (rp_office.R, threshold %d): reward and exact penalty on the office indicator, years 1-4 averages in pp; reward - penalty = the main estimate. Do not edit by hand.", SFX, THR),
              mac(paste0(PFX, "reward"), f1(100 * D14)), mac(paste0(PFX, "penaltyAbs"), f1(abs(100 * P14))), mac(paste0(PFX, "penalty"), f1(100 * P14)),
              mac(paste0(PFX, "rewardLo"), f1(100 * w14[group == "D", ci_lower])), mac(paste0(PFX, "rewardHi"), f1(100 * w14[group == "D", ci_upper])),
              mac(paste0(PFX, "penaltyLo"), f1(100 * w14[group == "P", ci_lower])), mac(paste0(PFX, "penaltyHi"), f1(100 * w14[group == "P", ci_upper])),
