@@ -102,6 +102,7 @@ write_tab(bs_lines, "by_succession.tex")
 # ------------------------------------------------------------------ 4. robustness of the main contrast
 thr <- list(list(1L, "Holds any ranked post (score 1 or above)"),
             list(6L, "Director general / other governor or above (score 6)"),
+            list(7L, "Undersecretary / senator or above (score 7, Camp's threshold)"),
             list(8L, "Major-state governor / PRI president or above (score 8)"),
             list(9L, "Cabinet rank or above (score 9)"))
 rob <- rbindlist(list(

@@ -231,7 +231,10 @@ A_e <- sapply(d_full$elections, function(e) {
   a
 })
 colnames(A_e) <- d_full$elections
-stopifnot(max(abs(rowMeans(A_e) - d_full$a)) < 1e-10)
+# the pooled weights combine the by-succession contrasts with the design's succession weights (person weights since
+# 3 November 2026; equal weights would make this the row mean)
+w_e <- sapply(d_full$elections, function(e) omega[[as.character(e)]])
+stopifnot(abs(sum(w_e) - 1) < 1e-8, max(abs(as.vector(A_e %*% w_e) - d_full$a)) < 1e-10)
 x_dec <- (d_full$elections - mean(d_full$elections)) / 10
 A_lin <- cbind(A_e, slope_per_decade = as.vector(A_e %*% (x_dec / sum(x_dec^2))))
 boot_linear <- function(d, A, y, B, seed) {
