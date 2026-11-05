@@ -50,15 +50,14 @@ ci <- function(lo, hi) sprintf("{\\scriptsize[%s, %s]}", f2(lo), f2(hi))
 pct <- function(x) if (is.na(x)) "--" else paste0(formatC(x, format = "f", digits = 0), "\\%")
 fp <- function(x) { s <- formatC(abs(round(x)), format = "d", big.mark = ","); paste0(if (x < 0) "$-$" else "$+$", s, "\\%") }
 lines <- c("% rules_table.tex (rules_table.R). Years 1-4 average, rank positions; 95% intervals; reward and penalty as shares of their gap,",
-  "% shown where the premium is positive; the premium as a percentage change in official pay (1999 ladder, 34% a rung, compounded).",
+  "% the reward D - N and the penalty P - N in rank positions, signed; the premium as a percentage change in official pay (1999 ladder, 34% a rung, compounded).",
   "\\begin{tabular}{lccccc}", "\\toprule",
-  " & \\multicolumn{2}{c}{Premium, designee's $-$ losers'} & \\multicolumn{2}{c}{Share of the premium} & Premium \\\\", "\\cmidrule(lr){2-3}\\cmidrule(lr){4-5}",
-  "Allocation of the same posts & rank positions & 95\\% interval & reward & penalty & in pay \\\\", "\\midrule")
+  " & \\multicolumn{2}{c}{Premium, designee's $-$ losers'} & \\multicolumn{2}{c}{Each group against the unaligned} & Premium \\\\", "\\cmidrule(lr){2-3}\\cmidrule(lr){4-5}",
+  "Allocation of the same posts & rank positions & 95\\% interval & designee's & losers' & in pay \\\\", "\\midrule")
 for (r in order_rules) {
   x <- W[rule == r]
-  # no split where the premium is negative: the two cells say in words what the components do instead
-  split_cells <- if (!is.na(x$reward_pct)) sprintf("%s & %s", pct(x$reward_pct), pct(x$penalty_pct)) else
-    if (x$estimate_DN < -0.5 && x$estimate_PN < -0.5) "\\multicolumn{2}{c}{\\textit{both groups fall}}" else "\\multicolumn{2}{c}{\\textit{neither group moves}}"
+  # the two components with their sign, rank positions (the reward D - N and the penalty P - N of the deck's decomposition)
+  split_cells <- sprintf("%s & %s", f2(x$estimate_DN), f2(x$estimate_PN))
   lines <- c(lines, sprintf("%s & %s & [%s, %s] & %s & %s \\\\", labels[[r]], f2(x$estimate_DP), f2(x$ci_lower_DP), f2(x$ci_upper_DP),
                             split_cells, fp(x$pay_pct)))
   if (r == "observed") lines <- c(lines, "\\addlinespace[3pt]")
