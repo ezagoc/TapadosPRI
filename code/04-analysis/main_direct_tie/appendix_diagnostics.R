@@ -152,6 +152,23 @@ for (i in which(rob$unit == "pp")) rl <- c(rl, sprintf("%s & %s & %s \\\\", rob$
                                                          ci_txt(100 * rob$ci_lower[i], 100 * rob$ci_upper[i], 1)))
 rl <- c(rl, "\\bottomrule", "\\end{tabular}")
 write_tab(rl, "robustness.tex")
+# deck version (4 November 2026, the user: nine rows, one unit, one question each): weights, covariates, sample, slate
+deck_specs <- c("Main: successions weighted by the designee's followers, all covariates", "Equal weight per succession",
+                "Succession indicators only", "Exact baseline rung instead of bands", "Ties formed by $e-4$ (late recruits excluded)",
+                "Inclusion in Camp's dictionary settled by $e-2$", "Only politicians ranked 7 or above before the succession, no rank bands",
+                "Contenders holding a cabinet-level post only", "Without 1976 and 1988 (president leaned early)")
+deck_labels <- c("Main, successions weighted by the designee's followers", "Equal weight per succession",
+                 "Succession indicators only, no covariates", "Exact baseline rung instead of rank bands", "Ties formed by $e-4$, late recruits excluded",
+                 "Inclusion in Camp's biographies settled by $e-2$", "Politicians ranked 7 or above before the succession",
+                 "Contenders holding a cabinet-level post only", "Without 1976 and 1988, when the president leaned early")
+stopifnot(all(deck_specs %in% rob$spec))
+rd <- c("% robustness_deck.tex (appendix_diagnostics.R): the deck's selection of robustness rows, rank positions. Do not edit by hand.",
+        "\\begin{tabular}{lrr}", "\\toprule", " & Estimate & 95\\% interval \\\\", "\\midrule")
+for (j in seq_along(deck_specs)) { i <- which(rob$spec == deck_specs[j])[1]
+  rd <- c(rd, sprintf("%s & %s & %s \\\\", deck_labels[j], f2(rob$estimate[i]), ci_txt(rob$ci_lower[i], rob$ci_upper[i])))
+  if (j == 1L) rd <- c(rd, "\\addlinespace[2pt]") }
+rd <- c(rd, "\\bottomrule", "\\end{tabular}")
+write_tab(rd, "robustness_deck.tex")
 
 # ------------------------------------------------------------------ 5. coverage of the interval in simulations
 cov <- fread(file.path(out_dir, "inference_coverage.csv"))
