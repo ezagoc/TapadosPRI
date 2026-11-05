@@ -69,7 +69,7 @@ g <- ggplot(pf, aes(x = x, y = estimate)) +
   geom_linerange(aes(ymin = ci_lower, ymax = ci_upper), colour = INK, linewidth = 0.45) +
   geom_linerange(aes(ymin = ci90_lower, ymax = ci90_upper), colour = INK, linewidth = 1.5) +
   geom_point(aes(size = n_designee), colour = INK) +
-  scale_size_area(max_size = 5, name = "Designee's followers in the succession", breaks = c(10, 40, 80)) +
+  scale_size_area(max_size = 5, name = "Designee's followers in the succession", breaks = range(pf$n_designee)) +   # smallest and largest camp
   scale_x_continuous(breaks = pf$x, labels = pf$lab) +
   coord_cartesian(ylim = c(bot - 0.03 * span, top + 0.08 * span), clip = "off") +
   labs(x = NULL, y = "Premium, years 1 to 4,\ndesignee's minus losers' followers") + theme_paper(17) +
