@@ -63,7 +63,7 @@ res <- rbindlist(list(
   fit_subset(camps, "All losing contenders' followers (main)", main = TRUE),
   fit_subset(ru[!is.na(n)], "Documented runner-up's followers"),
   fit_subset(largest, "Largest losing camp's followers"),
-  fit_subset(ru_int[!is.na(n)], "Interior secretary's, else runner-up's")))
+  fit_subset(ru_int[!is.na(n)], "Interior secretary as the number two")))
 
 # (c) every losing contender in turn
 per <- rbindlist(lapply(names(outcomes), function(o) rbindlist(lapply(seq_len(nrow(camps)), function(i) {
@@ -100,13 +100,13 @@ lines <- c("% runner_up.tex (runner_up.R). Designee's followers against one comp
   " & \\multicolumn{2}{c}{Years 1--4 average} & \\multicolumn{2}{c}{Window $e+1$..$e+4$} & Comparison & \\\\",
   "\\cmidrule(lr){2-3}\\cmidrule(lr){4-5}",
   "Comparison group & Estimate & 95\\% interval & Estimate & 95\\% interval & followers & Successions \\\\", "\\midrule",
-  row("All losing contenders' followers (main)"), row("Documented runner-up's followers"), row("Interior secretary's, else runner-up's"), row("Largest losing camp's followers"),
+  row("All losing contenders' followers (main)"), row("Documented runner-up's followers"), row("Interior secretary as the number two"), row("Largest losing camp's followers"),
   sprintf("Each losing contender in turn, median & %s & %s & %s & %s & & 9 \\\\", f2(ca$median), sprintf("range [%s, %s]", f2(ca$minimum), f2(ca$maximum)), f2(cw$median), sprintf("range [%s, %s]", f2(cw$minimum), f2(cw$maximum))),
   "\\bottomrule", "\\end{tabular}")
 writeLines(lines, file.path(tab_dir, "runner_up.tex"))
 mac <- function(n, v) sprintf("\\newcommand{\\%s}{%s}", n, v)
 a_ru <- res[spec == "Documented runner-up's followers" & outcome == "annual"]; a_lg <- res[spec == "Largest losing camp's followers" & outcome == "annual"]
-a_in <- res[spec == "Interior secretary's, else runner-up's" & outcome == "annual"]
+a_in <- res[spec == "Interior secretary as the number two" & outcome == "annual"]
 writeLines(c("% runner_up_macros.tex (runner_up.R). Do not edit by hand.",
   mac("RUest", f2(a_ru$estimate)), mac("RUlo", f2(a_ru$ci_lower)), mac("RUhi", f2(a_ru$ci_upper)), mac("RUn", a_ru$n_comparison), mac("RUsucc", a_ru$successions),
   mac("RUdropped", ifelse(a_ru$dropped == "", "none", a_ru$dropped)),
