@@ -68,11 +68,14 @@ g <- ggplot(pf, aes(x = x, y = estimate)) +
   annotate("text", x = 9.5, y = pooled, label = sprintf("pooled %.2f", pooled), colour = "#940034", hjust = 1, vjust = -0.5, size = 4.2, family = FAM) +
   geom_linerange(aes(ymin = ci_lower, ymax = ci_upper), colour = INK, linewidth = 0.45) +
   geom_linerange(aes(ymin = ci90_lower, ymax = ci90_upper), colour = INK, linewidth = 1.5) +
-  geom_point(aes(size = n_designee), colour = INK) + scale_size_area(max_size = 5, guide = "none") +
+  geom_point(aes(size = n_designee), colour = INK) +
+  scale_size_area(max_size = 5, name = "Designee's followers in the succession", breaks = c(10, 40, 80)) +
   scale_x_continuous(breaks = pf$x, labels = pf$lab) +
   coord_cartesian(ylim = c(bot - 0.03 * span, top + 0.08 * span), clip = "off") +
   labs(x = NULL, y = "Premium, years 1 to 4,\ndesignee's minus losers' followers") + theme_paper(17) +
-  theme(axis.text.x = element_text(size = 10, lineheight = 0.85), axis.title.y = element_text(size = 14, lineheight = 0.95))
+  theme(axis.text.x = element_text(size = 10, lineheight = 0.85), axis.title.y = element_text(size = 14, lineheight = 0.95),
+        legend.position = "inside", legend.position.inside = c(0.01, 0.99), legend.justification = c(0, 1), legend.direction = "horizontal",
+        legend.title = element_text(size = 11, colour = MUTED), legend.text = element_text(size = 11, colour = INK), legend.background = element_blank(), legend.key = element_blank())
 ggsave(file.path(out_dir, "by_succession_forest.pdf"), g, width = 10, height = 4.3, bg = "white", device = "pdf")
 ggsave(file.path(out_dir, "by_succession_forest.png"), g, width = 10, height = 4.3, dpi = 250, bg = "white")
 # ------------------------------------------------------------------ macros
