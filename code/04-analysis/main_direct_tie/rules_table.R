@@ -44,7 +44,7 @@ W[, gap := estimate_DN - estimate_PN]
 W[, `:=`(reward_pct = fifelse(estimate_DP > 0, 100 * estimate_DN / gap, NA_real_),
          penalty_pct = fifelse(estimate_DP > 0, -100 * estimate_PN / gap, NA_real_))]
 fwrite(W, file.path(out_dir, "rules_table.csv"))
-f2 <- function(x) sub("^-", "$-$", formatC(x, format = "f", digits = 2))
+f2 <- function(x) { x <- round(x, 2); x[abs(x) < 0.005] <- 0; sub("^-", "$-$", formatC(x, format = "f", digits = 2)) }   # no signed zero
 fu <- function(x) { s <- formatC(abs(round(x, -1)), format = "d", big.mark = ","); if (x < 0) paste0("$-$", s) else s }
 ci <- function(lo, hi) sprintf("{\\scriptsize[%s, %s]}", f2(lo), f2(hi))
 pct <- function(x) if (is.na(x)) "--" else paste0(formatC(x, format = "f", digits = 0), "\\%")
