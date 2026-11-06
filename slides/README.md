@@ -22,7 +22,7 @@ never move a frame on a slide.
 | `data/` | The three steps that write into `TapadosPRI/data`: `death_years.py` (death years from Camp's headers and Wikidata), `verified_deaths.py` (the deaths verified in the biography headers, used by the eligibility rule) and, from `code/02-rank/`, the office scale `position_tiers.csv` (`02_position_tiers.py`, title-corrected version of 26 October 2026). |
 | `analysis/` | The main design and every result slide. `estimate_main.R` builds the sample, the ties and the weights and is sourced by every other script; `design_tools.R` holds the estimator, the Ferman-Pinto bootstrap and the house style; `rp_setup.R` the reward/penalty design against the unaligned. `MAIN_SPEC.md` is the written specification. |
 | `benchmarks/` | The alternative allocation rules (purge, promotions only, proportional sharing, career merit): `prepare.R` reuses the design, `prepare_calendar.R` and `assignments.py` build the synthetic careers, `inference.R` re-estimates the design on them, `figures.py` draws the figure. |
-| `deck/` | Tables built for the deck from saved estimates (`build_rank_description.py`, `build_by_succession_table.py`), the headline macros (`headline_macros.py`) and `collect_deck_files.py`, which copies every deck file to `output/slides/deck` and into the Overleaf repository. |
+| `deck/` | Tables built for the deck from saved estimates or transcribed sources (`build_rank_description.py`, `build_by_succession_table.py`, `build_pay_table.py`), the headline macros (`headline_macros.py`) and `collect_deck_files.py`, which copies every deck file to `output/slides/deck` and into the Overleaf repository. |
 | `descriptives/` | The motivation and data slides: the PRI's presidential vote and land reform by president (`viz_appendix_descriptives.py`), federal investment by agency (`plot_agency_series.py`), and the cross-national autocracy benchmark (`autocracy/`, with its two hand-coded extension files), and the 1946 biographies figure (`bio_links_1946.py`). |
 | `reference/figure_geometry/` | The axis ranges of the deck's event-study figures, frozen on the estimates of 27 October 2026 (copies of that run's CSVs; `design_tools.R`, `figures.R`). |
 
@@ -49,7 +49,7 @@ list drives `deck/collect_deck_files.py`.
 | The 1946 succession | `followers_1946_aleman.tex`, `followers_1946_padilla_top12.tex`, `followers_1946_macros.tex` | `analysis/tables/` | `analysis/followers_table_1946.py` |
 | Data: sample, ladder, balance | `sample.tex`, `ladder_shares.tex`, `balance_combined.tex` | `analysis/tables/` | `deck/build_rank_description.py`, `analysis/ladder_shares.R`, `analysis/balance_combined.R` |
 | Data appendix: vote, investment, land | `pri_vote.pdf`, `investment_series.pdf`, `land_by_president.pdf` | `descriptives/` | `descriptives/viz_appendix_descriptives.py`, `descriptives/plot_agency_series.py` |
-| Who holds the posts | `md_post_holders.pdf`, `post_holders_macros.tex` | `analysis/` | `analysis/post_holders.R` |
+| Who holds the posts (and its appendix table) | `md_post_holders.pdf`, `post_holders_macros.tex`, `post_holders.tex` | `analysis/` | `analysis/post_holders.R` |
 | The raw trajectories | `md_rp_raw.pdf` | `analysis/` | `analysis/rp_raw_trajectories.R` |
 | First stage: new appointments | `md_first_stage_fed.pdf`, `first_stage_macros.tex` | `analysis/` | `analysis/first_stage.R` |
 | First stage, reward and penalty | `md_first_stage_rp.pdf`, `first_stage_rp_macros.tex` | `analysis/` | `analysis/first_stage_rp.R` |
@@ -61,6 +61,7 @@ list drives `deck/collect_deck_files.py`.
 | Succession by succession | `md_by_succession_forest.pdf`, `by_succession_forest_macros.tex`, `het_ties_macros.tex` | `analysis/` | `analysis/by_succession_forest.R`; `analysis/heterogeneity.R` + `het_ties_figure.R` (the number of splits) |
 | Allocation rules | `rules_table.tex`, `rules_macros.tex`, `benchmarks_all_comparisons.pdf` | `analysis/tables/`, `benchmarks/final/` | `analysis/rules_table.R`; `benchmarks/figures.py` |
 | The losers themselves | `loser_careers.tex`, `loser_macros.tex` | `analysis/tables/` | `analysis/loser_careers.py` (after `analysis/aspirants_table.R`) |
+| Appendix: official pay along the ladder | `rank_pay_check.tex` | `analysis/tables/` | `deck/build_pay_table.py` (pay lines transcribed from the 1927 and 2000 budgets) |
 | Appendix: randomization, robustness, leave one out, runner-up | `md_randomization.pdf`, `randomization_macros.tex`; `md_robustness.tex`; `md_by_succession.tex`, `by_succession_macros.tex`; `runner_up.tex`, `runner_up_macros.tex` | `analysis/` | `analysis/randomization_inference.R`; `analysis/appendix_diagnostics.R` (+ `variant_annual.R`); `deck/build_by_succession_table.py`; `analysis/runner_up.R` |
 
 Static images (not generated): `1942_mexican_cabinet_chart_poster.png` and the four `1946_portrait_*.png`, kept only

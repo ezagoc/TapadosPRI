@@ -54,6 +54,8 @@ DECK_FILES = {
     "tables/md_robustness.tex": "analysis/tables/robustness_deck.tex",                  # appendix_diagnostics.R
     "tables/md_by_succession.tex": "analysis/tables/md_by_succession.tex",              # deck/build_by_succession_table.py
     "tables/runner_up.tex": "analysis/tables/runner_up.tex",                            # runner_up.R
+    "tables/post_holders.tex": "analysis/tables/post_holders.tex",                      # post_holders.R
+    "tables/rank_pay_check.tex": "analysis/tables/rank_pay_check.tex",                  # deck/build_pay_table.py
     "tables/followers_1946_aleman.tex": "analysis/tables/followers_1946_aleman.tex",    # followers_table_1946.py
     "tables/followers_1946_padilla_top12.tex": "analysis/tables/followers_1946_padilla_top12.tex",   # followers_table_1946.py
     # ---- macro files (one \newcommand per number quoted on the slides)

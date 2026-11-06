@@ -69,6 +69,7 @@ STEPS=(
   # ---- deck tables and headline macros (slides/deck)
   "by_succession_table|$PY $SLIDES/deck/build_by_succession_table.py --analysis-dir $OUT/analysis"
   "sample_table|$PY $SLIDES/deck/build_rank_description.py --data-root $TAPADOSPRI_DB_ROOT --analysis-dir $OUT/analysis"
+  "pay_table|$PY $SLIDES/deck/build_pay_table.py --data-root $TAPADOSPRI_DB_ROOT"
   "headline_macros|$PY $SLIDES/deck/headline_macros.py"
   # ---- descriptive figures (slides/descriptives)
   "descriptives|$PY -I $SLIDES/descriptives/viz_appendix_descriptives.py"
