@@ -18,11 +18,13 @@ theme_paper <- function(base = 15) theme_minimal(base_size = base, base_family =
 
 ht <- fread(file.path(out_dir, "heterogeneity.csv"))
 sub <- ht[row_type == "subgroup" & !is.na(estimate)]
-keep <- list(c("tie_mix", "Ties to the contender"), c("tie_stage", "When they first\nworked together"))   # 6 Nov 2026: two blocks
+keep <- list(c("tie_mix", "Ties to the contender"), c("tie_stage", "When they first\nworked together"), c("tie_strength", "Size of the office\nwhere they met"))   # 6 Nov 2026
 sub <- sub[split %in% sapply(keep, `[`, 1)]
 sub <- sub[group != "Work and school ties"]   # 18 followers, interval wider than the axis; the bullet reports them
 sub[group == "First worked together in the first five years of the career", group := "Met in the follower's first five years"]
 sub[group == "First worked together later", group := "Met later in the career"]
+sub[group == "A tie in a focus of 10 or fewer", group := "An office of 10 or fewer"]
+sub[group == "Only larger foci", group := "Larger offices only"]
 sub[, dimension := factor(sapply(keep, `[`, 2)[match(split, sapply(keep, `[`, 1))], levels = sapply(keep, `[`, 2))]
 sub[, group := gsub("−", "-", gsub("e-2", "e-2", group))]
 sub <- sub[order(dimension, -level)]
@@ -43,8 +45,8 @@ g <- ggplot(sub, aes(x = estimate, y = row)) +
   theme(axis.text.y = element_text(size = 12, colour = INK), axis.line.y = element_blank(), axis.ticks.y = element_blank(),
         strip.placement = "outside", strip.text.y.left = element_text(size = 11.5, angle = 0, hjust = 1, colour = MUTED),
         panel.spacing.y = unit(0.35, "lines"), axis.title.x = element_text(size = 12.5))
-ggsave(file.path(out_dir, "het_ties.pdf"), g, width = 10, height = 3.4, bg = "white", device = "pdf")
-ggsave(file.path(out_dir, "het_ties.png"), g, width = 10, height = 3.4, dpi = 250, bg = "white")
+ggsave(file.path(out_dir, "het_ties.pdf"), g, width = 10, height = 4.0, bg = "white", device = "pdf")
+ggsave(file.path(out_dir, "het_ties.png"), g, width = 10, height = 4.0, dpi = 250, bg = "white")
 
 f2 <- function(x) { s <- formatC(abs(x), format = "f", digits = 2); ifelse(x < 0, paste0("$-$", s), s) }
 mac <- function(n, v) sprintf("\\newcommand{\\%s}{%s}", n, v)
