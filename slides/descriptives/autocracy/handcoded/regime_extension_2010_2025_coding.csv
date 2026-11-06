@@ -1,0 +1,58 @@
+gwf_casename,status_2025,breakdown_date,breakdown_event,confidence,alternative_date,alternative_coding,source
+Afghanistan 09-NA,broke_down,2021-08-15,insurgent takeover,medium,2014-09-29,Breakdown 2014-09-29 if Ghani's disputed election and US-brokered unity government are read as a new leadership group,"Taliban entered Kabul and President Ghani fled, 15 Aug 2021 (Reuters, BBC)"
+Algeria 92-NA,survived,,,medium,2019-04-02,Breakdown 2019-04-02 if Bouteflika's forced resignation is read as the fall of the ruling group,Hirak protests and army ultimatum forced Bouteflika out 2 Apr 2019; the same military-backed establishment ran the Dec 2019 election won by ex-PM Tebboune (Reuters)
+Angola 75-NA,survived,,,high,,,MPLA rule continued; dos Santos handed over to MPLA candidate Lourenço 26 Sep 2017 (BBC)
+Armenia 98-NA,broke_down,2018-04-23,popular uprising,high,,,PM Serzh Sargsyan resigned after mass protests 23 Apr 2018; opposition leader Pashinyan elected PM 8 May 2018 (Reuters)
+Azerbaijan 93-NA,survived,,,high,,,Ilham Aliyev in power throughout (Reuters)
+Belarus 94-NA,survived,,,high,,,Lukashenko in power throughout; 2020 protests suppressed (Reuters)
+Botswana 66-NA,broke_down,2024-10-30,incumbent party lost election,high,2024-11-08,Date 2024-11-08 (Boko sworn in) instead of the election date,BDP lost the 30 Oct 2024 general election after 58 years; Duma Boko (UDC) sworn in 8 Nov 2024 (Reuters)
+Burkina Faso 87-NA,broke_down,2014-10-31,popular uprising,high,,,"Compaoré resigned and fled after mass protests against a term-limit change, 31 Oct 2014; military took over (BBC; Archigos 4.1)"
+Cambodia 79-NA,survived,,,high,,,CPP rule continued; Hun Sen handed the premiership to his son Hun Manet 22 Aug 2023 (Reuters)
+Cameroon 83-NA,survived,,,high,,,Biya in power throughout; re-elected Oct 2025 (Reuters)
+Cen African Rep 03-NA,broke_down,2013-03-24,insurgent takeover,high,,,"Séléka rebels seized Bangui and Bozizé fled, 24 Mar 2013 (BBC; Archigos 4.1)"
+Chad 90-NA,survived,,,low,2021-04-20,Breakdown 2021-04-20 if the military council's seizure of power (constitution suspended) is read as a new ruling group; Bjørnskov-Rode v7.1 record no successful coup in Chad 2011-2025,Idriss Déby killed fighting rebels 20 Apr 2021; a council of Déby-loyal generals led by his son Mahamat took power and Mahamat won the 2024 election (Reuters)
+China 49-NA,survived,,,high,,,CCP rule continued (Reuters)
+Congo-Brz 97-NA,survived,,,high,,,Sassou Nguesso in power throughout (Reuters)
+Congo/Zaire 97-NA,broke_down,2019-01-24,incumbent group lost election,medium,2020-12-06,"Breakdown 2020-12-06, when Tshisekedi ended the coalition with Kabila's FCC (which had kept parliament)",Kabila's candidate lost the disputed 30 Dec 2018 election; opposition leader Félix Tshisekedi inaugurated 24 Jan 2019 (Reuters)
+Cuba 59-NA,survived,,,high,,,PCC rule continued; Raúl Castro handed the presidency (2018) and party leadership (2021) to Díaz-Canel (Reuters)
+Egypt 52-NA,broke_down,2011-02-11,popular uprising,high,,,"Mubarak resigned under mass protests 11 Feb 2011; SCAF interim, then Morsi elected 2012 (Reuters; Archigos 4.1)"
+Eritrea 93-NA,survived,,,high,,,Isaias Afwerki in power throughout (Reuters)
+Ethiopia 91-NA,survived,,,low,2018-04-02,"Breakdown 2018-04-02 (Abiy) or 2019-12-01 (EPRDF dissolved into the Prosperity Party, TPLF excluded)",EPRDF chose Abiy Ahmed after Hailemariam resigned (PM 2 Apr 2018); Abiy merged the EPRDF into the Prosperity Party 1 Dec 2019 and kept power (Reuters)
+Gabon 60-NA,broke_down,2023-08-30,coup,high,,,"Republican Guard officers ousted Ali Bongo after the disputed Aug 2023 election, 30 Aug 2023 (Reuters)"
+Gambia 94-NA,broke_down,2017-01-21,incumbent lost election,high,2016-12-01,Date 2016-12-01 (election day),Jammeh lost the 1 Dec 2016 election and left the country under ECOWAS military pressure 21 Jan 2017 (BBC)
+Iran 79-NA,survived,,,high,,,Islamic Republic continued (Reuters)
+Ivory Coast 00-NA,broke_down,2011-04-11,civil war / foreign-backed removal,high,,,"Gbagbo, who refused to concede the Nov 2010 run-off, captured by Ouattara forces with French and UN support 11 Apr 2011 (Reuters; Archigos 4.1)"
+Jordan 46-NA,survived,,,high,,,Hashemite monarchy continued (Reuters)
+Kazakhstan 91-NA,survived,,,medium,2022-01-05,"Breakdown 2022-01-05, when Tokayev removed Nazarbayev as Security Council chair during the January 2022 unrest",Nazarbayev resigned 20 Mar 2019 and handed power to his pick Tokayev; same regime institutions after the 2022 unrest (Reuters)
+Korea North 48-NA,survived,,,high,,,Kim dynasty and WPK rule continued (Reuters)
+Kuwait 61-NA,survived,,,high,,,Al-Sabah monarchy continued; parliament suspended May 2024 (Reuters)
+Laos 75-NA,survived,,,high,,,LPRP rule continued (Reuters)
+Libya 69-NA,broke_down,2011-08-23,insurgent takeover (foreign-backed),high,,,"NATO-backed rebels took Tripoli and Qaddafi's compound, 23 Aug 2011; Qaddafi killed 20 Oct 2011 (Reuters; Archigos 4.1)"
+Madagascar 09-NA,broke_down,2014-01-25,transitional regime ended with elections,medium,,Continuation if Hery Rajaonarimampianina (Rajoelina's finance minister and proxy candidate) is read as the same group,SADC-brokered elections of 2013; Hery Rajaonarimampianina inaugurated 25 Jan 2014 and split from Rajoelina (BBC; Archigos 4.1)
+Malaysia 57-NA,broke_down,2018-05-09,incumbent coalition lost election,high,,,Barisan Nasional lost the 9 May 2018 general election; Mahathir (Pakatan Harapan) sworn in 10 May 2018 (Reuters)
+Mauritania 08-NA,survived,,,medium,2019-08-01,Breakdown 2019-08-01 if the handover is read as a new group,"Aziz handed over to his ally and former defense minister Ghazouani, elected 2019, inaugurated 1 Aug 2019 (Reuters)"
+Morocco 56-NA,survived,,,high,,,Alaouite monarchy continued (Reuters)
+Mozambique 75-NA,survived,,,high,,,Frelimo rule continued; Chapo inaugurated 15 Jan 2025 (Reuters)
+Myanmar 88-NA,broke_down,2016-03-30,democratization,medium,2011-03-30,"Breakdown 2011-03-30, when the SPDC junta dissolved and handed power to the USDP-led government of ex-general Thein Sein",NLD government (President Htin Kyaw) took office 30 Mar 2016 after the Nov 2015 election (Reuters)
+Namibia 90-NA,survived,,,high,,,SWAPO rule continued; Nandi-Ndaitwah inaugurated 21 Mar 2025 (Reuters)
+Oman 41-NA,survived,,,high,,,Al Said monarchy continued; Sultan Haitham succeeded Qaboos 11 Jan 2020 (Reuters)
+Russia 93-NA,survived,,,high,,,Putin in power throughout (Reuters)
+Rwanda 94-NA,survived,,,high,,,RPF and Kagame in power throughout (Reuters)
+Saudi Arabia 27-NA,survived,,,high,,,Al Saud monarchy continued; King Salman since 23 Jan 2015 (Reuters)
+Singapore 65-NA,survived,,,high,,,PAP rule continued; Lawrence Wong PM 15 May 2024 (Reuters)
+Sudan 89-NA,broke_down,2019-04-11,coup amid mass protests,high,,,"Military ousted Bashir after months of protests, 11 Apr 2019 (Reuters)"
+Swaziland 68-NA,survived,,,high,,,Mswati III in power throughout (Reuters)
+Syria 63-NA,broke_down,2024-12-08,insurgent takeover,high,,,"HTS-led rebels took Damascus and Assad fled to Russia, 8 Dec 2024 (Reuters)"
+Tajikistan 91-NA,survived,,,high,,,Rahmon in power throughout (Reuters)
+Tanzania 64-NA,survived,,,high,,,CCM rule continued (Reuters)
+Togo 63-NA,survived,,,high,,,Gnassingbé family rule continued; 2024 constitution made Faure Gnassingbé President of the Council of Ministers (Reuters)
+Tunisia 56-NA,broke_down,2011-01-14,popular uprising,high,,,"Ben Ali fled after mass protests, 14 Jan 2011 (Reuters; Archigos 4.1)"
+Turkmenistan 91-NA,survived,,,high,,,Gurbanguly Berdimuhamedov handed the presidency to his son Serdar 19 Mar 2022 (Reuters)
+Uganda 86-NA,survived,,,high,,,Museveni in power throughout (Reuters)
+United Arab Emirates 71-NA,survived,,,high,,,Federation of monarchies continued; Mohamed bin Zayed president 14 May 2022 (Reuters)
+Uzbekistan 91-NA,survived,,,high,,,Karimov died 2 Sep 2016; PM Mirziyoyev succeeded within the regime (Reuters)
+Venezuela 05-NA,survived,,,high,,,Chávez died 5 Mar 2013; his designated successor Maduro kept power (Reuters)
+Vietnam 54-NA,survived,,,high,,,CPV rule continued (Reuters)
+Yemen 78-NA,broke_down,2012-02-27,popular uprising and negotiated exit,medium,2015-01-22,Continuation under Saleh's vice-president Hadi until the Houthi takeover (Hadi resigned 22 Jan 2015),"Saleh handed power to VP Hadi under the GCC deal after the 2011 uprising, 27 Feb 2012 (Reuters; Archigos 4.1)"
+Zambia 96-NA,broke_down,2011-09-20,incumbent party lost election,high,,,MMD lost the 20 Sep 2011 election; Michael Sata (PF) sworn in 23 Sep 2011 (Reuters; Archigos 4.1)
+Zimbabwe 80-NA,survived,,,medium,2017-11-21,Breakdown 2017-11-21: Bjørnskov-Rode v7.1 record a successful coup in Nov 2017,Military forced Mugabe out 21 Nov 2017; ZANU-PF kept power under his former VP Mnangagwa (Reuters)

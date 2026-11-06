@@ -25,6 +25,9 @@ This repo (`TapadosCode`) **contains code only**. Data, outputs, and literature 
     03-descriptive_stats/        ← visualizations and stats
     04-analysis/                 ← analysis exports (export_candidate_networks.py)
     05-investment/               ← federal public-investment ETL (Azure JSON → real-peso DB)
+    06-land/                     ← land-reform ledger (DOF harvest, Sanderson, PROCEDE)
+  slides/                 ← the seminar deck's code: every figure, table and number (slides/README.md)
+  research/slides/        ← the deck itself (Overleaf-synced git repo, not in this repo)
 ```
 
 ## Path configuration
@@ -46,7 +49,7 @@ Never hardcode absolute paths — always use constants from `config.py`:
 | `00-preprocess/02_parse_biographies.py` | Parses raw text into structured CSV using field markers a–l | txt → `biographies.csv` |
 | `00-preprocess/03_fix_person_names.py` | Repairs corrupted person names (death-date fragments / name bleed) in place, recovering them from `biographies_full.txt` | `biographies_corrected.csv` → `biographies_corrected.csv` |
 | `00-preprocess/03b_split_merged_biographies.py` | Recovers biographies that 02 merged into the previous entry (02 starts an entry only at "a—"; entries with unknown birth date start at "b—"/"c—", and OCR sometimes reads "a—" as "A-"), and repairs the host fields they overwrote. Splits at field restarts after "l—", validates names against the raw text, repairs a host column only if it still holds the overwrite (manual edits kept), APPENDS recovered entries at the end (no person_id shifts). Idempotent. 67 entries recovered, 35 hosts had personal_info overwritten (e.g. General Henríquez Guzmán carried Jorge Heredia Ferráez's 1968 posts) | `biographies_corrected.csv` → same (in place) + `biography_repairs.csv` |
-| `00-preprocess/04_parse_positions.py` | Extracts state/org/dates/title; assigns `person_id`; cleans names (no accents, no parens) | `biographies_corrected.csv` → `parsed_positions.csv` (15K+ rows) |
+| `00-preprocess/04_parse_positions.py` | Extracts state/org/dates/title; assigns `person_id`; cleans names (no accents, no parens). One record per date range when Camp lists several spells of a post ("head, Federal District, 1952–1958, 1958–1964, 1964–1966"): the later ranges are appended at the end of the file, so earlier record_ids and person_ids do not move (1,103 records added on 2026-10-20; before, 619 records of 509 people kept only their first range) | `biographies_corrected.csv` → `parsed_positions.csv` (15K+ rows) |
 | `00-preprocess/05_*.py` | One script per position type (education, govt, party, labor, public, birthplace) | `parsed_positions.csv` → specialized CSVs |
 | `01-clean/05?_*_clean.py` | Post-processing cleaners, one per position type. `05e_govt_positions_clean.py` Fix 9 recovers `organization` from `role_text` when it was never structured out (~15%→12% of dated govt records left without an institution) | specialized CSVs → `clean_positions/*.csv` |
 | `00-preprocess/05_slate_verdicts.py` | Apply the slate rule (≥2 independent qualifying sources counted by source family; in the party at e−2; Arts. 82–83; alive at the destape) to the 1946–1982 source audits. Run before `05_match_corcholatas.py` | `candidates/slate_audit/audit_*_sources.csv` → `candidates/slate_verdicts.csv` |
@@ -73,7 +76,7 @@ Never hardcode absolute paths — always use constants from `config.py`:
 | `05-investment/10_build_agency_investment_panel.py` | Agency × year panel 1925–2003, continuous. One source table per year × block (most recent edition); `agency_key` + `lineage` crosswalk across renamings; blocks `dependencias` (secretarías' own investment: ≤1983 and 1998–2003), `paraestatal` (entity level) and `ramo_sector` (1984–98, sector view that already contains parastatals — never add to `paraestatal`); nominal, real 1960 pesos, share of block-year total. 1964–69 come from 12_* with `measure = imputed_from_authorized` (+ `authorized_mn_new_pesos`, `execution_rate`, `share_of_year_total_authorized` as the rate-free robustness) | → `investment/agency_investment_panel.csv` |
 | `05-investment/11_extract_authorized_agency_investment_1964_1969.py` | AUTHORIZED / programmed investment by agency 1964–1970 from the two scanned Secretaría de la Presidencia books (`federal_investment_1964.pdf` = IPF 1964–66, Cuadros 1/6/12; `federal_investment_1965_1970.pdf`, Cuadros 9–15 and annex I) + programmed vs REALIZED by purpose (Cuadros 1, 16). Azure OCR as reader 1, gpt-5.5 as reader 2 on page crops, gpt-5.4 breaks ties; every table balanced, the two printings agree cell by cell for 1964–66, each entity's 1965–70 sum equals Cuadro 9; manual fixes listed with printed evidence | books + JSON → `investment/agency_investment_authorized_1964_1969_long.csv`, `_validation.csv`, `investment_purpose_programmed_realized_1964_1970.csv` |
 | `05-investment/12_impute_realized_agency_investment_1964_1969.py` | Execution rates (realized / programmed) by purpose and year from the 1965–70 book (national 0.80, 0.75, 0.96, 0.95, 0.96); each agency mapped to its purpose (`PURPOSE_MAP`); realized 1965–69 = authorized × purpose rate, scaled to the printed realized total; 1964 = authorized level (INEGI convention, no realized figure exists). Checks: rate stability, leave-one-year-out (cross-year purpose patterns do not transfer → none applied), 1970 agency-level comparison, purpose-coverage of the map, discontinuity scan 1963–70 with the documented outlier rule (`OUTLIER_CORRECTIONS`: IMSS 1964). See `investment/README_1964_1969.md` | → `investment/execution_rates.csv`, `execution_rates_checks.csv`, `agency_investment_imputed_1964_1969_long.csv` |
-| `05-investment/13_plot_agency_series.py` | Slide figures from the agency panel: shares of the largest agencies 1925–2003 with the imputed stretch shaded (`investment_series`, copied to the deck's figures) and total real investment 1959–2003 (`investment_series_total`, sanity) | → `output/slides/investment_series*.pdf/.png` |
+| `slides/descriptives/plot_agency_series.py` | Slide figures from the agency panel: shares of the largest agencies 1925–2003 with the imputed stretch shaded (`investment_series`, the deck's figure) and total real investment 1959–2003 (`investment_series_total`, sanity) | → `output/slides/descriptives/investment_series*.pdf/.png` |
 | `06-land/01_build_ejido_geodata.py` | Clean ejido geodata from the RAN/PROCEDE shapefiles (cut 31 Dec 2006; raw files shared by Horacio Larreguy, outside the project Dropbox, path `config.RAN_SHAPEFILES_DIR`): one multipolygon per núcleo agrario (32,053 núcleos, 30,497 with polygon) + census-2000 localities inside núcleos with núcleo keys. PROCEDE map only: no land-reform resolution dates (those come from Sanderson / DOF) | RAN shapefiles → `land_reform/ejidos_procede_2006.gpkg`, `_attributes.csv`, `localities_2000_in_ejidos.csv`, `README.md` |
 | `06-land/02_harvest_dof_agrarian.py` | Harvest the Diario Oficial through SEGOB's public SIDOF API: the daily index of every DOF note 1916–1992 (28,125 days, 396K notes, 181K agrarian) and the full text of every agrarian note 1973–1992 (no HTML exists before 1973). Resumable modes `index`, `fulltext`, `compact`, `status`; raw JSONL (gz by year) under `data/_web_discovery_2026-10-13/dof_sidof_*` | SIDOF API → raw daily index + full texts |
 | `06-land/03_parse_dof_agrarian.py` | Parse agrarian DOF titles (action type, state, village, municipality) and the 1975–92 full texts (signing date, signer, hectares, beneficiaries, grant/denial; expropriation decrees: agency, indemnity). Hyphenless hectare amounts of 1979–83 rebuilt from the amount in words (digit/word disagreements flagged). The notes table stays 03's raw parse: 06 re-reads the land grants and 04 applies its corrections | raw → `land_reform/dof_agrarian_index_1916_1992.csv`, `dof_agrarian_notes_1975_1992.csv` |
@@ -124,7 +127,7 @@ These files are never in git — they live only in Dropbox and are read/written 
 ### Master positions dataset
 | File | Description |
 |---|---|
-| `parsed_positions.csv` | **Central dataset.** 45,677 rows × 14 cols. One row per position record per person. Columns: record_id, person_id, person_name, field_type (education/govt/party/labor/public/other/birthplace), role_text_raw, role_text, position_title, organization, state, year_start, year_end, date_precision |
+| `parsed_positions.csv` | **Central dataset.** 47,807 rows × 14 cols. One row per position record per person. Columns: record_id, person_id, person_name, field_type (education/govt/party/labor/public/other/birthplace), role_text_raw, role_text, position_title, organization, state, year_start, year_end, date_precision |
 
 ### Specialized position datasets (long format)
 | File | Rows | Key columns |
@@ -261,7 +264,7 @@ authorized budgets (`measure = imputed_from_authorized`; rule, validation and ca
 `investment/README_1964_1969.md`); `share_of_year_total_authorized` is the rate-free robustness for those years.
 One definitional outlier (IMSS 1964, printed as realized incl. housing) is replaced by its mean share in 1963 and
 1966 (`measure = imputed_outlier`, printed figure in `value_printed_mn_new_pesos`; rule in 12_* `OUTLIER_CORRECTIONS`).
-1970 parastatals are SPP's authorized column (`measure = authorized`). `budget_outcome.R` still interpolates 1964–69
+1970 parastatals are SPP's authorized column (`measure = authorized`). `slides/analysis/budget_outcome.R` still interpolates 1964–69
 from 1963 and 1970 and must drop that block now that the panel has those years.
 
 ### Federal public investment (`data/investment/`)
@@ -277,6 +280,27 @@ de pesos*; `03` deflates to real 1960 pesos.
 | `federal_investment_budget_reference.csv` | Catalog + real total/annual investment, `budget_tier` (1–5), `govt_rank_name` crosswalk + `match_confidence` |
 | `price_deflator_mexico.csv` | CPI deflator (1960=100), inflation %, WPI, 1959–2000 |
 | `federal_investment_wide_<year>.csv`, `federal_investment_validation.csv` | Per-year pivots; subtotal-vs-total QA (~97.5% reconcile) |
+
+## The seminar deck (`slides/`)
+
+`research/slides/3rdYearPresentation/main.tex` (the Overleaf repo `quinoba/3rdYearPaper`, branch `main`) reads only
+files that `slides/` produces, plus five static images. `bash slides/run_all.sh` rebuilds everything from
+`TapadosPRI/data` into `TapadosPRI/output/slides` (`analysis/`, `benchmarks/`, `descriptives/`, `deck/`, `logs/`) and
+copies the deck files into the Overleaf repo; `python3 slides/deck/collect_deck_files.py --check` compares a rebuild
+with the deck's current files. `slides/README.md` maps every slide to its deck file, output path and script.
+
+- The main design: `slides/analysis/estimate_main.R` (sample, ties, weights; sourced by every result script),
+  `design_tools.R` (estimator, Ferman–Pinto bootstrap, house style), `rp_setup.R` (reward/penalty against the
+  unaligned), specification in `slides/analysis/MAIN_SPEC.md`. Environment: `TAPADOS_TIE_CUTOFF=2`,
+  `TAPADOS_INCLUSION=all`, `TAPADOS_SUCCESSION_WEIGHTS=person`, outputs in `TAPADOS_MAIN_OUTPUT_DIR`
+  (`output/slides/analysis`), benchmarks in `TAPADOS_BENCH_DIR` (`output/slides/benchmarks`).
+- Data the deck depends on beyond the pipeline above: `data/rank/position_tiers.csv` (the title-corrected scale of
+  `02-rank/02_position_tiers.py`, 26 Oct 2026), `data/structural/death_years.csv` and `data/verified_death_years.csv`
+  (`slides/data/`; the eligibility rule drops politicians who had died before the designation year).
+- Figure axes are pinned to the 27 Oct 2026 estimates (`slides/reference/figure_geometry`), so a refresh of the
+  numbers keeps every frame.
+- Exploratory analyses that never reached the deck were removed from the tree on 6 Nov 2026 and live in git history
+  (commit `51b41e2`, `code/04-analysis/main_direct_tie/`).
 
 ## Git workflow
 
