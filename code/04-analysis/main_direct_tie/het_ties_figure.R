@@ -21,6 +21,8 @@ sub <- ht[row_type == "subgroup" & !is.na(estimate)]
 keep <- list(c("tie_mix", "Ties to the contender"), c("tie_stage", "When they first\nworked together"))   # 6 Nov 2026: two blocks
 sub <- sub[split %in% sapply(keep, `[`, 1)]
 sub <- sub[group != "Work and school ties"]   # 18 followers, interval wider than the axis; the bullet reports them
+sub[group == "First worked together in the first five years of the career", group := "Met in the follower's first five years"]
+sub[group == "First worked together later", group := "Met later in the career"]
 sub[, dimension := factor(sapply(keep, `[`, 2)[match(split, sapply(keep, `[`, 1))], levels = sapply(keep, `[`, 2))]
 sub[, group := gsub("−", "-", gsub("e-2", "e-2", group))]
 sub <- sub[order(dimension, -level)]
@@ -37,7 +39,7 @@ g <- ggplot(sub, aes(x = estimate, y = row)) +
   scale_y_discrete(labels = setNames(sub$group, sub$row)) +
   scale_x_continuous(limits = c(-1.6, 4.2), breaks = seq(-1, 3, 1)) +
   facet_grid(dimension ~ ., scales = "free_y", space = "free_y", switch = "y") +
-  labs(x = "Premium of a tie to the designee, rank positions, by subgroup", y = NULL) + theme_paper(15) +
+  labs(x = "Premium of a tie to the designee, rank positions", y = NULL) + theme_paper(15) +
   theme(axis.text.y = element_text(size = 12, colour = INK), axis.line.y = element_blank(), axis.ticks.y = element_blank(),
         strip.placement = "outside", strip.text.y.left = element_text(size = 11.5, angle = 0, hjust = 1, colour = MUTED),
         panel.spacing.y = unit(0.35, "lines"), axis.title.x = element_text(size = 12.5))
