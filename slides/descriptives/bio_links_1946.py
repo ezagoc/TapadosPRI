@@ -5,11 +5,13 @@ Ezequiel Padilla, one pyramid each: portrait, his biography, and below it the tw
 men Aleman appointed in December 1946, which the slide does not say: it comes before the outcome is revealed). The phrases that generate each
 position-based tie are highlighted: same school and cohort (yellow), same office and years (blue). Pages are located
 by the entry heading, phrases by text search; the crops are whole text lines of the book's column.
-Output: OUTPUT_DIR/slides/bio_links_1946.{png,pdf}
+Output: OUTPUT_DIR/slides/descriptives/bio_links_1946.{png,pdf} (the deck's figure of the same name). The two portraits are read
+from the deck's static images (research/slides/3rdYearPresentation/figures/1946_portrait_*.png).
+Run: python3 slides/descriptives/bio_links_1946.py
 """
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'code'))   # the repository's code/ (config.py)
 from config import BIOGRAPHIES_DIR, OUTPUT_DIR  # noqa: E402
 import pymupdf, io
 from PIL import Image, ImageDraw
@@ -18,7 +20,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 
 PDF = next(BIOGRAPHIES_DIR.glob('Mexican_Political_Biographies_1935-2009*.pdf'))
-OUT = OUTPUT_DIR / 'slides'; OUT.mkdir(parents=True, exist_ok=True)
+OUT = OUTPUT_DIR / 'slides' / 'descriptives'; OUT.mkdir(parents=True, exist_ok=True)
 PORTRAITS = Path(__file__).resolve().parents[2] / 'research' / 'slides' / '3rdYearPresentation' / 'figures'
 doc = pymupdf.open(PDF)
 YEL, BLU = (1.0, 0.86, 0.25), (0.50, 0.74, 1.0)

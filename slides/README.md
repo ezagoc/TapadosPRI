@@ -23,7 +23,7 @@ never move a frame on a slide.
 | `analysis/` | The main design and every result slide. `estimate_main.R` builds the sample, the ties and the weights and is sourced by every other script; `design_tools.R` holds the estimator, the Ferman-Pinto bootstrap and the house style; `rp_setup.R` the reward/penalty design against the unaligned. `MAIN_SPEC.md` is the written specification. |
 | `benchmarks/` | The alternative allocation rules (purge, promotions only, proportional sharing, career merit): `prepare.R` reuses the design, `prepare_calendar.R` and `assignments.py` build the synthetic careers, `inference.R` re-estimates the design on them, `figures.py` draws the figure. |
 | `deck/` | Tables built for the deck from saved estimates (`build_rank_description.py`, `build_by_succession_table.py`), the headline macros (`headline_macros.py`) and `collect_deck_files.py`, which copies every deck file to `output/slides/deck` and into the Overleaf repository. |
-| `descriptives/` | The motivation and data slides: the PRI's presidential vote and land reform by president (`viz_appendix_descriptives.py`), federal investment by agency (`plot_agency_series.py`), and the cross-national autocracy benchmark (`autocracy/`, with its two hand-coded extension files). |
+| `descriptives/` | The motivation and data slides: the PRI's presidential vote and land reform by president (`viz_appendix_descriptives.py`), federal investment by agency (`plot_agency_series.py`), and the cross-national autocracy benchmark (`autocracy/`, with its two hand-coded extension files), and the 1946 biographies figure (`bio_links_1946.py`). |
 | `reference/figure_geometry/` | The axis ranges of the deck's event-study figures, frozen on the estimates of 27 October 2026 (copies of that run's CSVs; `design_tools.R`, `figures.R`). |
 
 Outputs under `TapadosPRI/output/slides`:
@@ -45,6 +45,7 @@ list drives `deck/collect_deck_files.py`.
 | Slides | Deck file | Output | Script |
 |---|---|---|---|
 | Motivation: how unusual was the PRI | `autocracy_survival_successions.pdf` | `descriptives/` | `descriptives/autocracy/06_successions_survival.R` (tables from `01_build_tables.R`, `03_extend_to_2025.R`) |
+| The 1946 succession: ties read off the biographies | `bio_links_1946.pdf` | `descriptives/` | `descriptives/bio_links_1946.py` (crops of Camp 2011, phrases highlighted) |
 | The 1946 succession | `followers_1946_aleman.tex`, `followers_1946_padilla_top12.tex`, `followers_1946_macros.tex` | `analysis/tables/` | `analysis/followers_table_1946.py` |
 | Data: sample, ladder, balance | `sample.tex`, `ladder_shares.tex`, `balance_combined.tex` | `analysis/tables/` | `deck/build_rank_description.py`, `analysis/ladder_shares.R`, `analysis/balance_combined.R` |
 | Data appendix: vote, investment, land | `pri_vote.pdf`, `investment_series.pdf`, `land_by_president.pdf` | `descriptives/` | `descriptives/viz_appendix_descriptives.py`, `descriptives/plot_agency_series.py` |

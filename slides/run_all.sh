@@ -72,6 +72,7 @@ STEPS=(
   "headline_macros|$PY $SLIDES/deck/headline_macros.py"
   # ---- descriptive figures (slides/descriptives)
   "descriptives|$PY -I $SLIDES/descriptives/viz_appendix_descriptives.py"
+  "bio_links_1946|$PY $SLIDES/descriptives/bio_links_1946.py"
   "investment_series|$PY $SLIDES/descriptives/plot_agency_series.py"
   "autocracy_tables|Rscript $SLIDES/descriptives/autocracy/01_build_tables.R"
   "autocracy_extension|Rscript $SLIDES/descriptives/autocracy/03_extend_to_2025.R"

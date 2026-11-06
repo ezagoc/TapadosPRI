@@ -40,6 +40,7 @@ DECK_FILES = {
     "figures/md_randomization.pdf": "analysis/randomization_inference.pdf",             # randomization_inference.R
     "figures/benchmarks_all_comparisons.pdf": "benchmarks/final/02_all_comparisons.pdf",   # slides/benchmarks/figures.py
     # ---- descriptive figures (slides/descriptives)
+    "figures/bio_links_1946.pdf": "descriptives/bio_links_1946.pdf",                    # bio_links_1946.py
     "figures/pri_vote.pdf": "descriptives/pri_vote.pdf",                                # viz_appendix_descriptives.py
     "figures/land_by_president.pdf": "descriptives/land_by_president.pdf",              # viz_appendix_descriptives.py
     "figures/investment_series.pdf": "descriptives/investment_series.pdf",              # plot_agency_series.py
