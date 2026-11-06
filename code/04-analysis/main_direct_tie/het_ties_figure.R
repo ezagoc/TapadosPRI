@@ -18,9 +18,9 @@ theme_paper <- function(base = 15) theme_minimal(base_size = base, base_family =
 
 ht <- fread(file.path(out_dir, "heterogeneity.csv"))
 sub <- ht[row_type == "subgroup" & !is.na(estimate)]
-keep <- list(c("tie_work_any", "Work or school"), c("tie_type", "Earliest tie"), c("tie_age_cowork", "Age of the work tie"),
-             c("tie_strength", "Size of the focus"))
+keep <- list(c("tie_mix", "Ties to the contender"), c("tie_stage", "When they first\nworked together"))   # 6 Nov 2026: two blocks
 sub <- sub[split %in% sapply(keep, `[`, 1)]
+sub <- sub[group != "Work and school ties"]   # 18 followers, interval wider than the axis; the bullet reports them
 sub[, dimension := factor(sapply(keep, `[`, 2)[match(split, sapply(keep, `[`, 1))], levels = sapply(keep, `[`, 2))]
 sub[, group := gsub("−", "-", gsub("e-2", "e-2", group))]
 sub <- sub[order(dimension, -level)]
@@ -41,8 +41,8 @@ g <- ggplot(sub, aes(x = estimate, y = row)) +
   theme(axis.text.y = element_text(size = 12, colour = INK), axis.line.y = element_blank(), axis.ticks.y = element_blank(),
         strip.placement = "outside", strip.text.y.left = element_text(size = 11.5, angle = 0, hjust = 1, colour = MUTED),
         panel.spacing.y = unit(0.35, "lines"), axis.title.x = element_text(size = 12.5))
-ggsave(file.path(out_dir, "het_ties.pdf"), g, width = 10, height = 4.4, bg = "white", device = "pdf")
-ggsave(file.path(out_dir, "het_ties.png"), g, width = 10, height = 4.4, dpi = 250, bg = "white")
+ggsave(file.path(out_dir, "het_ties.pdf"), g, width = 10, height = 3.4, bg = "white", device = "pdf")
+ggsave(file.path(out_dir, "het_ties.png"), g, width = 10, height = 3.4, dpi = 250, bg = "white")
 
 f2 <- function(x) { s <- formatC(abs(x), format = "f", digits = 2); ifelse(x < 0, paste0("$-$", s), s) }
 mac <- function(n, v) sprintf("\\newcommand{\\%s}{%s}", n, v)
@@ -59,6 +59,13 @@ writeLines(c("% het_ties_macros.tex (het_ties_figure.R, from heterogeneity.csv).
   mac("HETearliestWorkEst", f2(cwk$estimate)), mac("HETearliestEduEst", f2(ced$estimate)), mac("HETearliestEduLo", f2(ced$ci_lower)), mac("HETearliestEduHi", f2(ced$ci_upper)),
   mac("HETrecentEst", f2(rec$estimate)), mac("HEToldEst", f2(old$estimate)), mac("HETsmallEst", f2(sm$estimate)), mac("HETlargeEst", f2(lg$estimate)),
   mac("HETsplits", uniqueN(ht$split)),
+  mac("HETworkOnlyEst", f2(row_of("tie_mix", "Work ties only")$estimate)), mac("HETworkOnlyLo", f2(row_of("tie_mix", "Work ties only")$ci_lower)), mac("HETworkOnlyHi", f2(row_of("tie_mix", "Work ties only")$ci_upper)), mac("HETworkOnlyN", format(row_of("tie_mix", "Work ties only")$n, big.mark = ",")),
+  mac("HETschoolOnlyEst", f2(row_of("tie_mix", "School ties only")$estimate)), mac("HETschoolOnlyLo", f2(row_of("tie_mix", "School ties only")$ci_lower)), mac("HETschoolOnlyHi", f2(row_of("tie_mix", "School ties only")$ci_upper)), mac("HETschoolOnlyN", format(row_of("tie_mix", "School ties only")$n, big.mark = ",")),
+  mac("HETbothEst", f2(row_of("tie_mix", "Work and school ties")$estimate)), mac("HETbothLo", f2(row_of("tie_mix", "Work and school ties")$ci_lower)), mac("HETbothHi", f2(row_of("tie_mix", "Work and school ties")$ci_upper)), mac("HETbothN", format(row_of("tie_mix", "Work and school ties")$n, big.mark = ",")),
+  mac("HETmixDiff", f2(con_of("tie_mix")$estimate)), mac("HETmixDiffLo", f2(con_of("tie_mix")$ci_lower)), mac("HETmixDiffHi", f2(con_of("tie_mix")$ci_upper)),
+  mac("HETearlyEst", f2(row_of("tie_stage", "First worked together in the first five years of the career")$estimate)), mac("HETearlyLo", f2(row_of("tie_stage", "First worked together in the first five years of the career")$ci_lower)), mac("HETearlyHi", f2(row_of("tie_stage", "First worked together in the first five years of the career")$ci_upper)), mac("HETearlyN", format(row_of("tie_stage", "First worked together in the first five years of the career")$n, big.mark = ",")),
+  mac("HETlaterEst", f2(row_of("tie_stage", "First worked together later")$estimate)), mac("HETlaterLo", f2(row_of("tie_stage", "First worked together later")$ci_lower)), mac("HETlaterHi", f2(row_of("tie_stage", "First worked together later")$ci_upper)), mac("HETlaterN", format(row_of("tie_stage", "First worked together later")$n, big.mark = ",")),
+  mac("HETstageDiff", f2(con_of("tie_stage")$estimate)), mac("HETstageDiffLo", f2(con_of("tie_stage")$ci_lower)), mac("HETstageDiffHi", f2(con_of("tie_stage")$ci_upper)),
   mac("HETbelowSevenEst", f2(row_of("rung7", "Below rank 7")$estimate)), mac("HETbelowSevenLo", f2(row_of("rung7", "Below rank 7")$ci_lower)), mac("HETbelowSevenHi", f2(row_of("rung7", "Below rank 7")$ci_upper)),
   mac("HETsevenPlusEst", f2(row_of("rung7", "Rank 7 or above")$estimate)), mac("HETsevenPlusLo", f2(row_of("rung7", "Rank 7 or above")$ci_lower)), mac("HETsevenPlusHi", f2(row_of("rung7", "Rank 7 or above")$ci_upper)),
   mac("HETsevenDiff", f2(con_of("rung7")$estimate)), mac("HETsevenDiffLo", f2(con_of("rung7")$ci_lower)), mac("HETsevenDiffHi", f2(con_of("rung7")$ci_upper))),

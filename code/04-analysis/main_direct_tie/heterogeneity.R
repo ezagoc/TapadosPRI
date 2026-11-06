@@ -67,6 +67,17 @@ sample[, tie_work_group := fifelse(any_cowork, "Any co-work tie", fifelse(tie_ty
 sample[, tie_age_cowork_group := fifelse(tie_type != "co_work", NA_character_,
                                  fifelse(tie_year >= election - 2L - 8L, "Co-work tie within 8 years of e-2", "Co-work tie formed earlier"))]
 sample[, tie_strength_group := fifelse(min_focus <= 10L, "A tie in a focus of 10 or fewer", "Only larger foci")]
+# (e2) the mix of ties to the contender (work only, school only, both; military or revolution only left out) and, among the
+# followers with a co-work tie, whether the two first worked together early in the follower's ranked career (within its
+# first five years) or later (6 November 2026, the user's request after Shanker's comment on tie types).
+tf2 <- st[, .(any_school = any(edge_type == "co_education"),
+              first_work_year = as.numeric(if (any(edge_type == "co_work")) min(year_start[edge_type == "co_work"]) else NA_real_)), by = .(pid, election)]
+m2 <- match(paste(sample$pid, sample$election), paste(tf2$pid, tf2$election)); stopifnot(!anyNA(m2))
+sample[, `:=`(any_school = tf2$any_school[m2], first_work_year = tf2$first_work_year[m2])]
+cs <- annual[rank >= 1L, .(career_start = min(year)), by = pid]
+sample[, career_start := cs$career_start[match(pid, cs$pid)]]
+sample[, tie_mix_group := fifelse(any_cowork & any_school, "Work and school ties", fifelse(any_cowork, "Work ties only", fifelse(any_school, "School ties only", NA_character_)))]
+sample[, tie_stage_group := fifelse(!any_cowork, NA_character_, fifelse(first_work_year - career_start <= 5L, "First worked together in the first five years of the career", "First worked together later"))]
 # (f) career type: a post in the federal executive branch active in e-5..e-2 (the fed_exec flag of rp_setup.R)
 pt_all <- fread(file.path(data_dir, "rank", "position_tiers.csv"), na.strings = c("", "NA"))
 fedx <- pt_all[dataset == "govt_positions" & !grepl("^state_|^governor|^mayor|city_council|^local", rule) & !is.na(year_start)]
@@ -162,6 +173,11 @@ splits <- list(
   list(id = "tie_age_cowork", short = "within 8 years minus earlier", dimension = "Age of the tie, co-work ties", var = "tie_age_cowork_group",
        levels = c("Co-work tie formed earlier", "Co-work tie within 8 years of e-2"),
        contrast = c("Co-work tie within 8 years of e-2", "Co-work tie formed earlier")),
+  list(id = "tie_mix", short = "work only minus school only", dimension = "Ties to the contender", var = "tie_mix_group",
+       levels = c("School ties only", "Work ties only", "Work and school ties"), contrast = c("Work ties only", "School ties only")),
+  list(id = "tie_stage", short = "early minus later", dimension = "When they first worked together", var = "tie_stage_group",
+       levels = c("First worked together later", "First worked together in the first five years of the career"),
+       contrast = c("First worked together in the first five years of the career", "First worked together later")),
   list(id = "tie_strength", short = "small focus minus larger only", dimension = "Strength of the tie", var = "tie_strength_group",
        levels = c("Only larger foci", "A tie in a focus of 10 or fewer"), contrast = c("A tie in a focus of 10 or fewer", "Only larger foci")),
   list(id = "career", short = "federal executive minus other", dimension = "Career by e-2", var = "career_group",
