@@ -75,6 +75,65 @@ Designee's followers ($D$) and losers' followers ($P$) each against one group of
 
 The reward is +0.7 to +1.2 rungs in every specification. The penalty is small (−0.1 to −0.5), significant only in the main and (a), and temporary: in the event study (`rp_event_study.csv`, `es_reward_punishment.pdf`) the losers' followers dip by 0.24–0.34 rungs from $e$ to $e+4$ and are back at zero by $e+5$; their leads are flat. The designee's followers' leads are slightly negative (−0.37 to +0.03), the source of the small pre-designation gap in the main event study. With every tie, 65% of the comparable unaligned are two steps from the designee; with strong ties, 17%. Reading: $P-N$ is the penalty aimed at a loser's followers beyond what any unaligned politician bears; neither contrast is an absolute effect. Decomposition (`rp_decomposition.csv`, joint draws): reward minus penalty 1.09 [0.54, 1.63] against the §4 estimate 1.15; reward share 74% [37%, 99%], 60% to 90% across specifications.
 
+## The patron's chair (19 October 2026, MAIN_SPEC section 12)
+
+Losers' followers split by their patron's highest rung in $e+1,\ldots,e+2$: kept a top chair (rung 8 or above; 9 patrons, 216 followers, in 1952, 1958, 1976 and 1988) or lost it (36 patrons with followers, 594 followers). Same reweighted unaligned as §11. Cluster-robust and wild score (Webb) intervals coincide.
+
+| Specification | Patron kept a top chair | Patron lost it | Kept − lost, within succession |
+|---|---:|---:|---:|
+| Main | +0.33 [−0.04, +0.69] | −0.42 [−0.73, −0.11] | **+0.62 [+0.16, +1.08]**, wild p .005 |
+| (b) Chair over $e+1,\ldots,e+3$ | +0.29 [−0.07, +0.65] | −0.42 [−0.76, −0.09] | +0.60 [+0.08, +1.11] |
+| (c) Without 1952 / 1958 / 1976 / 1988 | +0.41 / +0.36 / +0.36 / +0.17 | −0.42 / −0.38 / −0.52 / −0.43 | +0.67 / +0.52 / +0.87 / +0.44 [−0.16, +1.04] |
+| (a) Top chair = rung 9, as specified | −0.99 [−1.39, −0.58] | −0.38 [−0.68, −0.09] | −0.78 [−1.22, −0.33] |
+| (a) without 1952 (diagnostic, not prespecified) | +0.43 [+0.03, +0.82] | −0.43 [−0.75, −0.11] | +0.72 [+0.24, +1.20] |
+| (a) followers weighted equally (diagnostic, not prespecified) | +0.36 [−0.05, +0.76] | −0.35 [−0.64, −0.05] | +0.51 [+0.09, +0.92] |
+
+Robustness (a) reverses because at the cabinet threshold the 1952 "kept" group is a single follower (of Bermúdez, −5.2 rungs against the unaligned), who carries a quarter of the equal-succession weight; without 1952 or with follower weights it agrees with the main estimate. By the patron's post in $e+1,\ldots,e+2$ (followers weighted, residuals against the unaligned): cabinet level +0.36 (6 patrons), rung 8 +0.18 (3), no ranked post −0.37 (27), demoted to rungs 1–7 −0.69 (9).
+
+Event study (`chair_split_event_study.csv`, `es_chair_split.pdf`): followers of losers who lost the chair fall by about half a rung in $e+1,\ldots,e+4$ and recover by $e+7$; followers of losers who kept it stay at 0 to +0.27. The kept − lost contrast is +0.72 to +1.06 from $e+1$ on, with leads of +0.15, 0.00 and −0.23 in $e-5,\ldots,e-3$, but +0.56 [+0.10, +1.03] in $e-7$ and −0.22 in $e-1$: followers of losers who would lose the chair were rising in $e-7,\ldots,e-2$ (their patrons rising as contenders), so part of their later fall may be a reversal. Selection: the followers' traits are balanced between the two groups (largest standardized difference 0.20); the patrons who kept a chair were more often in the cabinet at $e-2$ (78% vs 68%), younger (50 vs 54) and had more followers (24 vs 16).
+
+Reading: the losers' followers' penalty is concentrated where the patron lost his chair; where he kept one there is none. The new president chooses which losers keep a chair, so this is the moment the structural model must match conditional on that choice, not a causal effect of the chair.
+
+## Predetermined inclusion in the dictionary (19 October 2026, MAIN_SPEC section 13)
+
+Pool restricted to politicians with a dictionary-qualifying post started by $e-2$ (rung 7 or above, national opposition
+leadership, UNAM/IPN rector or major school director). The sample halves: 121 designee's followers (of 287), 402 losers'
+followers (of 810), 1,290 unaligned in support (of 2,954). Outputs in `output/main_direct_tie/robust_predetermined_inclusion/`.
+
+| Estimate | Full pool | Predetermined inclusion |
+|---|---:|---:|
+| Main window premium (§4–5) | 1.15 [0.46, 1.82] | **0.84 [−0.18, 1.82]** |
+| Event study $e+1$ / $e+2$ / $e+3$ / $e+4$ (§7) | 0.94 / 0.92 / 0.87 / 0.85 | 0.94 / 0.53 / 0.30 / 0.29 |
+| Holds a ranked post (§8, extensive) | +0.10 [−0.02, 0.22] | +0.11 [−0.05, 0.27] |
+| Rank among those in office (§8, intensive) | +0.58 [0.21, 0.95] | +0.01 [−0.83, 0.85] |
+| Reward, designee's followers − unaligned (§11) | +0.80 [0.23, 1.34] | +0.76 [−0.06, 1.54] |
+| Penalty, losers' followers − unaligned (§11) | −0.29 [−0.56, −0.01] | −0.04 [−0.44, 0.37] |
+| Losers' followers, patron kept / lost a top chair (§12) | +0.33 / −0.42 | +0.32 / −0.17 |
+| Kept − lost, within succession (§12) | +0.62 [0.16, 1.08] | +0.43 [−0.37, 1.22] |
+
+The annual margins event study did not run on this pool (the control model is rank-deficient in some years); the window
+margins did. Reading (fixed in §13 before computing): the reward to the designee's followers has the same size among
+politicians already in the dictionary by $e-2$, and the first-year jump is identical (0.94); what shrinks is the penalty to
+the losers' followers (to zero), the persistence after $e+1$ and the rank premium among those in office. The two explanations
+fixed in advance cannot be separated: selection into the dictionary, or a smaller rank premium for politicians already at
+rung 7 or above, who have little room left (the access margin is unchanged, the rank margin vanishes). The main premium is
+27% smaller and no longer significant with half the sample. Both pools are reported with equal prominence.
+
+## Co-optation and credentials (19 October 2026, MAIN_SPEC sections 15-16)
+
+**§15, co-optation (gate passed, weakly).** Within the four successions in which some loser kept a top chair, the kept losers
+had larger camps: exact one-sided p = 0.041 (21,000 within-succession permutations; threat = standardized log(1 + camp)).
+Secondary: no loser who was a general kept a top chair (p = 1.0); governors in camp p = 0.15; with seniority, age and
+runner-up controls the camp coefficient is 1.30 (s.e. 1.04, p = 0.21). Co-optation by opposition-entry regime shows no
+pattern (easy 1 of 3 successions, intermediate 1 of 2, hard 2 of 4). Retention of large-camp losers is consistent with both
+co-opting threats and keeping the most useful (senior) losers.
+
+**§16, credentials (no selection cost).** The §4 premium is the same for followers with and without a graduate degree by
+$e-2$ (1.16 [0.06, 2.30] vs 1.15 [0.40, 1.90]; contrast −0.01 [−1.39, 1.35]), with and without a technical field (contrast
++0.03 [−1.43, 1.50]); smaller but imprecise for foreign graduate degrees (0.47 vs 1.13; contrast +0.66 [−0.93, 2.15]). Among
+top-post holders in $e+1..e+4$, 29% of the designee's followers and 24% of the other holders had a graduate degree (20% among
+the holders of $e-5..e-2$). By the reading fixed in §16, the succession bargain had no selection cost in these measures.
+
 ## What supports the interval, and what does not
 
 There are nine winning networks and 45 nonempty losing networks. Within a succession, the person-weighted controls correspond to roughly 1.9–4.9 equally weighted losing networks. The primary bootstrap resamples **both winner and loser network contributions**, correcting donor residual moments for regression leverage and allowing network variance to depend on effective network size. The fitted variance components are $\widehat A=0$ for common network shocks and $\widehat B=15.226$ for individual noise, and the interval plugs them in as Ferman and Pinto (2019) do, with no inflation factor (the 1.20 widening of the 16 October run was dropped on 17 October). In six simulated scenarios on the observed network layout (`inference_coverage.csv`), its coverage is 96.8% without network shocks, 97.0% with repeated-person correlation, 94.3% with a common network shock $A=1$, and 92.7–93.5% with $A=2$ under normal, heavy-tailed and negatively related networks (Monte Carlo s.e. 0.6–1.2 percentage points). These simulations validate the algorithm **under their assumed error structures**; they cannot establish exchangeability of winner and loser shocks in the historical setting.
@@ -92,3 +151,15 @@ The pre-designation trend check is the event study above; the next design check 
 ## Reproduction
 
 Run the scripts in the order given in [README.md](README.md). Machine-readable source outputs are `main_result.csv`, `succession_contrasts.csv`, `network_contributions.csv`, `sample_flow.csv`, `post_recording.csv`, `inference_coverage.csv`, `network_variance_sensitivity.csv`, and the `event_study*.csv` tables in `TapadosPRI/output/main_direct_tie/` (or the directory set by `TAPADOS_MAIN_OUTPUT_DIR`).
+
+## Additions of 20 October 2026 (after the coauthor meeting; numbers on the current data, main 1.03 [0.31, 1.75])
+
+- **Balance** (`balance_table.R`, `balance_main.csv`): 19 predetermined traits, largest normalized difference 0.16 (military career), mean 0.07, smallest bootstrap p 0.23; pre-trend (change in highest rung from e−9..e−6 to e−5..e−2) −0.14 [−0.66, 0.37], p 0.59; joint test F 3.49, permutation p 0.29 (5,000 relabellings of the designee among the contenders' groups within succession).
+- **Timing placebo** (`placebos.R`, `placebo_timing.csv`): the main contrast with the event moved to e+s, s = −8..+8 (event-study covariates): 0.17, 0.17, 0.03 at s = −8, −7, −6 (joint p 0.83); rising through the overlap to 1.19 at s = 0; 0.06 at +4; −0.63 [−1.27, 0.01] at +6 and −0.75 at +8 (the premium reverses as the patron leaves).
+- **Designee placebo** (`placebo_designee.csv`): every losing contender relabelled as designee, one per succession; pooled estimate at or above 1.03 in 0.0006 of the 7.7 million combinations (one-sided; 20,000 sampled: 0.0004); the actual designee's camp ranks first in 5 of 9 slates; 7 of 54 contenders' camps exceed 1.03 individually (Beteta 1952, Miranda Fonseca 1964, Bracamontes 1976 among the losers).
+- **Followers' followers** (`indirect_ties.R`): unaligned politicians tied by e−2 to followers of one camp only. D2 − P2: all ties −0.47 [−1.30, 0.35] (229 vs 607); strong ties (focus ≤ 10 at both steps) −0.62 [−1.78, 0.38] (151 vs 426); without the single 1940 politician on the designee's side +0.04 [−0.85, 0.88] and +0.09 [−0.59, 0.77]. Against the unaligned: designee's side −0.26 [−1.24, 0.54], losers' side +0.22 [−0.13, 0.55]. Event study flat. 51% of the unaligned pool is within two steps of some camp with any tie, 17% with strong ties.
+- **Camps across successions** (`camp_persistence.R`): of the next designee's exclusive followers at e+4, 5% [1, 11] were the sitting president's followers at e−2 (next losers' benchmark 4%), 9% a loser's, 9% tied to several, 45% unaligned, 32% not yet in the pool; Jaccard 4%; 5 of 8 next designees were themselves tied to the sitting president by e−2 (Díaz Ordaz → Echeverría, 26%, the one camp that passed on).
+- **Heterogeneity** (`heterogeneity.R`, 17 splits): no subgroup contrast distinguishable from zero. Period 1.33 / 0.64 / 0.52 (1940–58, 1964–76, 1982–88), trend −0.22 rungs a decade [−0.78, 0.34]; co-work tie within 8 years of e−2 1.49 [0.49, 2.47] vs 0.32 for older ties (contrast 1.18 [−1.00, 3.25], same sign 5 of 6); co-education-only ties −0.25 vs co-work 1.00 (fragile: −0.49 with the loser model held fixed); career, rung, age, UNAM, ties, posts, prior pool all within ±0.6. Composition drift: economists among the designee's followers 0% (1940) to 42% (1988).
+- **What a rung pays** (`pay_envelope.R`, `pay_ladder.csv`): official pay rises 26% (1927) to 34% (1999) per rung on average from department head to cabinet secretary; cabinet/department head 4.0 (1927) vs 5.8 (1999); at the designee's followers' posts (median: deputy director general) one rung is +34% (median) or about 40 thousand 2025 pesos a month; 1.03 rungs ≈ +35% of pay, 41 thousand pesos a month (about 2,100 USD at 19 pesos per dollar); the undersecretary-to-cabinet step is +8% in pay.
+- **Deck**: 18 main slides (motivation, survival, this paper, dedazo, 1946 × 2, data, sample, estimand, identification, balance, event study, thresholds, reward/penalty, heterogeneity, losers, posts not pesos, conclusion); appendix with placebos, two steps, persistence, heterogeneity table, pay ladder, slate formation and the earlier material.
+- **Who ran the money** (`investment_heads.R`; crosswalk extended in `budget_outcome.R`, see its comments): share of federal investment by the agency head's group, average of the nine successions, e−5..e−2 → e+1..e+4: designee's followers 1.4 → 3.3%; losers' followers 9.4 → 6.9; tied to several 6.8 → 8.9; unaligned in the pool 33.6 → 34.5; contenders of this succession 20.2 → 5.0; contenders of other successions 5.7 → 12.2; outside the eligible pool 7.5 → 16.7; no head by construction 3.6 → 6.0; head not found 11.9 → 6.5. Section 9 with the extended crosswalk: share commanded +0.43 [0.14, 0.74] (+0.11 [−0.18, 0.42] without Estrada Reynoso), capped at 5 pp per agency +0.16 [0.06, 0.25]; heads an agency with at least 1% of investment +5.6 pp [2.3, 8.8], 8 of 9 successions positive; heads any investment agency +6.5 [1.2, 11.6].
