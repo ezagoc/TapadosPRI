@@ -1,12 +1,12 @@
 """
 02_position_tiers.py
 
-Rank every dated position record (govt, public/elected, party, labor, military) on
-three EXTERNAL, published scales, plus a combined ordinal rank — the basis for
-measuring promotions and demotions over careers.
+Classify every position record using historical sources and project extensions.
+These mappings are not three interchangeable measures of wages or political power.
+Unclassified records remain missing in this file, rather than being assigned zero.
 
   smith_tier       Peter H. Smith, Labyrinths of Power (1979), Appendix A, Table A-3,
-                   HIGHEST OFFICE scale (0–8), applied exactly:
+                   HIGHEST OFFICE scale (0–8), mapped to the published categories:
                      8 president and cabinet (secretaries, heads of autonomous
                        departments, governor/regent of the Federal District, attorney
                        general, ambassador to the United States)
@@ -14,7 +14,7 @@ measuring promotions and demotions over careers.
                        decentralized agencies and state companies: CFE, Ferrocarriles
                        Nacionales, IMSS, ISSSTE, PEMEX, Altos Hornos de México, Banco
                        de México, Banco Nacional de Crédito Ejidal, Banobras, Nafinsa
-                     6 governors of major states (Table A-2: the 10 largest state
+                     6 governors of major states (Table A-2: listed major state
                        budgets in 1910, 1930 or 1960, whichever year is closest to the
                        inauguration)
                      5 National Executive Committee (CEN) of the official party
@@ -23,8 +23,8 @@ measuring promotions and demotions over careers.
                      3 senators   2 governors of other states/territories
                      1 federal deputies   0 ambassadors in major posts
                    Positions outside Smith's list are NaN.
-  smith_tier_ext   the same scale with Smith's two budget rules made time-varying
-                   with this project's data (his own method, extended past 1971):
+  smith_tier_ext   project variants using federal investment to update the groups.
+                   Investment is NOT the original Smith budget concept:
                    "major state" = top-10 states by federal public investment in the
                    six years before the inauguration (state_investment_panel.csv,
                    1959+); before 1965 Smith's lists are kept. "Big parastatal" =
@@ -41,22 +41,29 @@ measuring promotions and demotions over careers.
                    list, following the official command ladder (see mando_level):
                    director general 7, director general adjunto 8, director de área 9,
                    subdirector / jefe de departamento 10.
-  mando_level      official federal command ladder (Manual de Sueldos y Prestaciones
-                   de Mando, DOF 28-Jan-2000; grades G–O of the later Manual de
-                   Percepciones): 9 Secretario (G), 8 Subsecretario / Oficial Mayor
-                   (H/I, old code 36), 7 Jefe de Unidad / Coordinador General (J, 35),
-                   6 Director General (K, 33E), 5 Director General Adjunto (L, 33A),
-                   4 Director de Área (M, 30E), 3 Subdirector (N, 29), 2 Jefe de
-                   Departamento (O, 28). Executive-branch posts only.
-  hybrid_rank      (13 − brandenburg_rung) + smith_tier_ext/10 + mando_level/100:
+  mando_level      project's title-based mapping to federal command groups
+                   (Manual de Sueldos y Prestaciones de Mando, DOF 28-Jan-2000;
+                   G–O labels of the later Manual de Percepciones): 9 Secretario,
+                   8 Subsecretario / Oficial Mayor, 7 Jefe de Unidad / Coordinador
+                   General, 6 Director General, 5 Director General Adjunto,
+                   4 Director de Área, 3 Subdirector, 2 Jefe de Departamento.
+                   Not individually observed historical grades. Numeric codes
+                   and homologation depend on institution and date. Executive
+                   ordering does not establish global political prestige.
+  office_score     13 − brandenburg_rung: explicit whole-level office score used by
+                   the main analysis. Includes the documented project extensions.
+  hybrid_rank      legacy compatibility field:
+                   (13 − brandenburg_rung) + smith_tier_ext/10 + mando_level/100:
                    Brandenburg orders everything; within a rung Smith and then the
-                   command ladder break ties. Higher = more senior.
+                   command ladder break ties. Higher = more senior. The decimal
+                   fields are neither pay nor estimated economic values of a rung.
 
 Classification is done on the ROLE TEXT (the `is_federal` flag is unreliable: e.g.
 "secretary of programming and budget, Puebla" is a state post), with ordered regex
 rules; each record keeps the `rule` that ranked it, for audit.
 
-Validation (printed): distribution by rule; people's highest Smith tier vs Smith's
+Descriptive checks (printed, not a validation of all mappings): distribution by
+rule; people's highest Smith tier vs Smith's
 Table A-3 shares; the ladder vs the 1999 official monthly pay ranges (exposición de
 motivos PEF 2000, Table VI.4); the 1927 federal budget's daily pay (see validate()).
 The 1940 budget (Google Books UYCkb6Nn1F0C) is full view but not downloadable.
@@ -68,6 +75,7 @@ from __future__ import annotations
 
 import re
 import sys
+import argparse
 from pathlib import Path
 
 import numpy as np
@@ -81,6 +89,7 @@ from config import (CLEAN_POSITIONS_DIR, INVESTMENT_DIR, MEXICAN_STATES, RANK_DI
                     strip_accents)
 
 OUT = RANK_DIR / "position_tiers.csv"
+RANKING_VERSION = "2026-10-26-explicit-office-title-fixes"
 
 # ── Smith Table A-2: states with the largest budgets ─────────────────────────
 SMITH_BIG_STATES = {
@@ -152,6 +161,62 @@ def is_state_level(t: str) -> bool:
     return bool(STATE_RE.search(t2)) and "federal district" not in t2
 
 
+def is_presidential_private_secretary(t: str) -> bool:
+    """The president's own secretary, not the secretary of another officeholder.
+
+    This specific exception must precede the generic staff rule. Explicit named
+    targets avoid promoting secretaries of party/congress presidents, and the
+    anchored prefix excludes aides to the presidential secretary.
+    """
+    match = re.match(
+        r"(?:private|personal) secretary (?:of|to) (?:the )?"
+        r"(?:president\b|pres\.)\s*(.*)", t
+    )
+    if not match:
+        return False
+    target = match.group(1).strip()
+    if re.search(r"\b(campaign|candidate)\b", target):
+        return False
+    target = re.sub(r"^[,;(\s]+", "", target)
+    if not target or re.match(r"\d", target):
+        return True
+    if re.match(r"of (?:mexico|the republic)\b", target):
+        return True
+    presidents = (
+        r"abelardo rodriguez|plutarco elias calles|emilio portes gil|"
+        r"pascual ortiz rubio|ortiz rubio|lazaro cardenaso?|cardenas|"
+        r"manuel avila camacho|avila camacho|miguel aleman|aleman|"
+        r"adolfo ruiz cortines|ruiz cortines|adolfo lopez mateos|lopez mateos|"
+        r"gustavo diaz ordaz|diaz ordaz|luis echeverria|echeverria|"
+        r"jose lopez portillo|lopez portillo|miguel de la madrid|de la madrid|"
+        r"carlos salinas|salinas|ernesto zedillo|zedillo|vicente fox|felipe calderon"
+    )
+    return bool(re.match(r"(?:" + presidents + r")\b", target))
+
+
+def chief_of_staff_scope(t: str) -> str | None:
+    """Distinguish national/presidential chiefs from staff of other officials.
+
+    Brandenburg's national military chief is not every office containing the
+    words 'chief of staff'. Unsupported staff targets remain unresolved.
+    """
+    if re.match(r"presidential chief of staff\b|chief of (?:the )?presidential staff\b|"
+                r"head of (?:the )?presidential (?:general )?staff\b", t):
+        return "national_or_presidential"
+    match = re.match(r"chief of (?:the )?staff\b(.*)", t)
+    if not match:
+        return None
+    target = re.sub(r"^[,;\s]+", "", match.group(1))
+    target = re.sub(r"^(?:of|for|to) (?:the )?", "", target)
+    if re.match(r"(?:the )?(?:secretariat of (?:national defense|(?:the )?navy)|"
+                r"(?:mexican )?(?:army|navy|air force)|office of (?:the )?presidency|"
+                r"presidential guards)\b", target):
+        return "national_or_presidential"
+    if is_presidential_private_secretary("private secretary to " + target):
+        return "national_or_presidential"
+    return "unresolved_other_target"
+
+
 # ── ordered rules per dataset: (name, regex on role text, output) ────────────
 # output = (brandenburg_rung, smith_tier or None, mando_level or None); the special
 # values 'GOV' (governor) and 'AMB' (ambassador) are resolved afterwards.
@@ -164,9 +229,16 @@ def govt_rule(t: str, rank: str):
     if re.match(r"(governor|regent|head)[^,]*(of )?the federal district|"
                 r"(head|chief)[, ]+(of )?(the )?department of the federal district", t):
         return "df_regent", (4, 8, 9)
+    # Smith Appendix A, footnote 8 includes acting/provisional/interim
+    # incumbents. The public_positions path already recognized these titles;
+    # government records must not lose them merely because parsed rank=other.
+    if re.match(r"(?:interim|provisional|substitute|acting) governor\b", t):
+        return ("df_regent", (4, 8, 9)) if "federal district" in t else ("governor", "GOV")
     if re.match(r"attorney general of (mexico|the republic)|attorney general, (office of the )?"
                 r"attorney general of mexico|attorney general of the nation", t):
         return "attorney_general_federal", (4, 8, 9)
+    if is_presidential_private_secretary(t):
+        return "president_private_secretary", (4, None, 7)
     if re.match(r"(aide|auxiliary|private secretary|personal secretary|adviser|advisor|"
                 r"assistant to|secretary to|technical secretary to)\b", t):
         return "staff", (11, None, None)
@@ -180,11 +252,11 @@ def govt_rule(t: str, rank: str):
                 r"(agrarian|health|tourism|labor|indigenous|forestry|fishing|press|physical|"
                 r"military industry|national economy|public health|statistics)", t) and not state:
         return "autonomous_dept_head", (4, 8, 9)
-    if re.match(r"private secretary (of|to) the president", t):
-        return "president_private_secretary", (4, None, 7)
-    if re.match(r"chief of (the )?(presidential )?staff|chief of staff of the president|"
-                r"head of (the )?presidential (general )?staff|head of military factories", t):
+    staff_scope = chief_of_staff_scope(t)
+    if staff_scope == "national_or_presidential" or re.match(r"head of military factories", t):
         return "presidential_chief_of_staff", (4, 4, 8)
+    if staff_scope == "unresolved_other_target":
+        return "staff_chief_scope_unresolved", None
     if re.match(r"(assistant secretary|subsecretary|undersecretary|oficial mayor)", t) or \
             rank in ("assistant_secretary", "oficial_mayor"):
         return ("state_subcabinet", (10, None, None)) if state else ("subcabinet", (6, 4, 8))
@@ -207,7 +279,10 @@ def govt_rule(t: str, rank: str):
         return "federal_official_in_states", (10, None, None)
     if re.search(r"city council|ayuntamiento|regidor", t):
         return "city_council", (12, None, None)
-    if rank in ("justice",) or re.match(r"justice of the supreme court|supreme court justice", t):
+    if rank in ("justice",) or re.match(
+        r"justice of the supreme court|supreme court justice|"
+        r"(?:justice|chief justice|president)(?: of|,)? (?:the )?supreme court\b", t
+    ):
         return ("state_supreme_court", (10, None, None)) if state else ("supreme_court_justice", (6, None, None))
     if rank in ("judge", "district_judge", "circuit_judge", "magistrate"):
         return ("state_judge", (10, None, None)) if state else ("federal_judge", (9, None, None))
@@ -248,11 +323,11 @@ def govt_rule(t: str, rank: str):
 def public_rule(t: str, title: str):
     if re.match(r"president of (mexico|the republic)", t):
         return "president", (2, 8, 10)
-    if title in ("Governor",) or re.match(r"(interim |provisional |substitute )?governor", t):
+    if title in ("Governor",) or re.match(r"(interim |provisional |substitute |acting )?governor", t):
         if "federal district" in t:
             return "df_regent", (4, 8, 9)
         return "governor", "GOV"
-    if title == "Senator":
+    if title == "Senator" or re.match(r"(?:federal )?senator\b", t):
         return "senator", (6, 3, None)
     if title in ("Federal Deputy", "Deputy") and "local" not in t:
         return "federal_deputy", (9, 1, None)
@@ -384,7 +459,7 @@ def investment_big_parastatals() -> dict:
     return out
 
 
-def main():
+def main(output_dir=None):
     frames = []
     for name in ("govt_positions", "public_positions", "party_positions",
                  "labor_positions", "military_positions"):
@@ -456,10 +531,16 @@ def main():
     sm = out.smith_tier_ext.astype("Float64").fillna(0).clip(lower=0)
     out["hybrid_rank"] = ((13 - out.brandenburg_rung.astype("Float64")) + sm / 10 +
                           out.mando_level.astype("Float64").fillna(0) / 100).round(3)
-    RANK_DIR.mkdir(parents=True, exist_ok=True)
-    out.to_csv(OUT, index=False)
+    # Explicit main score: the decimal tie-breakers are not salary or an
+    # independently estimated cardinal valuation of political power.
+    out["office_score"] = (13 - out.brandenburg_rung).astype("Int64")
+    out["classification_version"] = RANKING_VERSION
+    destination = Path(output_dir) if output_dir is not None else RANK_DIR
+    destination.mkdir(parents=True, exist_ok=True)
+    output_path = destination / "position_tiers.csv"
+    out.to_csv(output_path, index=False)
     validate(out)
-    print(f"\n→ {OUT}")
+    print(f"\n→ {output_path}")
 
 
 def validate(out: pd.DataFrame):
@@ -484,7 +565,7 @@ def validate(out: pd.DataFrame):
     lad = out[out.rule.isin(pay_1999)].groupby("rule").hybrid_rank.median()
     mid = pd.Series({k: np.mean(v) for k, v in pay_1999.items()})
     chk = pd.DataFrame({"hybrid_rank": lad, "pay_1999_mid": mid}).sort_values("pay_1999_mid")
-    print("\nCommand ladder vs 1999 official pay (must be monotone):")
+    print("\nReference executive titles vs 1999 pay (partial descriptive check):")
     print(chk.to_string())
     print("monotone:", bool(chk.hybrid_rank.is_monotonic_increasing))
 
@@ -496,7 +577,7 @@ def validate(out: pd.DataFrame):
     # Supreme Court justice 21,900/yr [25], senator and deputy 12,154.50/yr [13],
     # circuit magistrate 12,154.50/yr [28].
     pay_1927 = {"president": 200.0, "cabinet_secretary": 54.0, "attorney_general_federal": 54.0,
-                "subcabinet": 45.0, "director_general": 43.25, "jefe_de_departamento": 13.5}
+                "subcabinet": 45.0, "director_general": 41.5, "jefe_de_departamento": 13.5}
     other_1927 = {"supreme_court_justice": 60.0, "senator": 33.3, "federal_deputy": 33.3,
                   "federal_judge": 33.3}
     med = out.groupby("rule").hybrid_rank.median()
@@ -510,9 +591,11 @@ def validate(out: pd.DataFrame):
           bool(lad27.groupby("pay_1927_daily").hybrid_rank.min().is_monotonic_increasing))
     print("rank correlation, all checkpoints (Spearman):",
           round(c27.pay_1927_daily.rank().corr(c27.hybrid_rank.rank()), 2),
-          "— the scales rank by power, not pay: justices and senators earn like or above "
-          "cabinet / deputies but sit lower / higher")
+          "— historical prestige and pay checkpoints differ across branches. "
+          "This does not establish a cardinal power scale or validate every title mapping.")
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Classify dated political offices.")
+    parser.add_argument("--output-dir", type=Path, help="Write a research build without changing shared ranks.")
+    main(parser.parse_args().output_dir)

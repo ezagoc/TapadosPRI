@@ -48,7 +48,17 @@ POSITION_FIELDS = [
 ]
 
 # Year range pattern: 1940-1946 or 1940–1946 or just 1940
-YEAR_RANGE_RE = re.compile(r"(\d{4})\s*[-–]\s*(\d{4})")
+# A range ends in four digits or in two ("1979-82", completed with the start's century, rolling over: "1998-02").
+# A two-digit end followed by a word is a day ("6 Jan. 2006–30 Nov. 2006"), not a year.
+YEAR_RANGE_RE = re.compile(r"(\d{4})\s*[-–]\s*(\d{4}(?!\d)|\d{2}(?!\d)(?!\s*[A-Za-z]))")
+
+
+def _range_years(start: str, end: str) -> tuple:
+    s = int(start)
+    if len(end) == 4:
+        return s, int(end)
+    e = (s // 100) * 100 + int(end)
+    return s, e if e >= s else e + 100
 SINGLE_YEAR_RE = re.compile(r"\b(1[89]\d{2}|20[0-2]\d)\b")
 
 # Governor pattern
@@ -246,20 +256,23 @@ def extract_yr_range_py(entry: str) -> dict:
     Improvement over extract_years(): also cleans years out of role_text,
     removes trailing commas left after year removal, and handles empty text.
 
+    Camp often lists several spells of one post ("head, Federal District, 1952–1958, 1958–1964, 1964–1966"): the first
+    range is the record's dates and the others are returned in "extra_ranges", one record each (see parse_person).
+
     Returns:
-      {"text": str | None, "year_start": int | None, "year_end": int | None}
+      {"text": str | None, "year_start": int | None, "year_end": int | None, "extra_ranges": list[(int, int)]}
     """
-    result = {"text": entry, "year_start": None, "year_end": None}
+    result = {"text": entry, "year_start": None, "year_end": None, "extra_ranges": []}
     if not isinstance(entry, str) or not entry.strip():
         result["text"] = None
         return result
 
-    m = YEAR_RANGE_RE.search(entry)
-    if m:
-        result["year_start"] = int(m.group(1))
-        result["year_end"]   = int(m.group(2))
+    ranges = [_range_years(a, b) for a, b in YEAR_RANGE_RE.findall(entry)]
+    if ranges:
+        result["year_start"], result["year_end"] = ranges[0]
+        result["extra_ranges"] = ranges[1:]
         # Remove the range (and optional leading comma/space)
-        text_out = re.sub(r",?\s*\d{4}\s*[-\u2013]\s*\d{4}", "", entry)
+        text_out = re.sub(r",?\s*\d{4}\s*[-\u2013]\s*(?:\d{4}(?!\d)|\d{2}(?!\d)(?!\s*[A-Za-z]))", "", entry)
     else:
         singles = SINGLE_YEAR_RE.findall(entry)
         if singles:
@@ -872,7 +885,7 @@ def extract_years(text: str) -> tuple:
     # Try range first
     match = YEAR_RANGE_RE.search(text)
     if match:
-        return int(match.group(1)), int(match.group(2))
+        return _range_years(match.group(1), match.group(2))
     # Try single years — take the last one as most likely the relevant date
     singles = SINGLE_YEAR_RE.findall(text)
     if singles:
@@ -1005,7 +1018,15 @@ def parse_position_entry(entry: str, field_type: str) -> dict:
         "year_start":    year_start,
         "year_end":      year_end,
         "organization":  organization,
+        "extra_ranges":  yr["extra_ranges"],
     }
+
+
+def with_extra_ranges(result: dict) -> list[dict]:
+    """The record for the first date range, plus one copy per further range written in the same entry (flagged
+    `_extra` so main() can place them after every first-range record and leave existing record_ids unchanged)."""
+    extras = [dict(result, year_start=s, year_end=e, extra_ranges=[], _extra=True) for s, e in result["extra_ranges"]]
+    return [result] + extras
 
 
 def parse_birthplace(birthplace: str) -> Optional[dict]:
@@ -1065,7 +1086,7 @@ def parse_person(row: pd.Series) -> list[dict]:
                 result["person_name"]          = name_clean
                 result["birth_date_clean"]     = birth_date_clean
                 result["birth_date_precision"] = birth_date_precision
-                records.append(result)
+                records.extend(with_extra_ranges(result))
 
     # Parse education
     edu = row.get("education", "")
@@ -1081,7 +1102,7 @@ def parse_person(row: pd.Series) -> list[dict]:
                 result["person_name"]          = name_clean
                 result["birth_date_clean"]     = birth_date_clean
                 result["birth_date_precision"] = birth_date_precision
-                records.append(result)
+                records.extend(with_extra_ranges(result))
 
     return records
 
@@ -1104,7 +1125,12 @@ def main():
         if (idx + 1) % 500 == 0:
             print(f"  Parsed {idx + 1} / {len(df)} biographies...")
 
-    print(f"\nTotal position records extracted: {len(all_records)}")
+    # Records for second and later date ranges go after every first-range record, so record_ids of the first-range
+    # records (and person_ids, assigned by first appearance) are the same as before ranges were split.
+    extra = [r for r in all_records if r.get("_extra")]
+    all_records = [r for r in all_records if not r.get("_extra")] + extra
+    print(f"\nTotal position records extracted: {len(all_records)} "
+          f"({len(extra)} for second and later date ranges of one entry)")
 
     out = pd.DataFrame(all_records)
 
@@ -1154,6 +1180,17 @@ def main():
 
     print(f"\nState distribution (top 15):")
     print(out["state"].value_counts().head(15).to_string())
+
+    # Every date range written in an entry must be a record of that entry (a single kept range lost 5,427 person-years
+    # before 2026-10-20).
+    written = out[out.field_type != "birthplace"].dropna(subset=["role_text_raw"]).drop_duplicates(
+        ["person_id", "field_type", "role_text_raw"])                                      # birthplaces carry no dates
+    kept = set(zip(out.person_id, out.field_type, out.role_text_raw, out.year_start, out.year_end))
+    missing = [(r.person_id, r.field_type, r.role_text_raw, s, e)
+               for r in written.itertuples() for s, e in (_range_years(a, b) for a, b in YEAR_RANGE_RE.findall(r.role_text_raw))
+               if (r.person_id, r.field_type, r.role_text_raw, s, e) not in kept]
+    assert not missing, f"{len(missing)} written date ranges have no record, e.g. {missing[:3]}"
+    print(f"\n  Check: every written date range is a record ({sum(len(YEAR_RANGE_RE.findall(t)) for t in written.role_text_raw)} ranges)")
 
     out.to_csv(PARSED_POSITIONS_CSV, index=False)
     print(f"\nSaved to {PARSED_POSITIONS_CSV}")

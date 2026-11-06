@@ -380,9 +380,10 @@ mil = mil[cols]
 # work_state = state for military: assignment location IS physical work location.
 mil["work_state"] = mil["state"]
 
-# Remove exact duplicates (same person + same raw text from split artifacts)
+# Remove exact duplicates (same person + same raw text from split artifacts). The date range is part of the key: 04 writes
+# one record per range when Camp lists several ("1952–1958, 1958–1964"), and those are not duplicates.
 n_before = len(mil)
-mil = mil.drop_duplicates(subset=["person_id","role_text_raw"]).reset_index(drop=True)
+mil = mil.drop_duplicates(subset=["person_id","role_text_raw","year_start","year_end"]).reset_index(drop=True)
 mil["record_id"] = range(1, len(mil) + 1)  # reassign after dedup
 n_dropped = n_before - len(mil)
 if n_dropped:
