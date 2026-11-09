@@ -16,6 +16,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
+from matplotlib.ticker import MaxNLocator
 
 plt.rcParams.update({"font.family": "serif", "font.serif": ["Times New Roman", "STIXGeneral", "DejaVu Serif"],
     "font.size": 10, "axes.linewidth": .6, "axes.spines.top": False, "axes.spines.right": False,
@@ -102,6 +103,7 @@ def figures():
             ax = axes[row, col]
             panel(ax, observed, simulated, contrast, rule, n, marks=row == 0)
             ax.tick_params(labelsize=10)
+            ax.yaxis.set_major_locator(MaxNLocator(nbins=5, steps=[1, 2, 5, 10], min_n_ticks=3))   # 3-5 round ticks a panel
             if row == 0:
                 ax.set_title(TITLES[rule], fontsize=14, loc="left", pad=18, fontweight="bold")
             if row < 2:
