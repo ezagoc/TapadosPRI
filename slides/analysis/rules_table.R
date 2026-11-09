@@ -57,8 +57,8 @@ fp <- function(x) { s <- formatC(abs(round(x)), format = "d", big.mark = ","); p
 lines <- c("% rules_table.tex (rules_table.R). Years 1-4 average, rank positions; 95% intervals; reward and penalty as shares of their gap,",
   "% the reward D - N and the exact penalty (reward - premium: a tie to a loser for the same politicians) in rank positions, signed, adding to the premium; the premium as a percentage change in official pay (1999 ladder, 34% a rung, compounded).",
   "\\begin{tabular}{lccccc}", "\\toprule",
-  " & \\multicolumn{2}{c}{Premium, designee's $-$ losers'} & \\multicolumn{2}{c}{Split, against the unaligned} & Premium \\\\", "\\cmidrule(lr){2-3}\\cmidrule(lr){4-5}",
-  "Allocation of the same posts & rank positions & 95\\% interval & reward & penalty & in pay \\\\", "\\midrule")
+  " & \\multicolumn{2}{c}{Premium, designee's $-$ losers'} & \\multicolumn{2}{c}{Against the unaligned} & Premium \\\\", "\\cmidrule(lr){2-3}\\cmidrule(lr){4-5}",
+  "Allocation of the same posts & rank positions & 95\\% interval & designee's $-$ unaligned & losers' $-$ unaligned & in pay \\\\", "\\midrule")
 for (r in order_rules) {
   x <- W[rule == r]
   # the two components with their sign, rank positions (the reward D - N and the penalty P - N of the deck's decomposition)
