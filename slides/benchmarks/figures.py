@@ -22,14 +22,15 @@ plt.rcParams.update({"font.family": "serif", "font.serif": ["Times New Roman", "
     "xtick.major.width": .6, "ytick.major.width": .6, "xtick.major.size": 3, "ytick.major.size": 3,
     "pdf.fonttype": 42, "ps.fonttype": 42})
 RULES = ("purge", "promotions_only", "sharing", "career")
-TITLES = {"purge": "Complete exclusion", "promotions_only": "Winner promotions; losers unchanged",
+DECK_RULES = ("purge", "sharing")   # the deck's figure: the two extreme rules only (9 Nov 2026; all four stay in the table)
+TITLES = {"purge": "Winner-takes-all purge", "promotions_only": "Winner promotions; losers unchanged",
           "sharing": "Proportional sharing", "career": "Merit proxy: prior career and education"}
 DESCRIPTIONS = {"purge": "Losers excluded; winner’s followers take the top ranks",
                 "promotions_only": "Existing jobholders only; no hiring or exits",
                 "sharing": "Each camp’s share follows its available population",
                 "career": "Prior rank, years in office, then completed education"}
-CONTRASTS = {"DP": "Designee − losing contenders", "DN": "Designee − unconnected",
-             "PN": "Losing contenders − unconnected"}
+CONTRASTS = {"DP": "Premium\ndesignee's − losers'", "DN": "Reward\ndesignee's − unaligned",
+             "PN": "Penalty\nlosers' − unaligned"}
 
 
 def observed_data(n=9):
@@ -38,15 +39,16 @@ def observed_data(n=9):
                       pd.read_csv(DATA / "design/observed_rp_intervals.csv")]).query("k <= 6")
 
 
-def panel(ax, observed, simulated, contrast, rule, n, *, small=False):
+def panel(ax, observed, simulated, contrast, rule, n, *, small=False, marks=True):
     last = 6
     ax.axhline(0, color=".7", lw=.55, zorder=0)
     for x, label, align in ((-1.5, "After designation", "right"),
                              (.5, "New presidency", "left")):
         if x < last:
             ax.axvline(x, color=".75", lw=.55, ls=(0, (2, 3)), zorder=0)
-            ax.text(x, 1.005, label, transform=ax.get_xaxis_transform(), ha=align,
-                    va="bottom", fontsize=6 if small else 7, color=".4")
+            if marks:
+                ax.text(x, 1.005, label, transform=ax.get_xaxis_transform(), ha=align,
+                        va="bottom", fontsize=6 if small else 8, color=".4")
     for table, color, style, alpha in ((simulated.query("rule == @rule and contrast == @contrast"),
                                        "#333333", (0, (5, 2)), .10),
                                       (observed.query("contrast == @contrast"), "#940034", "-", .14)):
@@ -59,11 +61,11 @@ def panel(ax, observed, simulated, contrast, rule, n, *, small=False):
     ax.tick_params(labelsize=8 if small else 9)
 
 
-def footer(fig, n, y):
+def footer(fig, n, y, fontsize=9):
     fig.legend(handles=[Line2D([], [], color="#940034", lw=1.6, label="Observed"),
                         Line2D([], [], color="#333333", lw=1.5, ls="--", label="Assignment rule")],
                loc="lower center", bbox_to_anchor=(.53, y + .045), ncol=2, frameon=False,
-               fontsize=9, handlelength=3)
+               fontsize=fontsize, handlelength=3)
     note = ("9 PRI successions, 1940–88. Separate one-term exercises. Observed careers through year 0; rules apply in years 1–6.\n"
             "Shaded areas: pointwise 95% intervals using the paper’s DiD inference. Year −2 is the reference. Panel scales vary.\n"
             "Rules and annual rank counts are fixed; intervals assume the DiD error model applies to the constructed outcomes.")
@@ -93,21 +95,23 @@ def figures():
     n = 9
     observed = observed_data(n)
     simulated = intervals.query("scope == 'all_observed' and n_successions == @n")
-    fig, axes = plt.subplots(3, 4, figsize=(16.8, 10.9))
+    # The deck's figure: the two extreme rules (columns) and the premium with its reward and penalty (rows)
+    fig, axes = plt.subplots(3, 2, figsize=(11.5, 6.0))
     for row, contrast in enumerate(CONTRASTS):
-        for col, rule in enumerate(RULES):
+        for col, rule in enumerate(DECK_RULES):
             ax = axes[row, col]
-            panel(ax, observed, simulated, contrast, rule, n, small=True)
+            panel(ax, observed, simulated, contrast, rule, n, marks=row == 0)
+            ax.tick_params(labelsize=10)
             if row == 0:
-                title = "Career-based merit proxy" if rule == "career" else TITLES[rule]
-                if rule == "promotions_only":
-                    title = "Winner promotions\nLosers unchanged"
-                ax.set_title(title, fontsize=10, loc="left", pad=24)
+                ax.set_title(TITLES[rule], fontsize=14, loc="left", pad=18, fontweight="bold")
             if row < 2:
                 ax.set_xlabel("")
-        axes[row, 0].set_ylabel(CONTRASTS[contrast] + "\n(rank units)", labelpad=8)
-    footer(fig, n, .01)
-    fig.subplots_adjust(left=.08, right=.985, top=.91, bottom=.15, wspace=.29, hspace=.28)
+            else:
+                ax.set_xlabel("Years relative to election", labelpad=5, fontsize=11)
+        axes[row, 0].set_ylabel(CONTRASTS[contrast], labelpad=8, fontsize=11, linespacing=1.3)
+    footer(fig, n, -.01, fontsize=11)
+    fig.text(.12, .015, "Followers' rank positions. Shaded: 95% intervals", fontsize=9.5, color=".35")
+    fig.subplots_adjust(left=.12, right=.985, top=.90, bottom=.16, wspace=.14, hspace=.36)
     save(fig, "02_all_comparisons")
 
 
