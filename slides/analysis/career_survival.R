@@ -12,7 +12,8 @@
 #      with age and age squared and the window covariates (rank bands, degree, records, prior status); robust standard
 #      errors clustered by contender camp (the unaligned: by politician). Hazard ratio of leaving politics, losers'
 #      followers against the designee's, and each group against the unaligned. Proportional hazards: cox.zph.
-#   3. Restricted mean survival time: years in politics within 12 and 20 years after the election, the area under the
+#   3. Restricted mean survival time: years in politics within 12, 18 (three presidencies, the deck's number) and 20
+#      years after the election (every succession is observed for at least 20 years, so no window is cut), the area under the
 #      standardized curves, with 95% intervals from a bootstrap over contender camps within succession (B = 999).
 # Figure: the standardized curves and, below, the number of politicians still in politics and covered by the data.
 # Writes career_survival_km.csv, career_survival_cox.csv, career_survival_rmst.csv, career_survival.{pdf,png} and
@@ -24,7 +25,7 @@ source(file.path(script_dir, "design_tools.R"))
 invisible(capture.output(source(file.path(script_dir, "rp_setup.R"))))
 suppressPackageStartupMessages({ library(survival); library(patchwork) })
 tab_dir <- file.path(out_dir, "tables"); dir.create(tab_dir, showWarnings = FALSE)
-END <- 2009L; HORIZONS <- c(12L, 20L); B_boot <- 999L; set.seed(8112026L)
+END <- 2009L; HORIZONS <- c(12L, 18L, 20L); B_boot <- 999L; set.seed(8112026L)
 
 dead <- read_data("structural", "death_years.csv")[!is.na(death_year), .(death_year = min(death_year)), by = .(pid = person_id)]
 last_post <- annual[year <= END & rank > 0L, .(L = max(year)), by = pid]
@@ -141,14 +142,14 @@ ggsave(file.path(out_dir, "career_survival.png"), g, width = 10, height = 4.6, d
 f2 <- function(x) { v <- round(x, 2); s <- formatC(abs(v), format = "f", digits = 2); ifelse(v < 0, paste0("$-$", s), s) }
 f1 <- function(x) { v <- round(x, 1); s <- formatC(abs(v), format = "f", digits = 1); ifelse(v < 0, paste0("$-$", s), s) }
 mac <- function(n, v) sprintf("\\newcommand{\\%s}{%s}", n, v)
-r20 <- rm_tab[horizon == 20 & contrast == "designee's minus losers' followers"]
-r20P <- rm_tab[horizon == 20 & contrast == "losers' followers minus unaligned"]
-writeLines(c("% career_survival_macros.tex (career_survival.R): survival of careers after the succession. Do not edit by hand.",
+r18 <- rm_tab[horizon == 18 & contrast == "designee's minus losers' followers"]
+r18P <- rm_tab[horizon == 18 & contrast == "losers' followers minus unaligned"]
+writeLines(c("% career_survival_macros.tex (career_survival.R): survival of careers after the succession; years in politics within 18 years (three presidencies). Do not edit by hand.",
   mac("CSVhrDP", f2(cox[1, hr])), mac("CSVhrDPLo", f2(cox[1, lo])), mac("CSVhrDPHi", f2(cox[1, hi])),
   mac("CSVhrPN", f2(cox[3, hr])), mac("CSVhrPNLo", f2(cox[3, lo])), mac("CSVhrPNHi", f2(cox[3, hi])),
-  mac("CSVrmstD", f1(r20$years_D)), mac("CSVrmstP", f1(r20$years_P)), mac("CSVrmstN", f1(r20$years_N)),
-  mac("CSVrmstDiff", f1(r20$estimate)), mac("CSVrmstDiffLo", f1(r20$lo)), mac("CSVrmstDiffHi", f1(r20$hi)),
-  mac("CSVrmstPN", f1(r20P$estimate)), mac("CSVrmstPNLo", f1(r20P$lo)), mac("CSVrmstPNHi", f1(r20P$hi))),
+  mac("CSVrmstD", f1(r18$years_D)), mac("CSVrmstP", f1(r18$years_P)), mac("CSVrmstN", f1(r18$years_N)),
+  mac("CSVrmstDiff", f1(r18$estimate)), mac("CSVrmstDiffLo", f1(r18$lo)), mac("CSVrmstDiffHi", f1(r18$hi)),
+  mac("CSVrmstPN", f1(r18P$estimate)), mac("CSVrmstPNLo", f1(r18P$lo)), mac("CSVrmstPNHi", f1(r18P$hi))),
   file.path(tab_dir, "career_survival_macros.tex"))
 cat("\nHazard ratios of leaving politics (stratified Cox, age and window covariates, clustered by camp):\n"); print(cox[, lapply(.SD, function(x) if (is.numeric(x)) round(x, 3) else x)])
 cat("\nYears in politics within h years of the election (restricted mean survival time), with camp-bootstrap 95% intervals:\n"); print(rm_tab[, lapply(.SD, function(x) if (is.numeric(x)) round(x, 2) else x)])
