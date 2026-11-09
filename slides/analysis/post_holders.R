@@ -119,11 +119,12 @@ print(rs[order(-N)])
 
 # ------------------------------------------------------------------ figure: who holds the senior posts, year by year
 # Stacked shares of the senior post-years (rung 7 and above) in years e-6..e+8, by the holder's status at e-2, with
-# the pool collapsed to three slices and the outsiders split into newcomers (first ranked post after e-2) and others.
+# the pool in four slices (the unaligned; the other pool members: tied to two or more contenders, or a contender) and the
+# outsiders split into newcomers (first ranked post after e-2) and others.
 suppressPackageStartupMessages(library(ggplot2))
-slice_of <- c(D = "Designee's followers", P = "Losers' followers", N = "Rest of the pool", multi = "Rest of the pool",
-              contender = "Rest of the pool", entrant = "Newcomers, first ranked post after e-2", other = "Not eligible at e-2")
-slice_levels <- c("Designee's followers", "Losers' followers", "Rest of the pool", "Newcomers, first ranked post after e-2", "Not eligible at e-2")
+slice_of <- c(D = "Designee's followers", P = "Losers' followers", N = "Unaligned", multi = "Other pool members",
+              contender = "Other pool members", entrant = "Newcomers, first ranked post after e-2", other = "Not eligible at e-2")
+slice_levels <- c("Designee's followers", "Losers' followers", "Unaligned", "Other pool members", "Newcomers, first ranked post after e-2", "Not eligible at e-2")
 yearly <- rbindlist(lapply(elections, function(e) {
   rbindlist(lapply(-6:8, function(k) {
     h <- annual[year == e + k & rank >= 7L]
@@ -134,7 +135,7 @@ yearly <- rbindlist(lapply(elections, function(e) {
 fig <- yearly[, .(share = mean(share), posts = mean(posts)), by = .(k, slice)]    # equal weight per succession
 fig[, slice := factor(slice, levels = rev(slice_levels))]
 fwrite(fig, file.path(out_dir, "post_holders_yearly.csv"))
-fills <- c("Designee's followers" = INK, "Losers' followers" = MUTED, "Rest of the pool" = "#d9d9d9",
+fills <- c("Designee's followers" = INK, "Losers' followers" = MUTED, "Unaligned" = "#d9d9d9", "Other pool members" = "#a6a6a6",
            "Newcomers, first ranked post after e-2" = "#b2182b", "Not eligible at e-2" = "#f4a582")
 mk <- data.table(x = c(-1.5, 0.5, 6.5), lab = c("Dedazo", "New president", "Next president"))
 gph <- ggplot(fig, aes(k, 100 * share, fill = slice)) +
