@@ -29,8 +29,8 @@ DESCRIPTIONS = {"purge": "Losers excluded; winner’s followers take the top ran
                 "promotions_only": "Existing jobholders only; no hiring or exits",
                 "sharing": "Contenders’ camps share the top by size; the unaligned fill the rest",
                 "career": "Prior rank, years in office, then completed education"}
-CONTRASTS = {"DP": "Designee's −\nlosers'", "DN": "Designee's −\nunaligned",   # differences only: under a rule,
-             "PN": "Losers' −\nunaligned"}                                         # 'reward'/'penalty' can read backwards
+CONTRASTS = {"DP": "Premium\ndesignee's − losers'", "DN": "Reward\ndesignee's − unaligned",
+             "PN": "Penalty\nlosers' − unaligned"}
 
 
 def observed_data(n=9):
