@@ -27,7 +27,7 @@ TITLES = {"purge": "Winner-takes-all purge", "promotions_only": "Winner promotio
           "sharing": "Proportional sharing", "career": "Merit proxy: prior career and education"}
 DESCRIPTIONS = {"purge": "Losers excluded; winner’s followers take the top ranks",
                 "promotions_only": "Existing jobholders only; no hiring or exits",
-                "sharing": "Each camp’s share follows its available population",
+                "sharing": "Contenders’ camps share the top by size; the unaligned fill the rest",
                 "career": "Prior rank, years in office, then completed education"}
 CONTRASTS = {"DP": "Premium\ndesignee's − losers'", "DN": "Reward\ndesignee's − unaligned",
              "PN": "Penalty\nlosers' − unaligned"}

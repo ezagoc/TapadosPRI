@@ -5,15 +5,16 @@
 #                    best posts first (predetermined priority: prior rank, experience, credential), then the unaligned
 #   promotions_only  the designee's followers are moved up into the best of the observed posts; the losers' followers
 #                    keep their observed careers; nobody enters or leaves office
-#   sharing          every year's posts split across camps in proportion to their population shares (capped quotas),
-#                    within camp by predetermined priority
+#   sharing          the contenders' camps (the winner's, each loser's, those tied to several losers) take the best posts
+#                    first, split in proportion to their available members (capped quotas, within camp by predetermined
+#                    priority); the unaligned fill the remaining posts (9 Nov 2026; before, the unaligned were one more camp)
 #   career           every post goes by predetermined priority alone (prior rank, experience, credential), camp ignored
 # Columns: premium D - P (years 1-4 average, rank positions, 95% intervals from the same Ferman-Pinto machinery as the
 # observed row: benchmarks' inference.R), the reward D - N and the EXACT penalty (5 November 2026: reward minus premium,
 # the penalty of a tie to a loser for the same politicians as the premium, rp_setup.R rp_fit_exact; the own-profile P - N
 # of the benchmarks stays in estimate_PN_own) as shares of the premium,
 # the convention of the deck's reward/penalty slide (shown only where the premium is positive: under sharing both groups
-# lose to the unaligned and under career neither moves, so the split has no meaning), the premium in official pay (US$ a
+# gain on the unaligned and under career neither moves, so the split has no meaning), the premium in official pay (US$ a
 # month, one rung = PAYgainOneUSD of pay_envelope.R, 1999 scale in 2025 prices) and the observed premium as a share of each
 # rule's. The point estimates of reward and penalty stay in rules_table.csv and the RUL*Reward/PenaltyAbs macros.
 # Writes tables/rules_table.tex and tables/rules_macros.tex. Reads the benchmarks under TAPADOS_BENCH_DIR

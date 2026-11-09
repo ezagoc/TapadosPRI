@@ -43,7 +43,7 @@ def quota(n, shares, remaining, offset, permutation):
     assert base.sum() == n and (base <= remaining).all() and (base >= 0).all()
     return base
 
-def allocate(rule, slots, cohort, priority, rng_offsets, permutation, alive, reserved, camp_shares=None):
+def allocate(rule, slots, cohort, priority, rng_offsets, permutation, alive, reserved):
     """Return one annual highest rank per person, respecting observed capacities."""
     n = len(cohort)
     y = np.zeros(n, dtype=np.int8)
@@ -64,21 +64,40 @@ def allocate(rule, slots, cohort, priority, rng_offsets, permutation, alive, res
             order = np.r_[order[is_d], order[~is_d]]
         y[order[:len(seats)]] = seats
     else:
+        # Proportional sharing among the contenders (9 Nov 2026): the mirror of the purge. From the highest rung down,
+        # seats go to the followers of every contender (the winner's camp, each loser's camp, those tied to several
+        # losers) in proportion to each camp's available members, until every available follower holds a seat; the
+        # unaligned fill the remaining seats. Within a camp, and among the unaligned, the same predetermined priority.
         camps = cohort["camp_code"].to_numpy()
         ng = camps.max() + 1
-        shares = np.bincount(camps, minlength=ng) / n if camp_shares is None else camp_shares
-        queues = [priority[(camps[priority] == g) & eligible[priority]] for g in range(ng)]
+        n_code = int(cohort.loc[cohort["camp"] == "N", "camp_code"].iloc[0])
+        tied = eligible & (camps != n_code)
+        shares = np.bincount(camps[tied], minlength=ng).astype(float)
+        shares[n_code] = 0
+        shares = shares / shares.sum()
+        queues = [priority[(camps[priority] == g) & tied[priority]] for g in range(ng)]
+        unaligned = priority[(camps[priority] == n_code) & eligible[priority]]
         remaining = np.array([len(q) for q in queues])
         cursor = np.zeros(ng, dtype=int)
+        used = 0
         for r in range(10, 0, -1):
             nr = int(np.count_nonzero(slots == r))
             if not nr:
                 continue
-            q = quota(nr, shares, remaining, rng_offsets[r], permutation)
-            for g in range(ng):
-                y[queues[g][cursor[g]:cursor[g] + q[g]]] = r
-            cursor += q
-            remaining -= q
+            to_tied = min(nr, int(remaining.sum()))
+            if to_tied:
+                q = quota(to_tied, shares, remaining, rng_offsets[r], permutation)
+                for g in range(ng):
+                    y[queues[g][cursor[g]:cursor[g] + q[g]]] = r
+                cursor += q
+                remaining -= q
+            rest = nr - to_tied
+            assert used + rest <= len(unaligned)
+            y[unaligned[used:used + rest]] = r
+            used += rest
+        if remaining.sum() == 0:
+            # every available follower of a contender sits above every unaligned politician
+            assert y[tied].min() >= y[unaligned].max()
     assert np.array_equal(np.bincount(y, minlength=12), np.bincount(slots, minlength=12))
     assert (y[~alive] == 0).all()
     if rule == "purge":
@@ -154,14 +173,12 @@ def single_term_path(rule, scope, election, people, context, tables, years):
             assert (y[winner] >= base[winner]).all()
             assert (y[~winner] <= base[~winner]).all()
         else:
-            shares = np.bincount(camps[available & ~reserved], minlength=camps.max()+1)
-            shares = shares / shares.sum()
             allocator_c = c
             if (reserved & loser).any():
                 allocator_c = c.copy()
                 allocator_c.loc[reserved, "group"] = "D"
             y = allocate(rule, base, allocator_c, priority, offsets, permutation,
-                         available, reserved, camp_shares=shares)
+                         available, reserved)
             if rule == "purge":
                 assert (y[loser & ~reserved] == 0).all()
         assert np.array_equal(np.bincount(y, minlength=12), np.bincount(base, minlength=12))
