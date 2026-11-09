@@ -61,6 +61,7 @@ STEPS=(
   "runner_up|Rscript $SLIDES/analysis/runner_up.R"
   "by_succession_forest|Rscript $SLIDES/analysis/by_succession_forest.R"
   "post_holders|Rscript $SLIDES/analysis/post_holders.R"
+  "career_survival|Rscript $SLIDES/analysis/career_survival.R"
   "aspirants_table|Rscript $SLIDES/analysis/aspirants_table.R"
   "loser_careers|$PY $SLIDES/analysis/loser_careers.py"
   "followers_1946|$PY $SLIDES/analysis/followers_table_1946.py"

@@ -54,6 +54,7 @@ list drives `deck/collect_deck_files.py`.
 | First stage: new appointments | `md_first_stage_fed.pdf`, `first_stage_macros.tex` | `analysis/` | `analysis/first_stage.R` |
 | First stage, reward and penalty | `md_first_stage_rp.pdf`, `first_stage_rp_macros.tex` | `analysis/` | `analysis/first_stage_rp.R` |
 | No purge (holding a post) | `md_es_reward_punishment_office.pdf`, `rp_office_macros.tex`; appendix `md_es_extensive.pdf` | `analysis/` | `analysis/rp_office.R`; `analysis/margins.R` + `figures_deck.R` |
+| Losing did not shorten careers | `md_career_survival.pdf`, `career_survival_macros.tex` | `analysis/` | `analysis/career_survival.R` (Kaplan-Meier standardized by succession, Cox stratified by succession with age, censoring at 2009 and at death in office) |
 | The career premium (headline) | `md_es_rank.pdf`, `title_correction_macros.tex`, `main_direct_tie_macros.tex`, `pay_macros.tex` | `analysis/` | `analysis/event_study.R` + `figures_deck.R`; `deck/headline_macros.py`; `analysis/appendix_diagnostics.R`; `analysis/pay_envelope.R` |
 | Half reward, half penalty | `md_es_reward_punishment.pdf`, `rp_macros.tex` | `analysis/` | `analysis/reward_punishment.R` + `figures_deck.R` |
 | Where on the ladder | `md_rp_thresholds_gap.pdf`, `md_rp_thresholds.pdf`, `rp_thresholds_macros.tex` | `analysis/` | `analysis/rp_thresholds.R` |

@@ -33,6 +33,7 @@ DECK_FILES = {
     "figures/md_post_holders.pdf": "analysis/post_holders.pdf",                         # post_holders.R
     "figures/md_first_stage_fed.pdf": "analysis/first_stage_fed.pdf",                   # first_stage.R
     "figures/md_first_stage_rp.pdf": "analysis/first_stage_rp.pdf",                     # first_stage_rp.R
+    "figures/md_career_survival.pdf": "analysis/career_survival.pdf",                   # career_survival.R
     "figures/md_rp_thresholds_gap.pdf": "analysis/rp_thresholds_gap.pdf",               # rp_thresholds.R
     "figures/md_rp_thresholds.pdf": "analysis/rp_thresholds.pdf",                       # rp_thresholds.R
     "figures/md_es_indirect.pdf": "analysis/es_indirect.pdf",                           # indirect_ties.R
@@ -77,6 +78,7 @@ DECK_FILES = {
     "tables/followers_1946_macros.tex": "analysis/tables/followers_1946_macros.tex",    # followers_table_1946.py
     "tables/post_holders_macros.tex": "analysis/tables/post_holders_macros.tex",        # post_holders.R
     "tables/het_ties_macros.tex": "analysis/tables/het_ties_macros.tex",                # het_ties_figure.R (heterogeneity.R)
+    "tables/career_survival_macros.tex": "analysis/tables/career_survival_macros.tex",  # career_survival.R
 }
 STATIC = ["figures/1942_mexican_cabinet_chart_poster.png", "figures/1946_portrait_aleman.png", "figures/1946_portrait_baz.png",
           "figures/1946_portrait_padilla.png", "figures/1946_portrait_rojo_gomez.png"]
