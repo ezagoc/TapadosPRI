@@ -103,7 +103,12 @@ def figures():
             ax = axes[row, col]
             panel(ax, observed, simulated, contrast, rule, n, marks=row == 0)
             ax.tick_params(labelsize=10)
-            ax.yaxis.set_major_locator(MaxNLocator(nbins=5, steps=[1, 2, 5, 10], min_n_ticks=3))   # 3-5 round ticks a panel
+            # three to five whole-number ticks a panel; a panel spanning less than that reaches out to the next integers
+            lo, hi = ax.get_ylim()
+            if np.floor(hi) - np.ceil(lo) < 2:
+                pad = .06 * (np.ceil(hi) - np.floor(lo))
+                ax.set_ylim(min(lo, np.floor(lo) - pad), max(hi, np.ceil(hi) + pad) if np.floor(hi) - np.floor(lo) < 2 else hi)
+            ax.yaxis.set_major_locator(MaxNLocator(nbins=5, steps=[1, 2, 5, 10], min_n_ticks=3, integer=True))
             if row == 0:
                 ax.set_title(TITLES[rule], fontsize=14, loc="left", pad=18, fontweight="bold")
             if row < 2:
