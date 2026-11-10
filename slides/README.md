@@ -44,7 +44,7 @@ list drives `deck/collect_deck_files.py`.
 
 | Slides | Deck file | Output | Script |
 |---|---|---|---|
-| Motivation: how unusual was the PRI | `autocracy_survival_successions.pdf` | `descriptives/` | `descriptives/autocracy/06_successions_survival.R` (tables from `01_build_tables.R`, `03_extend_to_2025.R`) |
+| Appendix, Why Mexico (button on the second motivation slide): how unusual was the PRI | `autocracy_survival_successions.pdf` | `descriptives/` | `descriptives/autocracy/06_successions_survival.R` (tables from `01_build_tables.R`, `03_extend_to_2025.R`) |
 | The 1946 succession: ties read off the biographies | `bio_links_1946.pdf` | `descriptives/` | `descriptives/bio_links_1946.py` (crops of Camp 2011, phrases highlighted) |
 | The 1946 succession | `followers_1946_aleman.tex`, `followers_1946_padilla_top12.tex`, `followers_1946_macros.tex` | `analysis/tables/` | `analysis/followers_table_1946.py` |
 | Data: sample, ladder, balance | `sample.tex`, `ladder_shares.tex`, `balance_combined.tex` | `analysis/tables/` | `deck/build_rank_description.py`, `analysis/ladder_shares.R`, `analysis/balance_combined.R` |
