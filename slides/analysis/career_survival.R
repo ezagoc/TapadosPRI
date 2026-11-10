@@ -131,9 +131,8 @@ ar <- at_risk[group %in% c("D", "P")][, group := factor(group, levels = c("P", "
 g2 <- ggplot(ar, aes(time, group, label = format(n, big.mark = ","))) + geom_text(size = 5.6, family = FAM, colour = MUTED) +
   scale_x_continuous(breaks = seq(0, 30, 5), expand = expansion(mult = c(0, 0))) +
   scale_y_discrete(labels = c(P = "Losers' followers", D = "Designee's followers")) + coord_cartesian(xlim = c(-1, 30), clip = "off") +
-  labs(x = "Years after the election", y = NULL, subtitle = "Number still in politics") + theme_paper(19) +
-  theme(axis.line.y = element_blank(), axis.ticks.y = element_blank(), plot.margin = margin(0, 12, 6, 8),
-        plot.subtitle = element_text(size = 15, colour = MUTED))
+  labs(x = "Years after the election", y = NULL) + theme_paper(19) +
+  theme(axis.line.y = element_blank(), axis.ticks.y = element_blank(), plot.margin = margin(0, 12, 6, 8))
 g <- g1 / g2 + plot_layout(heights = c(3.4, 1))
 ggsave(file.path(out_dir, "career_survival.pdf"), g, width = 10, height = 4.6, bg = "white", device = "pdf")
 ggsave(file.path(out_dir, "career_survival.png"), g, width = 10, height = 4.6, dpi = 250, bg = "white")
