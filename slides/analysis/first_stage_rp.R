@@ -68,11 +68,12 @@ writeLines(c("% first_stage_rp_macros.tex (first_stage_rp.R): the first stage (s
            file.path(tab_dir, "first_stage_rp_macros.tex"))
 
 # figure, the style of es_reward_punishment_office (rp_office.R), in percentage points
-pd <- copy(es)[, `:=`(x = k + fifelse(group == "D", -0.12, 0.12), estimate = 100 * estimate, ci_lower = 100 * ci_lower,
+pd <- copy(es)[k <= K_PLOT_MAX][, `:=`(x = k + fifelse(group == "D", -0.12, 0.12), estimate = 100 * estimate, ci_lower = 100 * ci_lower,
                       ci_upper = 100 * ci_upper, ci90_lower = 100 * ci90_lower, ci90_upper = 100 * ci90_upper)]
 top <- max(pd$ci_upper); bot <- min(pd$ci_lower); span <- top - bot
 mk <- data.table(x = c(-1.5, 0.5, 6.5), lab = c("Dedazo", "New president", "Next president"),
                  col = c(INK, RULE, RULE), lw = c(0.6, 0.35, 0.35), tcol = c(INK, MUTED, MUTED))
+mk <- mk[x <= K_PLOT_MAX + 0.5]   # no next-president line: the plots end at e+4 (11 Nov 2026)
 lab_g <- c(D = "Designee's followers", P = "Losers' followers")
 g <- ggplot(pd, aes(x, estimate)) +
   geom_hline(yintercept = 0, colour = RULE, linewidth = 0.35) +
@@ -83,7 +84,7 @@ g <- ggplot(pd, aes(x, estimate)) +
   geom_point(aes(shape = group, colour = group), fill = "white", size = 2.6, stroke = 0.8) +
   scale_colour_manual(values = c(D = INK, P = "#7a7a7a"), labels = lab_g, name = NULL) +
   scale_shape_manual(values = c(D = 16, P = 21), labels = lab_g, name = NULL) +
-  scale_x_continuous(breaks = ks, labels = k_numbers) +
+  scale_x_continuous(breaks = ks[ks <= K_PLOT_MAX], labels = k_numbers) +
   coord_cartesian(ylim = c(bot - 0.03 * span, top + 0.20 * span), clip = "off") +
   labs(x = x_label_k, y = "Started a federal executive post (pp),\neach group minus the unconnected") + theme_paper(17) +
   theme(axis.title.y = element_text(size = 14, lineheight = 0.95),

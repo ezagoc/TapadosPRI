@@ -127,7 +127,7 @@ slice_of <- c(D = "Designee's followers", P = "Losers' followers", N = "Unaligne
               contender = "Tied to multiple contenders", entrant = "Newcomers, first ranked post after e-2", other = "Not eligible at e-2")
 slice_levels <- c("Designee's followers", "Losers' followers", "Unaligned", "Tied to multiple contenders", "Newcomers, first ranked post after e-2", "Not eligible at e-2")
 yearly <- rbindlist(lapply(elections, function(e) {
-  rbindlist(lapply(-6:8, function(k) {
+  rbindlist(lapply(-6:K_PLOT_MAX, function(k) {
     h <- annual[year == e + k & rank >= 7L]
     sl <- factor(slice_of[as.character(classify(e, h$pid))], levels = slice_levels)
     data.table(election = e, k = k, posts = nrow(h), slice = slice_levels, share = as.numeric(table(sl)[slice_levels]) / nrow(h))
@@ -138,13 +138,14 @@ fig[, slice := factor(slice, levels = rev(slice_levels))]
 fwrite(fig, file.path(out_dir, "post_holders_yearly.csv"))
 fills <- c("Designee's followers" = INK, "Losers' followers" = MUTED, "Unaligned" = "#d9d9d9", "Tied to multiple contenders" = "#a6a6a6",
            "Newcomers, first ranked post after e-2" = "#b2182b", "Not eligible at e-2" = "#f4a582")
-mk <- data.table(x = c(-1.5, 0.5, 6.5), lab = c("Dedazo", "New president", "Next president"))
+mk <- data.table(x = c(-1.5, 0.5, 6.5), lab = c("Dedazo", "New president", "Next president"), lw = c(0.6, 0.35, 0.35))
+mk <- mk[x <= K_PLOT_MAX + 0.5]   # no next-president line: the plots end at e+4 (11 Nov 2026)
 gph <- ggplot(fig, aes(k, 100 * share, fill = slice)) +
   geom_col(width = 0.82, colour = "white", linewidth = 0.3) +
-  geom_vline(data = mk, aes(xintercept = x), colour = INK, linewidth = c(0.6, 0.35, 0.35), linetype = "dashed") +
+  geom_vline(data = mk, aes(xintercept = x), colour = INK, linewidth = mk$lw, linetype = "dashed") +
   geom_text(data = mk, aes(x = x + 0.12, y = 104, label = lab), inherit.aes = FALSE, hjust = 0, vjust = 0, colour = INK, size = 4.2, family = FAM) +
   scale_fill_manual(values = fills, breaks = slice_levels, name = NULL) +
-  scale_x_continuous(breaks = -6:8, labels = function(x) ifelse(x == 0, "e", sprintf("%+d", x))) +
+  scale_x_continuous(breaks = -6:K_PLOT_MAX, labels = function(x) ifelse(x == 0, "e", sprintf("%+d", x))) +
   scale_y_continuous(breaks = seq(0, 100, 25), expand = expansion(mult = c(0, 0.12))) +
   labs(x = "Years relative to the election", y = "Share of the senior posts (%)") +
   guides(fill = guide_legend(nrow = 2, byrow = TRUE)) +

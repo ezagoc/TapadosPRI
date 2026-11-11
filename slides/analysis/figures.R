@@ -37,11 +37,12 @@ es_figure(bg[outcome == "heads_investment_agency"], expression("Effect on headin
 
 # Reward and penalty: two groups against the reweighted unaligned, symbol legend.
 es <- fread(file.path(out_dir, "rp_event_study.csv")); ks <- -7:8
-pd <- copy(es)[, x := k + fifelse(group == "D", -0.12, 0.12)]
-old_pd <- fread(file.path(geometry_root(), "rp_event_study.csv"))   # reference axes, see design_tools.R
+pd <- copy(es)[k <= K_PLOT_MAX][, x := k + fifelse(group == "D", -0.12, 0.12)]
+old_pd <- fread(file.path(geometry_root(), "rp_event_study.csv"))[k <= K_PLOT_MAX]   # reference axes, see design_tools.R
 top <- max(old_pd$ci_upper); bot <- min(old_pd$ci_lower); span <- top - bot
 mk <- data.table(x = c(-1.5, 0.5, 6.5), lab = c("Dedazo", "New president", "Next president"),
                  col = c("#1a1a1a", RULE, RULE), lw = c(0.6, 0.35, 0.35), tcol = c("#1a1a1a", MUTED, MUTED))
+mk <- mk[x <= K_PLOT_MAX + 0.5]   # no next-president line: the plots end at e+4 (11 Nov 2026)
 lab_g <- c(D = "Designee's followers", P = "Losers' followers")
 g <- ggplot(pd, aes(x, estimate)) +
   geom_hline(yintercept = 0, colour = RULE, linewidth = 0.35) +
@@ -52,7 +53,7 @@ g <- ggplot(pd, aes(x, estimate)) +
   geom_point(aes(shape = group, colour = group), fill = "white", size = 2.6, stroke = 0.8) +
   scale_colour_manual(values = c(D = INK, P = "#7a7a7a"), labels = lab_g, name = NULL) +
   scale_shape_manual(values = c(D = 16, P = 21), labels = lab_g, name = NULL) +
-  scale_x_continuous(breaks = ks, labels = k_numbers) +
+  scale_x_continuous(breaks = ks[ks <= K_PLOT_MAX], labels = k_numbers) +
   coord_cartesian(ylim = c(bot - 0.03 * span, top + 0.20 * span), clip = "off") +
   labs(x = x_label_k, y = "Effect on rank position,\neach group minus the unconnected") + theme_paper(17) +
   theme(axis.title.y = element_text(size = 14, lineheight = 0.95),

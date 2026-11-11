@@ -47,11 +47,12 @@ cat(sprintf("unaligned in support: %d; within two steps of the designee: %.1f%%;
 pd <- tr[group %in% c("Designee's followers", "Losers' followers", "Unaligned, reweighted")]
 # The figure starts at e-6 (deck decision, 4 November 2026): e-7 shows the jump of the previous handover, common to the
 # three groups and a distraction on a slide of levels. The CSV keeps e-7; the event study keeps its leads -7..-3.
-k_plot <- ks[ks >= -6L]
-pd <- pd[k >= -6L]
+k_plot <- ks[ks >= -6L & ks <= K_PLOT_MAX]
+pd <- pd[k >= -6L & k <= K_PLOT_MAX]
 lv <- c("Designee's followers", "Losers' followers", "Unaligned, reweighted")
 pd[, group := factor(group, levels = lv)]
 mk <- data.table(x = c(-1.5, 0.5, 6.5), lab = c("Dedazo", "New president", "Next president"), col = c(INK, RULE, RULE), lw = c(0.6, 0.35, 0.35))
+mk <- mk[x <= K_PLOT_MAX + 0.5]   # no next-president line: the plots end at e+4 (11 Nov 2026)
 top <- max(pd$rank); bot <- min(pd$rank); span <- top - bot
 g <- ggplot(pd, aes(k, rank, colour = group, shape = group, linetype = group)) +
   geom_vline(data = mk, aes(xintercept = x), colour = mk$col, linewidth = mk$lw, linetype = "dashed") +

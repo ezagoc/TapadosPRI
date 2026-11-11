@@ -127,12 +127,15 @@ x_label_k <- "Years relative to the election"
 k_labels <- function(x) ifelse(x == 0, "e", ifelse(x > 0, paste0("e+", x), paste0("e−", abs(x))))
 k_labels_ascii <- function(x) ifelse(x == 0, "e", ifelse(x > 0, paste0("e+", x), paste0("e-", abs(x))))
 k_numbers <- function(x) as.character(x)
+# Event-study plots end at e+4 (11 Nov 2026): e+5 and e+6 are e-1 and e of the next succession (the next dedazo and the
+# next election), so from e+5 on the gap no longer measures the patron's term alone. Estimates for every year stay in the CSVs.
+K_PLOT_MAX <- 4L
 
 # Event-study figure: points with 95% intervals, reference year hollow, vertical rules at designation
 # (between e-2 and e-1), the new president's inauguration (1 Dec of e) and the next one (1 Dec of e+6).
 es_figure <- function(d, ylab, file, scale = 1, out = out_dir, width = 10, height = 4.1, marks = TRUE,
                       facet = NULL, base = 17, ysize = 14, summary = NULL) {
-  d <- copy(d)
+  d <- copy(d)[k <= K_PLOT_MAX]
   d[, `:=`(est = scale * estimate, lo = scale * ci_lower, hi = scale * ci_upper)]
   if (!"ci90_lower" %in% names(d)) d[, `:=`(ci90_lower = ci_lower, ci90_upper = ci_upper)]
   d[, `:=`(lo90 = scale * ci90_lower, hi90 = scale * ci90_upper)]
@@ -151,6 +154,7 @@ es_figure <- function(d, ylab, file, scale = 1, out = out_dir, width = 10, heigh
     if (grepl("^indirect", spec[1])) old_d <- old_d[version == "strong" & contrast == "D2-P2"]
     old_d[, `:=`(hi = scale * ci_upper, lo = scale * ci_lower)]
   }
+  old_d <- old_d[k <= K_PLOT_MAX]
   top <- max(old_d$hi, na.rm = TRUE); bot <- min(old_d$lo, na.rm = TRUE)
   span <- top - bot
   g <- ggplot(d, aes(k, est)) +
@@ -168,6 +172,7 @@ es_figure <- function(d, ylab, file, scale = 1, out = out_dir, width = 10, heigh
     # The designation (the treatment) in near-black; the two handovers in grey.
     mk <- data.table(x = c(-1.5, 0.5, 6.5), lab = c("Dedazo", "New president", "Next president"),
                      col = c("#1a1a1a", RULE, RULE), lw = c(0.6, 0.35, 0.35), tcol = c("#1a1a1a", MUTED, MUTED))
+    mk <- mk[x <= K_PLOT_MAX + 0.5]   # no next-president line: the plots end at e+4 (11 Nov 2026)
     g <- g + geom_vline(data = mk, aes(xintercept = x), colour = mk$col, linewidth = mk$lw, linetype = "dashed") +
       geom_text(data = mk, aes(x = x + 0.12, y = top + 0.10 * span, label = lab), hjust = 0, vjust = 0,
                 colour = mk$tcol, size = base * 0.25, family = FAM)

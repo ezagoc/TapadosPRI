@@ -34,14 +34,17 @@ CONTRASTS = {"DP": "Premium\ndesignee's − losers'", "DN": "Reward\ndesignee's 
              "PN": "Penalty\nlosers' − unaligned"}
 
 
+K_PLOT_MAX = 4   # plots end at e+4 (11 Nov 2026): e+5 and e+6 are e-1 and e of the next succession
+
+
 def observed_data(n=9):
     assert n == 9
     return pd.concat([pd.read_csv(DATA / "design/observed_dp_intervals.csv"),
-                      pd.read_csv(DATA / "design/observed_rp_intervals.csv")]).query("k <= 6")
+                      pd.read_csv(DATA / "design/observed_rp_intervals.csv")]).query("k <= @K_PLOT_MAX")
 
 
 def panel(ax, observed, simulated, contrast, rule, n, *, small=False, marks=True):
-    last = 6
+    last = K_PLOT_MAX
     ax.axhline(0, color=".7", lw=.55, zorder=0)
     for x, label, align in ((-1.5, "After designation", "right"),
                              (.5, "New presidency", "left")):
@@ -50,7 +53,7 @@ def panel(ax, observed, simulated, contrast, rule, n, *, small=False, marks=True
             if marks:
                 ax.text(x, 1.005, label, transform=ax.get_xaxis_transform(), ha=align,
                         va="bottom", fontsize=6 if small else 8, color=".4")
-    for table, color, style, alpha in ((simulated.query("rule == @rule and contrast == @contrast"),
+    for table, color, style, alpha in ((simulated.query("rule == @rule and contrast == @contrast and k <= @last"),
                                        "#333333", (0, (5, 2)), .10),
                                       (observed.query("contrast == @contrast"), "#940034", "-", .14)):
         z = table.sort_values("k")
