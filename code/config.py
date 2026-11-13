@@ -73,6 +73,9 @@ INFLATION_XLS              = INVESTMENT_DIR / "API_FP.CPI.TOTL.ZG_DS2_es_excel_v
 WPI_XLS                    = INVESTMENT_DIR / "API_FP.WPI.TOTL_DS2_es_excel_v2_28789.xls"    # wholesale price index
 PRICE_DEFLATOR_CSV         = INVESTMENT_DIR / "price_deflator_mexico.csv"                    # tidy, rebased 1960=100
 DEFLATOR_BASE_YEAR         = 1960
+# Press: Excélsior page scans from the Hemeroteca Nacional Digital de México (code/10-press/01_download_excelsior_hndm.py)
+PRESS_DIR = DATA_DIR / "press"
+EXCELSIOR_HNDM_DIR = PRESS_DIR / "excelsior_hndm"
 SHAPEFILE_DIR = DATA_DIR / "shapefiles"
 STATES_GEOJSON = SHAPEFILE_DIR / "mexico_states.json"
 MAIN_BIOGRAPHIES_PDF = BIOGRAPHIES_DIR / "Mexican_Political_Biographies_1935-2009_Fourth_Edi....pdf"
