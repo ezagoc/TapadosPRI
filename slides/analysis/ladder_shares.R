@@ -21,7 +21,7 @@ offices <- c("10" = "President of the Republic",
              "4" = "Area directors; federal deputies and judges",
              "3" = "Subdirectors; department heads; state legislators",
              "2" = "Mayors; advisers and staff; union officers",
-             "1" = "Municipal councillors; local party officials")
+             "1" = "Municipal councilors; local party officials")
 
 pool <- rbindlist(lapply(names(eligible), function(e) {
   d <- copy(eligible[[e]])
